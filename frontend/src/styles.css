@@ -1,0 +1,42 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #263d36;
+  background: #f6f7f2;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+a { color: #267060; }
+a:focus-visible { outline: 3px solid #b7682d; outline-offset: 5px; border-radius: 4px; }
+.app { max-width: 1040px; margin: auto; padding: 0 32px; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 30px 0; }
+.brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-size: 22px; font-weight: 750; color: #263d36; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: #267060; color: white; }
+.header-note { color: #626f68; font-size: 14px; }
+.navigation { display: flex; gap: 8px; border-bottom: 1px solid #dce2da; padding-bottom: 14px; }
+.navigation a { padding: 12px 24px; color: #53665c; text-decoration: none; border-radius: 12px; font-weight: 600; }
+.navigation a.active { background: #dfebe1; color: #205344; }
+.navigation a:hover { background: #e8eee5; }
+main { padding: 54px 0; }
+.eyebrow { color: #267060; font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; }
+h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.15; letter-spacing: -.035em; margin: 16px 0; }
+.intro { color: #626f68; line-height: 1.6; margin-bottom: 36px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; }
+.card { background: #fff; border: 1px solid #e1e6dc; border-radius: 20px; padding: 28px; }
+h2 { font-size: 19px; margin: 0 0 16px; }
+.card p { color: #626f68; line-height: 1.7; }
+.badge { display: inline-block; margin-top: 16px; padding: 6px 10px; border-radius: 8px; background: #f2f3ed; color: #626f68; font-size: 12px; }
+.skip-link { position: absolute; top: -100px; background: white; padding: 12px; }
+.skip-link:focus { top: 10px; z-index: 10; }
+@media (max-width: 600px) {
+  .app { padding: 0 20px; }
+  .header { padding: 24px 0; }
+  .header-note { display: none; }
+  main { padding: 22px 0 calc(110px + env(safe-area-inset-bottom)); }
+  .navigation { position: fixed; z-index: 1; bottom: 0; left: 0; right: 0; justify-content: space-around; gap: 4px; background: #fff; border-top: 1px solid #dce2da; border-bottom: 0; padding: 12px 8px calc(12px + env(safe-area-inset-bottom)); }
+  .navigation a { flex: 1; text-align: center; padding: 14px 4px; font-size: 14px; }
+  .card { padding: 24px; }
+}
+
