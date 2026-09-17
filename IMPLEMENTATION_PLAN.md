@@ -105,6 +105,43 @@ The backend owns the application logic.
 
 The frontend must not communicate directly with Google Calendar.
 
+## Hexagonal architecture (ports and adapters)
+
+The backend should use a lightweight hexagonal architecture. This is a boundary
+between the application and its outside systems, not a reason to introduce a
+large framework or a generic abstraction for every class.
+
+Use these dependency rules:
+
+* Domain models and application services must not depend on Ktor, Exposed,
+  Flyway, SQLite, or Google client classes.
+* Application use cases define the ports they need. For example,
+  `TaskRepository`, `ShoppingRepository`, and `CalendarService` are application
+  ports rather than database or HTTP concerns.
+* HTTP routes, OpenClaw-facing HTTP clients, and other callers are inbound
+  adapters. They translate transport data into application commands and call
+  application services.
+* Exposed/SQLite repositories and the Google Calendar client are outbound
+  adapters. They implement application ports and translate external data into
+  domain models.
+* Ktor application startup is the composition root: it wires the application
+  services to the selected adapters, runs Flyway migrations, and then starts
+  serving requests.
+* Database migrations belong to the persistence adapter. SQLite-specific SQL
+  must not leak into the domain or application layers; a future database can
+  provide its own adapter and migration set.
+
+The intended dependency direction is:
+
+```text
+Inbound adapters → application ports/use cases ← outbound adapters
+                         ↑
+                       domain
+```
+
+This keeps the current SQLite implementation simple while allowing a later
+database replacement without changing the API contract or application logic.
+
 ---
 
 # 4. MVP Scope
@@ -141,6 +178,7 @@ Do not implement yet:
 ```kotlin
 data class User(
     val id: UUID,
+    val householdId: UUID,
     val name: String
 )
 ```
@@ -162,11 +200,12 @@ data class Household(
 )
 ```
 
-Both users belong to one Household.
+Each user belongs to exactly one Household in the MVP.
 
 Every Task and ShoppingItem belongs to a Household.
 
-This prevents unnecessary model changes later.
+If users ever need to belong to multiple households, introduce a membership
+entity at that point rather than adding it to the initial MVP.
 
 ---
 
@@ -222,7 +261,6 @@ Minimum tables:
 ```text
 users
 households
-household_members
 tasks
 shopping_items
 ```
@@ -231,6 +269,7 @@ shopping_items
 
 ```text
 id UUID PK
+household_id UUID NOT NULL FK households(id)
 name TEXT NOT NULL
 ```
 
@@ -239,14 +278,6 @@ name TEXT NOT NULL
 ```text
 id UUID PK
 name TEXT NOT NULL
-```
-
-## household_members
-
-```text
-household_id UUID
-user_id UUID
-PRIMARY KEY(household_id, user_id)
 ```
 
 ## tasks

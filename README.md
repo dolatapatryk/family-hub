@@ -82,6 +82,8 @@ Open http://localhost:5173. The web container serves the app and proxies `/healt
 
 ## Scope
 
-The four screens are placeholders. React Router and the TanStack Query provider are wired in. `/health` returns HTTP 200 and JSON without user identification.
+The four screens are still placeholders. React Router and the TanStack Query provider are wired in. `/health` returns HTTP 200 and JSON without user identification.
 
-SQLite, Exposed, Flyway, feature services and Koin wiring, user selection, Google Calendar, PWA installation, and persistent Docker storage will be added in their respective stages in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). No feature API, credentials, or offline synchronization is included yet.
+Stage 2 adds the SQLite persistence foundation. On backend startup, Flyway creates the initial schema and seeds one `Family` household with `User 1` and `User 2`; Exposed is then connected for the feature adapters that will be added in later stages. The default database path is `data/family.db`, relative to the backend process, and can be overridden with `DATABASE_PATH`.
+
+Feature services, Koin wiring, user selection, Google Calendar, PWA installation, and persistent Docker storage will be added in their respective stages in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). No feature API, credentials, or offline synchronization is included yet.

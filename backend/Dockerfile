@@ -7,7 +7,7 @@ FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S family && adduser -S family -G family
 WORKDIR /app
 COPY --from=build /app/build/install/family-api/ ./
+RUN mkdir -p /app/data && chown family:family /app/data
 USER family
 EXPOSE 8080
 ENTRYPOINT ["/app/bin/family-api"]
-
