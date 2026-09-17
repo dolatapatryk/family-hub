@@ -4,7 +4,7 @@ A shared family application. Stage 1 provides a Kotlin/Ktor backend and a React/
 
 ## Local development
 
-Prerequisites: JDK 21 and Node.js 22.12+ (Node 22 LTS recommended). Gradle is included through the wrapper.
+Prerequisites: JDK 25 and Node.js 22.12+ (Node 22 LTS recommended). Gradle is included through the wrapper.
 
 Start the backend:
 
