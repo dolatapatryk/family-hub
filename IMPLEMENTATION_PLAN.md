@@ -115,14 +115,15 @@ Use these dependency rules:
 
 * Domain models and application services must not depend on Ktor, Exposed,
   Flyway, SQLite, or Google client classes.
-* Application use cases define the ports they need. For example,
-  `TaskRepository`, `ShoppingRepository`, and `CalendarService` are application
-  ports rather than database or HTTP concerns.
+* Entity repository contracts such as `TaskRepository` and `UserRepository`
+  belong to the domain. Application services depend on those contracts.
+  Application-specific ports, such as `TransactionRunner` and `CalendarService`,
+  belong to the application layer. No port depends on a database or HTTP framework.
 * HTTP routes, OpenClaw-facing HTTP clients, and other callers are inbound
   adapters. They translate transport data into application commands and call
   application services.
 * Exposed/SQLite repositories and the Google Calendar client are outbound
-  adapters. They implement application ports and translate external data into
+  adapters. They implement domain/application ports and translate external data into
   domain models.
 * Ktor application startup is the composition root: it wires the application
   services to the selected adapters, runs Flyway migrations, and then starts
@@ -134,9 +135,9 @@ Use these dependency rules:
 The intended dependency direction is:
 
 ```text
-Inbound adapters → application ports/use cases ← outbound adapters
-                         ↑
-                       domain
+Inbound adapters → application use cases → domain models and repository ports
+                            ↑                         ↑
+                  transaction adapters       persistence adapters
 ```
 
 This keeps the current SQLite implementation simple while allowing a later
@@ -177,8 +178,8 @@ Do not implement yet:
 
 ```kotlin
 data class User(
-    val id: UUID,
-    val householdId: UUID,
+    val id: UserId,
+    val householdId: HouseholdId,
     val name: String
 )
 ```
@@ -195,7 +196,7 @@ Users may initially be seeded in the database.
 
 ```kotlin
 data class Household(
-    val id: UUID,
+    val id: HouseholdId,
     val name: String
 )
 ```
@@ -207,22 +208,34 @@ Every Task and ShoppingItem belongs to a Household.
 If users ever need to belong to multiple households, introduce a membership
 entity at that point rather than adding it to the initial MVP.
 
+Use UUID-backed value classes (`TaskId`, `UserId`, `HouseholdId`) in domain and
+application code. HTTP and database adapters convert them to/from UUID strings.
+Repositories expose nullable `find` and default throwing `get` methods. Task
+lookups include household scope.
+
+The implemented user and task models use these typed IDs.
+
 ---
 
 ## Task
 
 ```kotlin
 data class Task(
-    val id: UUID,
-    val householdId: UUID,
+    val id: TaskId,
+    val householdId: HouseholdId,
     val title: String,
     val dueDate: LocalDate?,
     val completed: Boolean,
-    val assignedTo: UUID?,
-    val createdBy: UUID,
-    val createdAt: Instant
+    val assignedTo: UserId?,
+    val createdBy: UserId,
+    val createdAt: Instant,
+    val archivedAt: Instant? = null
 )
 ```
+
+Task exposes domain operations for editing its title/due date, assigning a user,
+completing, reopening, and archiving. Archived tasks remain stored and readable;
+changes to their state are rejected. Archiving is not a full audit log.
 
 `assignedTo` is optional.
 
@@ -254,7 +267,8 @@ It is a separate domain concept.
 
 Use SQLite.
 
-Use Flyway for migrations.
+Use Flyway for migrations. The initial V1 task schema includes `archived_at`;
+archiving does not have a separate migration in this initial implementation.
 
 Minimum tables:
 
@@ -291,6 +305,7 @@ completed BOOLEAN NOT NULL
 assigned_to UUID NULL
 created_by UUID NOT NULL
 created_at TIMESTAMP NOT NULL
+archived_at TIMESTAMP NULL
 ```
 
 ## shopping_items
@@ -315,26 +330,21 @@ Use a simple separation of responsibilities:
 
 ```text
 backend/
-  src/main/kotlin/
-
-    application/
-      task/
-      shopping/
-      calendar/
-
-    domain/
-      task/
-      shopping/
-      user/
-
-    infrastructure/
-      persistence/
-      google/
-
-    api/
-      task/
-      shopping/
-      calendar/
+  core-domain/
+    src/main/kotlin/familyhub/domain/
+    src/test/kotlin/
+    src/testFixtures/kotlin/
+  core-application/
+    src/main/kotlin/familyhub/application/
+    src/test/kotlin/
+    src/testFixtures/kotlin/
+  core-infrastructure-sqlite/
+    src/main/kotlin/familyhub/infrastructure/persistence/
+    src/main/resources/db/migration/
+    src/test/kotlin/
+  service-api-ktor/
+    src/main/kotlin/familyhub/api/
+    src/test/kotlin/
 ```
 
 HTTP code should not directly contain Exposed queries.
@@ -364,7 +374,12 @@ completed
 from
 to
 assignedTo
+archived
 ```
+
+By default, archived tasks are excluded. `archived=true` lists archived tasks.
+Date bounds are inclusive. The filter contains the identified user's household ID
+and rejects `from` values after `to` using `InvalidTaskFilter`.
 
 Example:
 
@@ -389,38 +404,62 @@ Response:
 
 ---
 
+## GET /api/tasks/{id}
+
+Returns a task in the caller's household, including an archived task.
+
 ## POST /api/tasks
 
-Request:
+Creates an unassigned, incomplete task and returns HTTP 201.
 
 ```json
 {
   "title": "Call the doctor",
-  "dueDate": "2026-09-15",
-  "assignedTo": null
+  "dueDate": "2026-09-15"
 }
 ```
 
----
-
 ## PATCH /api/tasks/{id}
 
-Request may contain:
+Edits only the title and due date. Omitted fields remain unchanged; an explicit
+`null` clears the due date.
 
 ```json
 {
   "title": "Call the pediatrician",
-  "dueDate": "2026-09-16",
-  "assignedTo": "...",
-  "completed": true
+  "dueDate": "2026-09-16"
 }
 ```
 
----
+## POST /api/tasks/{id}/assign
 
-## DELETE /api/tasks/{id}
+Assigns a household member using a required, non-null UUID. The service validates
+that the user exists and belongs to the household; `Task.assignTo` accepts `UserId`.
 
-Deletes a task.
+```json
+{
+  "assignedTo": "..."
+}
+```
+
+## POST /api/tasks/{id}/unassign
+
+Clears assignment using `Task.unassign()`.
+
+## POST /api/tasks/{id}/complete
+
+Calls `TaskService.complete`, which loads the task, invokes `Task.complete()`,
+and persists it through `TaskRepository.save` within a transaction.
+
+## POST /api/tasks/{id}/reopen
+
+Marks a completed task incomplete using a separate domain operation.
+
+## POST /api/tasks/{id}/archive
+
+Archives the task while retaining its stored data and archive timestamp.
+There is no task DELETE endpoint. Archived tasks cannot be edited, assigned,
+completed, or reopened. Repeated archive calls retain the original timestamp.
 
 ---
 
@@ -678,8 +717,7 @@ Task item:
 Checkbox action:
 
 ```text
-PATCH /api/tasks/{id}
-completed=true
+POST /api/tasks/{id}/complete
 ```
 
 Provide:
@@ -913,9 +951,19 @@ instead of a full backend URL.
 Backend minimum:
 
 ```text
+TaskTest
+TaskFilterTest
 TaskServiceTest
+UserServiceTest
+TaskRoutesSpec
 ShoppingServiceTest
 ```
+
+Tests use JUnit Jupiter with Kotest assertions, following the reference backend.
+Domain and application unit tests belong to their owning modules. In-memory
+repository fixtures start empty and are populated through `save`. HTTP functional
+specs start the real application with temporary SQLite files and production
+adapters. Persistence integration specs cover migrations and transaction rollback.
 
 Test at least:
 
@@ -984,10 +1032,15 @@ TaskRoutes
 Endpoints:
 
 ```text
-GET
-POST
-PATCH
-DELETE
+GET /api/tasks
+GET /api/tasks/{id}
+POST /api/tasks
+PATCH /api/tasks/{id}
+POST /api/tasks/{id}/assign
+POST /api/tasks/{id}/unassign
+POST /api/tasks/{id}/complete
+POST /api/tasks/{id}/reopen
+POST /api/tasks/{id}/archive
 ```
 
 ---
@@ -1005,7 +1058,7 @@ Features:
 * list tasks,
 * create task,
 * complete task,
-* delete task.
+* archive task.
 
 ---
 
