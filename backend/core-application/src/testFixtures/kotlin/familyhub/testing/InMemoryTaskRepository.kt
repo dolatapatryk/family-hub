@@ -10,7 +10,7 @@ class InMemoryTaskRepository : TaskRepository {
 
     private val tasks = mutableMapOf<TaskId, Task>()
 
-    override fun find(householdId: HouseholdId, id: TaskId): Task? =
+    override fun find(id: TaskId, householdId: HouseholdId): Task? =
         tasks[id]?.takeIf { it.householdId == householdId }
 
     override fun save(task: Task): Task {

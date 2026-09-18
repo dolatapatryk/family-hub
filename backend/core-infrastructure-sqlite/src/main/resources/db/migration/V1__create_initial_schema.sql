@@ -6,8 +6,7 @@ CREATE TABLE households (
 CREATE TABLE users (
     id TEXT NOT NULL PRIMARY KEY,
     household_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    FOREIGN KEY (household_id) REFERENCES households (id) ON DELETE CASCADE
+    name TEXT NOT NULL
 );
 
 CREATE TABLE tasks (
@@ -19,10 +18,7 @@ CREATE TABLE tasks (
     assigned_to TEXT NULL,
     created_by TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    archived_at TIMESTAMP NULL,
-    FOREIGN KEY (household_id) REFERENCES households (id) ON DELETE CASCADE,
-    FOREIGN KEY (assigned_to) REFERENCES users (id) ON DELETE SET NULL,
-    FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT
+    archived_at TIMESTAMP NULL
 );
 
 CREATE TABLE shopping_items (
@@ -32,9 +28,7 @@ CREATE TABLE shopping_items (
     quantity TEXT NULL,
     completed BOOLEAN NOT NULL DEFAULT 0,
     added_by TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    FOREIGN KEY (household_id) REFERENCES households (id) ON DELETE CASCADE,
-    FOREIGN KEY (added_by) REFERENCES users (id) ON DELETE RESTRICT
+    created_at TIMESTAMP NOT NULL
 );
 
 CREATE INDEX idx_users_household_id ON users (household_id);

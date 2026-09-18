@@ -6,20 +6,18 @@ import familyhub.domain.task.TaskFilter
 import familyhub.domain.task.TaskId
 import familyhub.domain.task.TaskRepository
 import familyhub.domain.user.UserId
-import java.time.Instant
-import java.time.LocalDate
-import java.util.UUID
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.ResultRow
-import org.jetbrains.exposed.sql.SortOrder
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SortOrder.ASC
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.andWhere
-import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
+import org.jetbrains.exposed.sql.upsert
+import java.time.Instant
+import java.time.LocalDate
+import java.util.UUID
 
 internal object Tasks : Table("tasks") {
     val id = text("id")
@@ -35,7 +33,8 @@ internal object Tasks : Table("tasks") {
 }
 
 class ExposedTaskRepository(private val database: Database) : TaskRepository {
-    override fun find(householdId: HouseholdId, id: TaskId): Task? = transaction(database) {
+
+    override fun find(id: TaskId, householdId: HouseholdId): Task? = transaction(database) {
         Tasks.selectAll()
             .where { (Tasks.householdId eq householdId.toString()) and (Tasks.id eq id.toString()) }
             .singleOrNull()
@@ -52,33 +51,21 @@ class ExposedTaskRepository(private val database: Database) : TaskRepository {
                 filter.to?.let { value -> andWhere { Tasks.dueDate lessEq value.toString() } }
                 filter.assignedTo?.let { value -> andWhere { Tasks.assignedTo eq value.toString() } }
             }
-            .orderBy(Tasks.createdAt to SortOrder.ASC, Tasks.id to SortOrder.ASC)
+            .orderBy(Tasks.createdAt to ASC, Tasks.id to ASC)
             .map { it.toTask() }
     }
 
     override fun save(task: Task): Task = transaction(database) {
-        val updatedRows = Tasks.update({
-            (Tasks.id eq task.id.toString()) and (Tasks.householdId eq task.householdId.toString())
-        }) {
+        Tasks.upsert {
+            it[id] = task.id.toString()
+            it[householdId] = task.householdId.toString()
             it[title] = task.title
             it[dueDate] = task.dueDate?.toString()
             it[completed] = task.completed
             it[assignedTo] = task.assignedTo?.toString()
+            it[createdBy] = task.createdBy.toString()
+            it[createdAt] = task.createdAt.toString()
             it[archivedAt] = task.archivedAt?.toString()
-        }
-
-        if (updatedRows == 0) {
-            Tasks.insert {
-                it[id] = task.id.toString()
-                it[householdId] = task.householdId.toString()
-                it[title] = task.title
-                it[dueDate] = task.dueDate?.toString()
-                it[completed] = task.completed
-                it[assignedTo] = task.assignedTo?.toString()
-                it[createdBy] = task.createdBy.toString()
-                it[createdAt] = task.createdAt.toString()
-                it[archivedAt] = task.archivedAt?.toString()
-            }
         }
         task
     }
