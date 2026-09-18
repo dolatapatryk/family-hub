@@ -2,8 +2,10 @@ package familyhub.support
 
 import familyhub.api.task.TaskResponse
 import familyhub.domain.household.HouseholdId
+import familyhub.domain.household.HouseholdId.Companion.randomHouseholdId
 import familyhub.domain.user.User
 import familyhub.domain.user.UserId
+import familyhub.domain.user.UserId.Companion.randomUserId
 import familyhub.infrastructure.persistence.DatabaseFactory
 import familyhub.infrastructure.persistence.DatabaseSettings
 import familyhub.infrastructure.persistence.ExposedUserRepository
@@ -15,8 +17,9 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
 import io.ktor.client.statement.HttpResponse
-import io.ktor.http.ContentType
+import io.ktor.http.ContentType.Application.Json
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpStatusCode.Companion.OK
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.testing.ApplicationTestBuilder
@@ -37,14 +40,14 @@ fun ApplicationTestBuilder.userClient(userId: UserId = TestUsers.author): HttpCl
     install(ContentNegotiation) { json() }
     defaultRequest {
         header("X-User-Id", userId.toString())
-        contentType(ContentType.Application.Json)
+        contentType(Json)
     }
 }
 
 fun seedOtherHousehold(directory: Path): User {
     val settings = DatabaseSettings(directory.resolve("family.db").toString())
     val database = DatabaseFactory(settings).initialize()
-    val user = User(UserId.randomUserId(), HouseholdId.randomHouseholdId(), "Other household user")
+    val user = User(randomUserId(), randomHouseholdId(), "Other household user")
     DriverManager.getConnection(settings.jdbcUrl).use { connection ->
         connection.prepareStatement("INSERT INTO households (id, name) VALUES (?, ?)").use { statement ->
             statement.setString(1, user.householdId.toString())
@@ -56,7 +59,7 @@ fun seedOtherHousehold(directory: Path): User {
     return user
 }
 
-suspend fun HttpResponse.task(expectedStatus: HttpStatusCode = HttpStatusCode.OK): TaskResponse {
+suspend fun HttpResponse.task(expectedStatus: HttpStatusCode = OK): TaskResponse {
     this shouldHaveStatus expectedStatus
     return body()
 }

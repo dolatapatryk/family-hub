@@ -6,15 +6,11 @@ import java.time.format.DateTimeParseException
 import java.util.UUID
 
 fun parseUuid(value: String, field: String): UUID {
-    val id = try {
+    return try {
         UUID.fromString(value)
     } catch (_: IllegalArgumentException) {
         throw BadRequestException("$field must be a UUID")
     }
-    if (!id.toString().equals(value, ignoreCase = true)) {
-        throw BadRequestException("$field must be a UUID")
-    }
-    return id
 }
 
 fun parseDate(value: String, field: String): LocalDate = try {
