@@ -1,6 +1,7 @@
 package familyhub.domain.task
 
 import familyhub.domain.household.HouseholdId
+import familyhub.domain.task.TaskId.Companion.randomTaskId
 import familyhub.domain.user.UserId
 import java.time.Instant
 import java.time.LocalDate
@@ -17,7 +18,9 @@ data class Task(
     val archivedAt: Instant? = null,
 ) {
     init {
-        if (title.isBlank()) throw InvalidTask("title must not be blank")
+        if (title.isBlank()) {
+            throw InvalidTask("title must not be blank")
+        }
     }
 
     fun update(title: String = this.title, dueDate: LocalDate? = this.dueDate): Task {
@@ -37,29 +40,43 @@ data class Task(
 
     fun complete(): Task {
         ensureActive()
-        return if (completed) this else copy(completed = true)
+        if (completed) {
+            return this
+        }
+        return copy(completed = true)
     }
 
     fun reopen(): Task {
         ensureActive()
-        return if (!completed) this else copy(completed = false)
+        if (!completed) {
+            return this
+        }
+        return copy(completed = false)
     }
 
-    fun archive(now: Instant): Task = if (archivedAt != null) this else copy(archivedAt = now)
+    fun archive(now: Instant): Task {
+        if (archivedAt != null) {
+            return this
+        }
+        return copy(archivedAt = now)
+    }
 
     private fun ensureActive() {
-        if (archivedAt != null) throw TaskArchived()
+        if (archivedAt != null) {
+            throw TaskArchived()
+        }
     }
 
     companion object {
+
         fun create(
             title: String,
-            dueDate: LocalDate?,
             householdId: HouseholdId,
+            dueDate: LocalDate?,
             createdBy: UserId,
             now: Instant,
         ): Task = Task(
-            id = TaskId.random(),
+            id = randomTaskId(),
             householdId = householdId,
             title = title.trim(),
             dueDate = dueDate,

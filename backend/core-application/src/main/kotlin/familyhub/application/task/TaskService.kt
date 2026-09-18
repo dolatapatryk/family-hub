@@ -26,8 +26,8 @@ class TaskService(
     fun create(user: User, command: CreateTask): Task {
         val task = Task.create(
             title = command.title,
-            dueDate = command.dueDate,
             householdId = user.householdId,
+            dueDate = command.dueDate,
             createdBy = user.id,
             now = Instant.now(clock),
         )

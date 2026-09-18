@@ -22,11 +22,11 @@ class ExposedUserRepositorySpec {
         val users = ExposedUserRepository(database)
         users.find(author.id).shouldNotBeNull()
         users.get(author.id) shouldBe users.find(author.id)
-        val missingId = UserId.random()
+        val missingId = UserId.randomUserId()
         users.find(missingId).shouldBeNull()
         shouldThrow<UserNotFound> { users.get(missingId) }
 
-        val user = User(UserId.random(), author.householdId, "New member")
+        val user = User(UserId.randomUserId(), author.householdId, "New member")
         users.save(user)
         users.get(user.id) shouldBe user
 

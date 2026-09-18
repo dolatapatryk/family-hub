@@ -67,18 +67,18 @@ class ExposedTaskRepositorySpec {
         tasks.list(filter) shouldBe listOf(expected)
         tasks.list(TaskFilter(author.householdId, completed = true)).size shouldBe 1
         tasks.list(TaskFilter(author.householdId, completed = false)).size shouldBe 5
-        tasks.list(TaskFilter(author.householdId, assignedTo = UserId.random())).shouldBeEmpty()
+        tasks.list(TaskFilter(author.householdId, assignedTo = UserId.randomUserId())).shouldBeEmpty()
     }
 
     @Test
     fun `get and list exclude other households`() {
         val existing = tasks.save(task())
-        val otherHousehold = HouseholdId.random()
+        val otherHousehold = HouseholdId.randomHouseholdId()
 
         tasks.find(otherHousehold, existing.id).shouldBeNull()
         shouldThrow<TaskNotFound> { tasks.get(otherHousehold, existing.id) }
-        tasks.find(author.householdId, TaskId.random()).shouldBeNull()
-        shouldThrow<TaskNotFound> { tasks.get(author.householdId, TaskId.random()) }
+        tasks.find(author.householdId, TaskId.randomTaskId()).shouldBeNull()
+        shouldThrow<TaskNotFound> { tasks.get(author.householdId, TaskId.randomTaskId()) }
         tasks.list(TaskFilter(otherHousehold)).shouldBeEmpty()
     }
 

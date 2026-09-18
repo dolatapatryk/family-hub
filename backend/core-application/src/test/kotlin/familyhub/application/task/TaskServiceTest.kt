@@ -89,7 +89,7 @@ class TaskServiceTest {
     fun `unknown and foreign assignees leave the stored task unchanged`() {
         val existing = tasks.save(task())
 
-        shouldThrow<InvalidTask> { service.assignTo(author, existing.id, UserId.random()) }
+        shouldThrow<InvalidTask> { service.assignTo(author, existing.id, UserId.randomUserId()) }
         shouldThrow<InvalidTask> { service.assignTo(author, existing.id, outsider.id) }
         tasks.get(author.householdId, existing.id) shouldBe existing
     }
@@ -133,7 +133,7 @@ class TaskServiceTest {
         val existing = tasks.save(task())
         val id = existing.id
 
-        shouldThrow<TaskNotFound> { service.get(author, TaskId.random()) }
+        shouldThrow<TaskNotFound> { service.get(author, TaskId.randomTaskId()) }
         shouldThrow<TaskNotFound> { service.get(outsider, id) }
         shouldThrow<TaskNotFound> { service.update(outsider, id, UpdateTask(title = "Changed")) }
         shouldThrow<TaskNotFound> { service.assignTo(outsider, id, outsider.id) }

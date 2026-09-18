@@ -44,7 +44,7 @@ fun ApplicationTestBuilder.userClient(userId: UserId = TestUsers.author): HttpCl
 fun seedOtherHousehold(directory: Path): User {
     val settings = DatabaseSettings(directory.resolve("family.db").toString())
     val database = DatabaseFactory(settings).initialize()
-    val user = User(UserId.random(), HouseholdId.random(), "Other household user")
+    val user = User(UserId.randomUserId(), HouseholdId.randomHouseholdId(), "Other household user")
     DriverManager.getConnection(settings.jdbcUrl).use { connection ->
         connection.prepareStatement("INSERT INTO households (id, name) VALUES (?, ?)").use { statement ->
             statement.setString(1, user.householdId.toString())
