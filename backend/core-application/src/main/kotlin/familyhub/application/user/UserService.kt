@@ -7,5 +7,6 @@ import familyhub.domain.user.UserRepository
 class UnknownUser : RuntimeException("Unknown user")
 
 class UserService(private val users: UserRepository) {
+
     fun identify(id: UserId): User = users.find(id) ?: throw UnknownUser()
 }

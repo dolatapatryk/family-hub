@@ -1,5 +1,7 @@
 package familyhub.application.task
 
+import familyhub.application.task.FieldChange.Set
+import familyhub.application.task.FieldChange.Unchanged
 import java.time.LocalDate
 
 sealed interface FieldChange<out T> {
@@ -8,13 +10,13 @@ sealed interface FieldChange<out T> {
 }
 
 internal fun <T> FieldChange<T>.orElse(current: T): T = when (this) {
-    FieldChange.Unchanged -> current
-    is FieldChange.Set -> value
+    is Unchanged -> current
+    is Set -> value
 }
 
 data class CreateTask(val title: String, val dueDate: LocalDate? = null)
 
 data class UpdateTask(
     val title: String? = null,
-    val dueDate: FieldChange<LocalDate?> = FieldChange.Unchanged,
+    val dueDate: FieldChange<LocalDate?> = Unchanged,
 )

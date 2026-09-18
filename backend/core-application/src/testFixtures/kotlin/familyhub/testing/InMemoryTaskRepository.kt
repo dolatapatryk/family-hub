@@ -7,6 +7,7 @@ import familyhub.domain.task.TaskId
 import familyhub.domain.task.TaskRepository
 
 class InMemoryTaskRepository : TaskRepository {
+
     private val tasks = mutableMapOf<TaskId, Task>()
 
     override fun find(householdId: HouseholdId, id: TaskId): Task? =

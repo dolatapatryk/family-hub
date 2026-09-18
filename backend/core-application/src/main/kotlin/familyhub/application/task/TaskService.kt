@@ -10,18 +10,19 @@ import familyhub.domain.user.User
 import familyhub.domain.user.UserId
 import familyhub.domain.user.UserRepository
 import java.time.Clock
-import java.time.Instant
+import java.time.Clock.systemUTC
+import java.time.Instant.now
 
 class TaskService(
     private val tasks: TaskRepository,
     private val users: UserRepository,
     private val transactions: TransactionRunner,
-    private val clock: Clock = Clock.systemUTC(),
+    private val clock: Clock = systemUTC(),
 ) {
+
     fun list(filter: TaskFilter): List<Task> = tasks.list(filter)
 
-    fun get(user: User, id: TaskId): Task =
-        tasks.get(user.householdId, id)
+    fun get(user: User, id: TaskId): Task = tasks.get(id, user.householdId)
 
     fun create(user: User, command: CreateTask): Task {
         val task = Task.create(
@@ -29,7 +30,7 @@ class TaskService(
             householdId = user.householdId,
             dueDate = command.dueDate,
             createdBy = user.id,
-            now = Instant.now(clock),
+            now = now(clock),
         )
         return tasks.save(task)
     }
@@ -69,6 +70,6 @@ class TaskService(
 
     fun archive(user: User, id: TaskId): Task = transactions.execute {
         val task = get(user, id)
-        tasks.save(task.archive(Instant.now(clock)))
+        tasks.save(task.archive(now(clock)))
     }
 }
