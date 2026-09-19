@@ -82,7 +82,7 @@ Open http://localhost:5173. The web container serves the app and proxies `/healt
 
 ## Scope
 
-The four screens are still placeholders. React Router and the TanStack Query provider are wired in. `/health` returns HTTP 200 and JSON without user identification.
+The Tasks screen is functional; Today, Shop, and Calendar remain placeholders. React Router and TanStack Query are wired in. `/health` returns HTTP 200 and JSON without user identification.
 
 Stage 2 adds the SQLite persistence foundation. On backend startup, Flyway creates the initial schema and seeds one `Family` household with `User 1` and `User 2`; Exposed is then connected for the feature adapters that will be added in later stages. The default database path is `data/family.db`, relative to the backend process, and can be overridden with `DATABASE_PATH`.
 
@@ -155,4 +155,20 @@ Tests use JUnit Jupiter with Kotest assertions, including Kotest HTTP assertions
 
 The initial V1 migration includes `archived_at`; only V1 and V2 are retained. Existing databases created with the earlier V1 require recreation or a deliberate Flyway migration-history reconciliation before startup.
 
-Reusable domain data and in-memory repositories live in their modules' `testFixtures` source sets. Functional specs use the production persistence adapters. No frontend task functionality is included in Stage 3.
+Reusable domain data and in-memory repositories live in their modules' `testFixtures` source sets. Functional specs use the production persistence adapters. Stage 4 adds the frontend task workflow described below.
+
+## Stage 4 — Tasks frontend
+
+Open `/tasks` to list, create, complete, reopen, and archive tasks. Tasks are grouped into Overdue, Today, Upcoming, No due date, and Completed using the browser’s local date. Archiving removes a task from the active list while preserving it in the backend. The form supports a title, optional due date, and optional assignment to either seeded household member. Creation and assignment use separate endpoints; if assignment fails, the UI reports that the task was saved as shared.
+
+Until Stage 7 adds user selection, requests identify as seeded User 1. To use User 2, set `VITE_USER_ID=00000000-0000-0000-0000-000000000102` in `frontend/.env.local` and restart Vite. Member names and IDs currently match the database seed. `VITE_API_URL` defaults to `/api`; Vite and nginx proxy that path to the backend. These Vite settings are applied at build time in production.
+
+Run frontend checks:
+
+```sh
+cd frontend
+npm test
+npm run build
+```
+
+Manual smoke test with the backend running: open `/tasks`, add a dated task assigned to User 2, complete it, refresh and verify it remains in Completed, reopen it, then archive it and verify it disappears after another refresh. Also check an undated task, a past-due task, and the mobile layout.

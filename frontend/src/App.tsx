@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { TasksPage } from './tasks/TasksPage'
 
 const pages = [
   { path: '/', label: 'Today', title: 'A little more together.', description: 'Your family’s day, in one place.', sections: ['Today’s tasks', 'Today’s calendar'] },
@@ -41,11 +42,10 @@ export function App() {
       </nav>
       <main id="main" tabIndex={-1}>
         <Routes>
-          {pages.map(page => <Route key={page.path} path={page.path} element={<Page page={page} />} />)}
+          {pages.map(page => <Route key={page.path} path={page.path} element={page.path === '/tasks' ? <TasksPage /> : <Page page={page} />} />)}
           <Route path="*" element={<><h1>Page not found</h1><Link to="/">Back to Today</Link></>} />
         </Routes>
       </main>
     </div>
   )
 }
-
