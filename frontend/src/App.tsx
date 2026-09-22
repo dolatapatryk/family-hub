@@ -1,4 +1,5 @@
 import { Link, NavLink, Route, Routes } from 'react-router-dom'
+import { AuthGate, useAuth } from './auth/AuthGate'
 import { TasksPage } from './tasks/TasksPage'
 import { ShoppingPage } from './shopping/ShoppingPage'
 
@@ -28,13 +29,18 @@ function Page({ page }: { page: (typeof pages)[number] }) {
   )
 }
 
-export function App() {
+function AuthenticatedApp() {
+  const { profile, signOut } = useAuth()
+
   return (
     <div className="app">
       <a className="skip-link" href="#main">Skip to content</a>
       <header className="header">
         <Link className="brand" to="/"><span className="brand-mark" aria-hidden="true">F</span>Family Hub</Link>
-        <span className="header-note">Our everyday, together</span>
+        <div className="header-account">
+          <span className="header-note">{profile.name}</span>
+          <button className="button-quiet" onClick={() => void signOut()}>Sign out</button>
+        </div>
       </header>
       <nav className="navigation" aria-label="Main navigation">
         {pages.map(page => (
@@ -49,4 +55,8 @@ export function App() {
       </main>
     </div>
   )
+}
+
+export function App() {
+  return <AuthGate><AuthenticatedApp /></AuthGate>
 }

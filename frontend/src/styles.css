@@ -15,6 +15,7 @@ a:focus-visible { outline: 3px solid #b7682d; outline-offset: 5px; border-radius
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font-size: 22px; font-weight: 750; color: #263d36; }
 .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; background: #267060; color: white; }
 .header-note { color: #626f68; font-size: 14px; }
+.header-account { display: flex; align-items: center; gap: 12px; }
 .navigation { display: flex; gap: 8px; border-bottom: 1px solid #dce2da; padding-bottom: 14px; }
 .navigation a { padding: 12px 24px; color: #53665c; text-decoration: none; border-radius: 12px; font-weight: 600; }
 .navigation a.active { background: #dfebe1; color: #205344; }
@@ -30,10 +31,18 @@ h2 { font-size: 19px; margin: 0 0 16px; }
 .badge { display: inline-block; margin-top: 16px; padding: 6px 10px; border-radius: 8px; background: #f2f3ed; color: #626f68; font-size: 12px; }
 .skip-link { position: absolute; top: -100px; background: white; padding: 12px; }
 .skip-link:focus { top: 10px; z-index: 10; }
+.auth-shell { max-width: 640px; }
+.auth-card { margin: 0 auto; }
+.auth-form { display: grid; gap: 18px; }
+.auth-form label { display: grid; gap: 8px; font-weight: 600; }
+.auth-form input { width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #bfcfc4; border-radius: 10px; color: #263d36; background: white; }
+.auth-switch { display: flex; align-items: center; gap: 8px; color: #626f68; margin-bottom: 0; }
+.auth-config { overflow-x: auto; padding: 14px; border-radius: 10px; background: #f2f3ed; color: #365e50; }
 @media (max-width: 600px) {
   .app { padding: 0 20px; }
   .header { padding: 24px 0; }
   .header-note { display: none; }
+  .header-account .button-quiet { padding: 10px 8px; }
   main { padding: 22px 0 calc(110px + env(safe-area-inset-bottom)); }
   .navigation { position: fixed; z-index: 1; bottom: 0; left: 0; right: 0; justify-content: space-around; gap: 4px; background: #fff; border-top: 1px solid #dce2da; border-bottom: 0; padding: 12px 8px calc(12px + env(safe-area-inset-bottom)); }
   .navigation a { flex: 1; text-align: center; padding: 14px 4px; font-size: 14px; }
