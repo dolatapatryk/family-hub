@@ -3,8 +3,8 @@ package familyhub.api.task
 import familyhub.api.common.parseBoolean
 import familyhub.api.common.parseDate
 import familyhub.api.common.parseUuid
+import familyhub.application.common.FieldChange
 import familyhub.application.task.CreateTask
-import familyhub.application.task.FieldChange
 import familyhub.application.task.UpdateTask
 import familyhub.domain.household.HouseholdId
 import familyhub.domain.task.Task

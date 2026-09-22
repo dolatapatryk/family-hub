@@ -1,6 +1,8 @@
 package familyhub.api.common
 
 import familyhub.application.user.UnknownUser
+import familyhub.domain.shopping.InvalidShoppingItem
+import familyhub.domain.shopping.ShoppingItemNotFound
 import familyhub.domain.task.InvalidTask
 import familyhub.domain.task.InvalidTaskFilter
 import familyhub.domain.task.TaskArchived
@@ -21,6 +23,12 @@ fun Application.configureExceptionHandling() {
     install(StatusPages) {
         exception<UnknownUser> { call, _ ->
             call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Missing, invalid, or unknown X-User-Id"))
+        }
+        exception<ShoppingItemNotFound> { call, _ ->
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Shopping item not found"))
+        }
+        exception<InvalidShoppingItem> { call, cause ->
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(cause.message ?: "Invalid shopping item"))
         }
         exception<TaskNotFound> { call, _ ->
             call.respond(HttpStatusCode.NotFound, ErrorResponse("Task not found"))

@@ -1,11 +1,14 @@
 package familyhub
 
 import familyhub.api.common.configureExceptionHandling
+import familyhub.api.shopping.shoppingRoutes
 import familyhub.api.task.taskRoutes
+import familyhub.application.shopping.ShoppingService
 import familyhub.application.task.TaskService
 import familyhub.application.user.UserService
 import familyhub.infrastructure.persistence.DatabaseFactory
 import familyhub.infrastructure.persistence.DatabaseSettings
+import familyhub.infrastructure.persistence.ExposedShoppingRepository
 import familyhub.infrastructure.persistence.ExposedTaskRepository
 import familyhub.infrastructure.persistence.ExposedTransactionRunner
 import familyhub.infrastructure.persistence.ExposedUserRepository
@@ -37,7 +40,13 @@ fun Application.module(databaseSettings: DatabaseSettings? = null) {
         transactions = ExposedTransactionRunner(database),
     )
 
+    val shoppingService = ShoppingService(
+        items = ExposedShoppingRepository(database),
+        transactions = ExposedTransactionRunner(database),
+    )
+
     routing {
+        shoppingRoutes(shoppingService, UserService(users))
         taskRoutes(taskService, UserService(users))
         get("/health") { call.respond(HealthResponse("ok")) }
     }

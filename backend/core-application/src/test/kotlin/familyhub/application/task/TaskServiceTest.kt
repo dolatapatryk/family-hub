@@ -1,6 +1,6 @@
 package familyhub.application.task
 
-import familyhub.application.task.FieldChange.Set
+import familyhub.application.common.FieldChange.Set
 import familyhub.domain.task.InvalidTask
 import familyhub.domain.task.TaskFilter
 import familyhub.domain.task.TaskId.Companion.randomTaskId
