@@ -42,8 +42,8 @@ set search_path = ''
 as $$
 begin
     new.name := pg_catalog.btrim(new.name);
-    new.quantity := pg_catalog.nullif(pg_catalog.btrim(new.quantity), '');
-    new.store := pg_catalog.nullif(pg_catalog.btrim(new.store), '');
+    new.quantity := nullif(pg_catalog.btrim(new.quantity), '');
+    new.store := nullif(pg_catalog.btrim(new.store), '');
     return new;
 end;
 $$;

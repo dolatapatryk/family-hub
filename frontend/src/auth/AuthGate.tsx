@@ -104,7 +104,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!profile) {
-    return <AuthLayout><HouseholdOnboarding user={session.user} onCreated={() => void loadProfile(session.user.id)} /></AuthLayout>
+    return <AuthLayout><HouseholdOnboarding user={session.user} onCreated={() => void loadProfile(session.user.id)} onSignOut={signOut} /></AuthLayout>
   }
 
   return (
@@ -184,7 +184,7 @@ function AuthForm() {
   )
 }
 
-function HouseholdOnboarding({ user, onCreated }: { user: User; onCreated: () => void }) {
+function HouseholdOnboarding({ user, onCreated, onSignOut }: { user: User; onCreated: () => void; onSignOut: () => Promise<void> }) {
   const defaultProfileName = String(user.user_metadata?.name ?? user.email?.split('@')[0] ?? '').trim()
   const [householdName, setHouseholdName] = useState('Family')
   const [profileName, setProfileName] = useState(defaultProfileName)
@@ -201,8 +201,12 @@ function HouseholdOnboarding({ user, onCreated }: { user: User; onCreated: () =>
       profile_name: profileName.trim(),
     })
     setPending(false)
-    if (createError) setError(createError.message)
-    else onCreated()
+    if (createError) {
+      const staleSession = createError.code === '23503' && createError.message.includes('profiles_id_fkey')
+      setError(staleSession
+        ? 'This saved session belongs to a Supabase Auth user that no longer exists. This can happen after resetting the database. Sign out, then sign in again; if the account was also removed, choose “Create one” to register it again.'
+        : createError.message)
+    } else onCreated()
   }
 
   return (
@@ -216,6 +220,7 @@ function HouseholdOnboarding({ user, onCreated }: { user: User; onCreated: () =>
         {error && <p className="error-message" role="alert">{error}</p>}
         <button className="button-primary" type="submit" disabled={pending || !profileName.trim() || !householdName.trim()}>{pending ? 'Creating…' : 'Create household'}</button>
       </form>
+      <p className="auth-switch"><button className="button-quiet" type="button" onClick={() => void onSignOut()}>Sign out</button></p>
     </section>
   )
 }

@@ -1,6 +1,6 @@
 # Family Hub
 
-A shared family app built with Kotlin/Ktor, React/TypeScript, SQLite, and Supabase Auth. The Tasks screen supports creating, assigning, completing, reopening, and archiving tasks. Today, Shop, and Calendar screens are placeholders. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap.
+A shared family app built with Kotlin/Ktor, React/TypeScript, SQLite, and Supabase Auth. The Tasks screen supports creating, assigning, completing, reopening, and archiving tasks. The Shopping screen reads and manages the shared list directly through Supabase; Today and Calendar are placeholders. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap.
 
 ## Local development
 
@@ -37,7 +37,7 @@ For frontend overrides, copy `frontend/.env.example` to `frontend/.env.local` an
 | `VITE_USER_ID` | Temporary legacy identity for the Ktor-backed tasks: User 1 is `00000000-0000-0000-0000-000000000101`; User 2 is `00000000-0000-0000-0000-000000000102` |
 | `DEV_ALLOWED_HOSTS` | Optional comma-separated development hostnames, without scheme, port, or path |
 
-The frontend now uses Supabase Auth for sign-in. The first authenticated user can create a household from the onboarding screen; the database creates the household and profile together. Local and hosted Supabase projects have separate Auth users. `VITE_USER_ID` remains only for the domains that still use the legacy Ktor API. `VITE_*` settings are applied at build time in production. Never expose a Supabase secret or service-role key in frontend variables.
+The frontend now uses Supabase Auth for sign-in. The first authenticated user can create a household from the onboarding screen; the database creates the household and profile together. The Shopping screen reads and writes `public.shopping_items` with the authenticated Supabase client, while row-level security scopes access to the current household. Local and hosted Supabase projects have separate Auth users. `VITE_USER_ID` remains only for the domains that still use the legacy Ktor API. `VITE_*` settings are applied at build time in production. Never expose a Supabase secret or service-role key in frontend variables.
 
 Existing databases created with the earlier V1 migration require recreation or deliberate Flyway migration-history reconciliation before startup.
 

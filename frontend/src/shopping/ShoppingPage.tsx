@@ -1,14 +1,12 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { members } from '../tasks/tasks'
+import { useAuth } from '../auth/AuthGate'
 import { createShoppingApi } from './api'
 import type { ShoppingItem } from './shopping'
 
-const userId = import.meta.env.VITE_USER_ID || members[0].id
-const api = createShoppingApi(import.meta.env.VITE_API_URL || '/api', userId)
-const queryKey = ['shoppingItems', userId]
+type ShoppingApi = ReturnType<typeof createShoppingApi>
 
-async function refreshItems(client: QueryClient, saved: ShoppingItem) {
+async function refreshItems(client: QueryClient, queryKey: readonly unknown[], saved: ShoppingItem) {
   await client.cancelQueries({ queryKey })
   // Keep a successful write visible even if the subsequent refresh fails.
   client.setQueryData<ShoppingItem[]>(queryKey, items => items
@@ -17,11 +15,11 @@ async function refreshItems(client: QueryClient, saved: ShoppingItem) {
   await client.invalidateQueries({ queryKey })
 }
 
-function ShoppingItemRow({ item }: { item: ShoppingItem }) {
+function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; api: ShoppingApi; queryKey: readonly unknown[] }) {
   const client = useQueryClient()
   const update = useMutation({
     mutationFn: (completed: boolean) => api.setCompleted(item.id, completed),
-    onSuccess: saved => refreshItems(client, saved),
+    onSuccess: saved => refreshItems(client, queryKey, saved),
   })
 
   return (
@@ -40,7 +38,10 @@ function ShoppingItemRow({ item }: { item: ShoppingItem }) {
 }
 
 export function ShoppingPage() {
+  const { profile } = useAuth()
   const client = useQueryClient()
+  const api = createShoppingApi(profile.household_id, profile.id)
+  const queryKey = ['shoppingItems', profile.household_id]
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('')
   const [store, setStore] = useState('')
@@ -55,7 +56,7 @@ export function ShoppingPage() {
       setStore('')
       setNotice(`${saved.name} added.`)
       nameInput.current?.focus()
-      await refreshItems(client, saved)
+      await refreshItems(client, queryKey, saved)
     },
   })
 
@@ -94,7 +95,7 @@ export function ShoppingPage() {
     return <div className="shopping-store-groups">
       {storeGroups(groupItems).map(group => <section className="shopping-store-group" key={group.key || 'no-store'} aria-label={group.label}>
         <h3>{group.label}<span className="task-count">{group.items.length}</span></h3>
-        <ul className="task-list">{group.items.map(item => <ShoppingItemRow key={item.id} item={item} />)}</ul>
+        <ul className="task-list">{group.items.map(item => <ShoppingItemRow key={item.id} item={item} api={api} queryKey={queryKey} />)}</ul>
       </section>)}
     </div>
   }
@@ -121,7 +122,7 @@ export function ShoppingPage() {
           <button className="button-primary shopping-add" type="submit" disabled={!name.trim() || create.isPending}
             aria-label={create.isPending ? 'Adding item' : 'Add item'}>{create.isPending ? 'Adding…' : '+ Add'}</button>
         </div>
-        <p className="task-meta">Adding as {members.find(member => member.id === userId)?.name ?? 'configured user'}</p>
+        <p className="task-meta">Adding as {profile.name}</p>
         {create.isError && <div className="error-message" role="alert">{create.error.message}</div>}
       </form>
       <p className="shopping-notice" role="status">{notice}</p>

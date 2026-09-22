@@ -1,37 +1,84 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { supabase } from '../auth/supabase'
 import type { ShoppingItem } from './shopping'
 
-export function createShoppingApi(baseUrl: string, userId: string) {
-  async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    let response: Response
-    try {
-      response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
-        ...options,
-        headers: { 'X-User-Id': userId, ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
-      })
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') throw error
-      throw new Error('Could not reach Family Hub. Check your connection and try again.')
-    }
-    if (!response.ok) {
-      const body = await response.json().catch(() => null)
-      throw new Error(typeof body?.error === 'string' ? body.error : `Request failed (${response.status}). Please try again.`)
-    }
-    return response.json() as Promise<T>
+interface ShoppingItemRow {
+  id: string
+  name: string
+  quantity: string | null
+  store: string | null
+  completed: boolean
+  added_by: string
+  created_at: string
+}
+
+const shoppingItemColumns = 'id, name, quantity, store, completed, added_by, created_at'
+
+function toShoppingItem(row: ShoppingItemRow): ShoppingItem {
+  return {
+    id: row.id,
+    name: row.name,
+    quantity: row.quantity,
+    store: row.store,
+    completed: row.completed,
+    addedBy: row.added_by,
+    createdAt: row.created_at,
   }
+}
+
+function requireSupabase(): SupabaseClient {
+  if (!supabase) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
+  return supabase
+}
+
+function throwIfError(error: { message: string } | null): asserts error is null {
+  if (error) throw new Error(error.message)
+}
+
+export function createShoppingApi(householdId: string, userId: string) {
+  const client = requireSupabase()
 
   return {
-    list: async (signal?: AbortSignal): Promise<ShoppingItem[]> => {
-      // The default endpoint only returns incomplete items; fetch purchased items too.
-      const [active, purchased] = await Promise.all([
-        request<ShoppingItem[]>('/shopping-items?completed=false', { signal }),
-        request<ShoppingItem[]>('/shopping-items?completed=true', { signal }),
-      ])
-      // Another household member may check an item off between the two reads.
-      return [...new Map([...active, ...purchased].map(item => [item.id, item])).values()]
+    async list(signal?: AbortSignal): Promise<ShoppingItem[]> {
+      let query = client
+        .from('shopping_items')
+        .select(shoppingItemColumns)
+        .eq('household_id', householdId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+      if (signal) query = query.abortSignal(signal)
+
+      const { data, error } = await query
+      throwIfError(error)
+      return (data as ShoppingItemRow[]).map(toShoppingItem)
     },
-    create: (input: { name: string; quantity: string | null; store?: string | null }) =>
-      request<ShoppingItem>('/shopping-items', { method: 'POST', body: JSON.stringify(input) }),
-    setCompleted: (id: string, completed: boolean) =>
-      request<ShoppingItem>(`/shopping-items/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ completed }) }),
+
+    async create(input: { name: string; quantity: string | null; store?: string | null }): Promise<ShoppingItem> {
+      const { data, error } = await client
+        .from('shopping_items')
+        .insert({
+          household_id: householdId,
+          name: input.name,
+          quantity: input.quantity,
+          store: input.store ?? null,
+          added_by: userId,
+        })
+        .select(shoppingItemColumns)
+        .single()
+      throwIfError(error)
+      return toShoppingItem(data as ShoppingItemRow)
+    },
+
+    async setCompleted(id: string, completed: boolean): Promise<ShoppingItem> {
+      const { data, error } = await client
+        .from('shopping_items')
+        .update({ completed })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .select(shoppingItemColumns)
+        .single()
+      throwIfError(error)
+      return toShoppingItem(data as ShoppingItemRow)
+    },
   }
 }
