@@ -74,7 +74,21 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .task-completed .task-title { text-decoration: line-through; color: #626f68; }
 .task-feedback { font-size: 13px; color: #626f68; margin-bottom: 0; }
 .error-message { color: #933322; background: #fff0eb; border-radius: 10px; padding: 12px; overflow-wrap: anywhere; }
+.shopping-form-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 200px) auto; align-items: end; gap: 12px; }
+.shopping-form label { min-width: 0; font-weight: 600; }
+.shopping-form input { display: block; width: 100%; min-width: 0; min-height: 46px; margin-top: 8px; padding: 10px 12px; border: 1px solid #bfcfc4; border-radius: 10px; color: #263d36; background: white; }
+.shopping-add { min-height: 46px; }
+.shopping-form .task-meta { margin-bottom: 0; }
+.shopping-notice { min-height: 1.5em; margin: 12px 0 24px; color: #267060; overflow-wrap: anywhere; }
+.shopping-name { flex: 1; min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.shopping-quantity { max-width: 35%; text-align: right; color: #626f68; overflow-wrap: anywhere; }
+.shopping-purchased { background: #f7f8f4; }
+.shopping-purchased .shopping-name { color: #626f68; text-decoration: line-through; }
 @media (max-width: 600px) {
+  .shopping-form-fields { grid-template-columns: minmax(0, 1fr) auto; }
+  .shopping-name-field { grid-column: 1; grid-row: 1; }
+  .shopping-add { grid-column: 2; grid-row: 1; }
+  .shopping-quantity-field { grid-column: 1 / -1; grid-row: 2; }
   .task-form-options { grid-template-columns: 1fr; gap: 16px; }
   .task-item { padding: 12px; }
   .task-row { gap: 8px; }
