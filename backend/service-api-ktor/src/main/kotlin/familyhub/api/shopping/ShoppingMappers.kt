@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 
-fun CreateShoppingItemRequest.toCommand(): CreateShoppingItem = CreateShoppingItem(name, quantity)
+fun CreateShoppingItemRequest.toCommand(): CreateShoppingItem = CreateShoppingItem(name, quantity, store)
 
 fun JsonObject.toUpdateCommand(): UpdateShoppingItem {
     if (this["name"] == JsonNull) throw BadRequestException("name cannot be null")
@@ -23,6 +23,7 @@ fun JsonObject.toUpdateCommand(): UpdateShoppingItem {
     return UpdateShoppingItem(
         name = request.name,
         quantity = if (containsKey("quantity")) FieldChange.Set(request.quantity) else FieldChange.Unchanged,
+        store = if (containsKey("store")) FieldChange.Set(request.store) else FieldChange.Unchanged,
         completed = request.completed,
     )
 }
@@ -36,6 +37,7 @@ fun ShoppingItem.toResponse(): ShoppingItemResponse = ShoppingItemResponse(
     id = id.toString(),
     name = name,
     quantity = quantity,
+    store = store,
     completed = completed,
     addedBy = addedBy.toString(),
     createdAt = createdAt.toString(),

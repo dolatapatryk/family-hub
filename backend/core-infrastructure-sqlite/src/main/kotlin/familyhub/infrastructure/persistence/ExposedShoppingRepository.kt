@@ -24,6 +24,7 @@ internal object ShoppingItems : Table("shopping_items") {
     val householdId = text("household_id")
     val name = text("name")
     val quantity = text("quantity").nullable()
+    val store = text("store").nullable()
     val completed = bool("completed")
     val addedBy = text("added_by")
     val createdAt = text("created_at")
@@ -55,6 +56,7 @@ class ExposedShoppingRepository(private val database: Database) : ShoppingReposi
             it[householdId] = item.householdId.toString()
             it[name] = item.name
             it[quantity] = item.quantity
+            it[store] = item.store
             it[completed] = item.completed
             it[addedBy] = item.addedBy.toString()
             it[createdAt] = item.createdAt.toString()
@@ -75,6 +77,7 @@ class ExposedShoppingRepository(private val database: Database) : ShoppingReposi
         householdId = HouseholdId(UUID.fromString(this[ShoppingItems.householdId])),
         name = this[ShoppingItems.name],
         quantity = this[ShoppingItems.quantity],
+        store = this[ShoppingItems.store],
         completed = this[ShoppingItems.completed],
         addedBy = UserId(UUID.fromString(this[ShoppingItems.addedBy])),
         createdAt = Instant.parse(this[ShoppingItems.createdAt]),

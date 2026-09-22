@@ -10,6 +10,7 @@ data class ShoppingItem(
     val householdId: HouseholdId,
     val name: String,
     val quantity: String?,
+    val store: String?,
     val completed: Boolean,
     val addedBy: UserId,
     val createdAt: Instant,
@@ -23,8 +24,14 @@ data class ShoppingItem(
     fun update(
         name: String = this.name,
         quantity: String? = this.quantity,
+        store: String? = this.store,
         completed: Boolean = this.completed,
-    ): ShoppingItem = copy(name = name.trim(), quantity = quantity, completed = completed)
+    ): ShoppingItem = copy(
+        name = name.trim(),
+        quantity = quantity,
+        store = store.normalizedStore(),
+        completed = completed,
+    )
 
     companion object {
 
@@ -34,14 +41,18 @@ data class ShoppingItem(
             quantity: String?,
             addedBy: UserId,
             now: Instant,
+            store: String? = null,
         ): ShoppingItem = ShoppingItem(
             id = randomShoppingItemId(),
             householdId = householdId,
             name = name.trim(),
             quantity = quantity,
+            store = store.normalizedStore(),
             completed = false,
             addedBy = addedBy,
             createdAt = now,
         )
     }
 }
+
+private fun String?.normalizedStore(): String? = this?.trim()?.takeIf { it.isNotEmpty() }

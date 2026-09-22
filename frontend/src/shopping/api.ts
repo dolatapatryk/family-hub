@@ -29,7 +29,7 @@ export function createShoppingApi(baseUrl: string, userId: string) {
       // Another household member may check an item off between the two reads.
       return [...new Map([...active, ...purchased].map(item => [item.id, item])).values()]
     },
-    create: (input: { name: string; quantity: string | null }) =>
+    create: (input: { name: string; quantity: string | null; store?: string | null }) =>
       request<ShoppingItem>('/shopping-items', { method: 'POST', body: JSON.stringify(input) }),
     setCompleted: (id: string, completed: boolean) =>
       request<ShoppingItem>(`/shopping-items/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ completed }) }),

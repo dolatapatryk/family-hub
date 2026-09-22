@@ -26,6 +26,7 @@ class ShoppingService(
             quantity = command.quantity,
             addedBy = user.id,
             now = now(clock),
+            store = command.store,
         )
     )
 
@@ -34,6 +35,7 @@ class ShoppingService(
         val updated = item.update(
             name = command.name ?: item.name,
             quantity = command.quantity.orElse(item.quantity),
+            store = command.store.orElse(item.store),
             completed = command.completed ?: item.completed,
         )
         items.save(updated)
