@@ -2,22 +2,27 @@ import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { createHouseholdMembersApi, type HouseholdMember } from '../household/api'
-import { createTasksApi } from './api'
+import { createTasksApi, type CreateTaskInput } from './api'
 import { formatDueDate, groupTasks, type Task } from './tasks'
 
-const userId = import.meta.env.VITE_USER_ID || ''
-const api = createTasksApi(import.meta.env.VITE_API_URL || '/api', userId)
-const queryKey = ['tasks', userId]
+type TasksApi = ReturnType<typeof createTasksApi>
 
 function memberName(members: HouseholdMember[] | undefined, memberId: string | null) {
   if (!memberId) return 'Shared'
   return members?.find(member => member.id === memberId)?.name ?? 'Household member'
 }
 
-function TaskItem({ task, members }: { task: Task; members: HouseholdMember[] | undefined }) {
+function TaskItem({ task, api, queryKey, members }: {
+  task: Task
+  api: TasksApi
+  queryKey: readonly unknown[]
+  members: HouseholdMember[] | undefined
+}) {
   const client = useQueryClient()
   const mutation = useMutation({
-    mutationFn: (action: 'complete' | 'reopen' | 'archive') => api.action(task.id, action),
+    mutationFn: (action: 'complete' | 'reopen' | 'archive') => action === 'archive'
+      ? api.archive(task.id)
+      : api.setCompleted(task.id, action === 'complete'),
     onSuccess: () => client.invalidateQueries({ queryKey }),
   })
   return (
@@ -44,6 +49,8 @@ function TaskItem({ task, members }: { task: Task; members: HouseholdMember[] | 
 export function TasksPage() {
   const { profile } = useAuth()
   const client = useQueryClient()
+  const api = createTasksApi(profile.household_id, profile.id)
+  const queryKey = ['tasks', profile.household_id]
   const [formOpen, setFormOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -57,18 +64,9 @@ export function TasksPage() {
   })
   const tasks = useQuery({ queryKey, queryFn: ({ signal }) => api.list(signal) })
   const create = useMutation({
-    mutationFn: async () => {
-      const task = await api.create({ title: title.trim(), dueDate: dueDate || null })
-      // Creation and assignment are separate API operations. An assignment failure
-      // must not invite retrying creation and accidentally duplicating the task.
-      if (assignedTo) {
-        try { await api.assign(task.id, assignedTo) }
-        catch (error) { return `Task created, but assignment failed: ${error instanceof Error ? error.message : 'Please try again later.'} It is saved as a shared task.` }
-      }
-      return 'Task added.'
-    },
-    onSuccess: async message => {
-      setNotice(message)
+    mutationFn: (input: CreateTaskInput) => api.create(input),
+    onSuccess: async () => {
+      setNotice('Task added.')
       setTitle('')
       setDueDate('')
       setAssignedTo('')
@@ -79,7 +77,13 @@ export function TasksPage() {
   })
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (title.trim() && !create.isPending) create.mutate()
+    if (title.trim() && !create.isPending) {
+      create.mutate({
+        title: title.trim(),
+        dueDate: dueDate || null,
+        assignedTo: assignedTo || null,
+      })
+    }
   }
   return (
     <>
@@ -111,7 +115,7 @@ export function TasksPage() {
         {tasks.data.filter(task => !task.archivedAt).length === 0 && <div className="card"><h2>A little breathing room.</h2><p>No tasks yet. Add your first task above.</p></div>}
         {Object.entries(groupTasks(tasks.data)).map(([heading, items]) => <section key={heading} className="task-section" aria-label={heading}>
           <h2>{heading}<span className="task-count">{items.length}</span></h2>
-          {items.length ? <ul className="task-list">{items.map(task => <TaskItem key={task.id} task={task} members={householdMembers.data} />)}</ul> : <p className="section-empty">{heading === 'Today' ? 'Nothing due today.' : heading === 'No due date' ? 'No undated tasks.' : `No ${heading.toLowerCase()} tasks.`}</p>}
+          {items.length ? <ul className="task-list">{items.map(task => <TaskItem key={task.id} task={task} api={api} queryKey={queryKey} members={householdMembers.data} />)}</ul> : <p className="section-empty">{heading === 'Today' ? 'Nothing due today.' : heading === 'No due date' ? 'No undated tasks.' : `No ${heading.toLowerCase()} tasks.`}</p>}
         </section>)}
       </div>}
     </>

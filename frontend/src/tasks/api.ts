@@ -147,13 +147,5 @@ export function createTasksApi(
     setCompleted,
     setAssignedTo,
     archive,
-
-    // These aliases keep the current Tasks page type-safe until Stage 12
-    // switches its mutations to the explicit Supabase operations above.
-    assign: setAssignedTo,
-    action: (id: string, action: 'complete' | 'reopen' | 'archive') => {
-      if (action === 'archive') return archive(id)
-      return setCompleted(id, action === 'complete')
-    },
   }
 }
