@@ -9,12 +9,6 @@ export interface Task {
   archivedAt: string | null
 }
 
-// Until Stage 7 provides user selection and a household member endpoint.
-export const members = [
-  { id: '00000000-0000-0000-0000-000000000101', name: 'User 1' },
-  { id: '00000000-0000-0000-0000-000000000102', name: 'User 2' },
-]
-
 export function localDate(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
