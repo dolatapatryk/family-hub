@@ -8,11 +8,10 @@ interface ShoppingItemRow {
   quantity: string | null
   store: string | null
   completed: boolean
-  added_by: string
   created_at: string
 }
 
-const shoppingItemColumns = 'id, name, quantity, store, completed, added_by, created_at'
+const shoppingItemColumns = 'id, name, quantity, store, completed, created_at'
 
 function toShoppingItem(row: ShoppingItemRow): ShoppingItem {
   return {
@@ -21,7 +20,6 @@ function toShoppingItem(row: ShoppingItemRow): ShoppingItem {
     quantity: row.quantity,
     store: row.store,
     completed: row.completed,
-    addedBy: row.added_by,
     createdAt: row.created_at,
   }
 }

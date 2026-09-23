@@ -4,9 +4,7 @@ export interface Task {
   dueDate: string | null
   completed: boolean
   assignedTo: string | null
-  createdBy: string
   createdAt: string
-  archivedAt: string | null
 }
 
 export function localDate(date = new Date()) {
@@ -16,7 +14,6 @@ export function localDate(date = new Date()) {
 export function groupTasks(tasks: Task[], today = localDate()) {
   const groups: Record<string, Task[]> = { Overdue: [], Today: [], Upcoming: [], 'No due date': [], Completed: [] }
   for (const task of [...tasks].sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || a.createdAt.localeCompare(b.createdAt))) {
-    if (task.archivedAt) continue
     const group = task.completed ? 'Completed' : !task.dueDate ? 'No due date' : task.dueDate < today ? 'Overdue' : task.dueDate === today ? 'Today' : 'Upcoming'
     groups[group].push(task)
   }

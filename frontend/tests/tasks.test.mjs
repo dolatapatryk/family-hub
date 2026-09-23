@@ -3,14 +3,13 @@ import assert from 'node:assert/strict'
 import { groupTasks, localDate, formatDueDate } from '../src/tasks/tasks.ts'
 import { createTasksApi } from '../src/tasks/api.ts'
 
-const task = (id, overrides = {}) => ({ id, title: id, dueDate: null, completed: false, assignedTo: null, createdBy: 'user', createdAt: '2026-09-01T12:00:00Z', archivedAt: null, ...overrides })
+const task = (id, overrides = {}) => ({ id, title: id, dueDate: null, completed: false, assignedTo: null, createdAt: '2026-09-01T12:00:00Z', ...overrides })
 
 test('groups all active tasks without dropping overdue or undated completed tasks', () => {
   const groups = groupTasks([
     task('shared'), task('today', { dueDate: '2026-09-19' }),
     task('later', { dueDate: '2026-09-22' }), task('tomorrow', { dueDate: '2026-09-20' }),
     task('overdue', { dueDate: '2026-09-18' }), task('done', { completed: true }),
-    task('archived', { archivedAt: '2026-09-19T10:00:00Z' }),
   ], '2026-09-19')
   assert.deepEqual(Object.fromEntries(Object.entries(groups).map(([key, tasks]) => [key, tasks.map(t => t.id)])), {
     Overdue: ['overdue'], Today: ['today'], Upcoming: ['tomorrow', 'later'], 'No due date': ['shared'], Completed: ['done'],
@@ -35,9 +34,7 @@ const row = (id = 'task-1', overrides = {}) => ({
   due_date: '2026-09-20',
   completed: false,
   assigned_to: 'member-2',
-  created_by: 'member-1',
   created_at: '2026-09-01T12:00:00Z',
-  archived_at: null,
   ...overrides,
 })
 
@@ -78,7 +75,7 @@ test('Supabase adapter scopes, maps, and writes task rows', async () => {
 
   const listed = await api.list(controller.signal)
   assert.deepEqual(listed, [task('task-1', {
-    title: 'Call doctor', dueDate: '2026-09-20', assignedTo: 'member-2', createdBy: 'member-1',
+    title: 'Call doctor', dueDate: '2026-09-20', assignedTo: 'member-2',
   })])
   assert.equal(client.calls[0].find(operation => operation[0] === 'abortSignal')[1], controller.signal)
   assert.ok(client.calls[0].some(operation => operation[0] === 'is' && operation[1] === 'archived_at' && operation[2] === null))
@@ -95,12 +92,11 @@ test('Supabase adapter scopes, maps, and writes task rows', async () => {
   const updateClient = fakeClient({ data: row('updated'), error: null })
   const updateApi = createTasksApi('household-1', 'member-1', updateClient)
   await updateApi.setCompleted('task-1', true)
-  await updateApi.setAssignedTo('task-1', null)
   await updateApi.archive('task-1')
   const updates = updateClient.calls.map(operations => operations.find(operation => operation[0] === 'update')[1])
-  assert.deepEqual(updates.slice(0, 2), [{ completed: true }, { assigned_to: null }])
-  assert.equal(updates.length, 3)
-  assert.equal(typeof updates[2].archived_at, 'string')
+  assert.deepEqual(updates[0], { completed: true })
+  assert.equal(updates.length, 2)
+  assert.equal(typeof updates[1].archived_at, 'string')
   assert.ok(updateClient.calls.every(operations => operations.some(operation => operation[0] === 'eq' && operation[1] === 'household_id' && operation[2] === 'household-1')))
 })
 

@@ -8,9 +8,7 @@ interface TaskRow {
   due_date: string | null
   completed: boolean
   assigned_to: string | null
-  created_by: string
   created_at: string
-  archived_at: string | null
 }
 
 export interface CreateTaskInput {
@@ -19,7 +17,7 @@ export interface CreateTaskInput {
   assignedTo?: string | null
 }
 
-const taskColumns = 'id, title, due_date, completed, assigned_to, created_by, created_at, archived_at'
+const taskColumns = 'id, title, due_date, completed, assigned_to, created_at'
 const connectionErrorMessage = 'Could not reach Family Hub. Check your connection and try again.'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
@@ -69,9 +67,7 @@ function toTask(row: TaskRow): Task {
     dueDate: row.due_date,
     completed: row.completed,
     assignedTo: row.assigned_to,
-    createdBy: row.created_by,
     createdAt: row.created_at,
-    archivedAt: row.archived_at,
   }
 }
 
@@ -133,10 +129,6 @@ export function createTasksApi(
     return updateTask(id, { completed })
   }
 
-  async function setAssignedTo(id: string, profileId: string | null): Promise<Task> {
-    return updateTask(id, { assigned_to: profileId })
-  }
-
   async function archive(id: string): Promise<Task> {
     return updateTask(id, { archived_at: new Date().toISOString() })
   }
@@ -145,7 +137,6 @@ export function createTasksApi(
     list,
     create,
     setCompleted,
-    setAssignedTo,
     archive,
   }
 }

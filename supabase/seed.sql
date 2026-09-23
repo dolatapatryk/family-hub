@@ -1,2 +1,0 @@
--- There is intentionally no household seed data.
--- Households are created by authenticated application onboarding.

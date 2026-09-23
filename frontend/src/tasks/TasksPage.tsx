@@ -112,7 +112,7 @@ export function TasksPage() {
       {tasks.isPending && <p role="status">Loading tasks…</p>}
       {tasks.isError && <div className="error-message" role="alert"><p>{tasks.error.message}</p><button className="button-quiet" disabled={tasks.isFetching} onClick={() => void tasks.refetch()}>{tasks.isFetching ? 'Retrying…' : 'Try again'}</button></div>}
       {tasks.data && <div className="task-sections">
-        {tasks.data.filter(task => !task.archivedAt).length === 0 && <div className="card"><h2>A little breathing room.</h2><p>No tasks yet. Add your first task above.</p></div>}
+        {tasks.data.length === 0 && <div className="card"><h2>A little breathing room.</h2><p>No tasks yet. Add your first task above.</p></div>}
         {Object.entries(groupTasks(tasks.data)).map(([heading, items]) => <section key={heading} className="task-section" aria-label={heading}>
           <h2>{heading}<span className="task-count">{items.length}</span></h2>
           {items.length ? <ul className="task-list">{items.map(task => <TaskItem key={task.id} task={task} api={api} queryKey={queryKey} members={householdMembers.data} />)}</ul> : <p className="section-empty">{heading === 'Today' ? 'Nothing due today.' : heading === 'No due date' ? 'No undated tasks.' : `No ${heading.toLowerCase()} tasks.`}</p>}

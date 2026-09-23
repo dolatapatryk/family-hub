@@ -4,6 +4,5 @@ export interface ShoppingItem {
   quantity: string | null
   store: string | null
   completed: boolean
-  addedBy: string
   createdAt: string
 }

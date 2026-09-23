@@ -14,10 +14,6 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       allowedHosts,
-      proxy: {
-        '/api': 'http://localhost:8080',
-        '/health': 'http://localhost:8080',
-      },
     },
   }
 })

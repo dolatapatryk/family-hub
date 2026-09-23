@@ -3,11 +3,10 @@ import { supabase } from '../auth/supabase'
 
 export interface HouseholdMember {
   id: string
-  household_id: string
   name: string
 }
 
-const householdMemberColumns = 'id, household_id, name'
+const householdMemberColumns = 'id, name'
 
 function requireSupabase(): SupabaseClient {
   if (!supabase) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
@@ -33,11 +32,7 @@ export function createHouseholdMembersApi(householdId: string) {
 
       const { data, error } = await query
       throwIfError(error)
-      return (data as HouseholdMember[]).map(member => ({
-        id: member.id,
-        household_id: member.household_id,
-        name: member.name,
-      }))
+      return data as HouseholdMember[]
     },
   }
 }

@@ -3,11 +3,8 @@
 .env
 .env.*
 !.env.example
-**/.gradle/
-**/.kotlin/
 **/build/
 **/node_modules/
 **/dist/
 *.tsbuildinfo
 /data/
-
