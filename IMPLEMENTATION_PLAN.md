@@ -54,6 +54,8 @@ tokens in VITE_* variables or browser code.
 - Household member lookup for task assignment labels.
 - Database-side text normalization and write invariants.
 - Frontend adapter tests and production build checks.
+- Installable PWA manifest, application icons, and static shell caching.
+- Mobile touch targets and safe-area spacing; static Nginx deployment guidance.
 
 ### Current product gap
 
@@ -61,8 +63,6 @@ tokens in VITE_* variables or browser code.
   verification is still pending.
 - Today and Calendar are placeholders.
 - Calendar integration and event creation are not implemented.
-- PWA installation metadata and final deployment documentation are not
-  complete.
 - RLS and migration behavior still need a repeatable two-user integration
   verification pass.
 
@@ -233,7 +233,7 @@ Reuse the existing feature adapters and query keys. Do not duplicate
 Supabase queries or introduce another global store. Do not include Shopping
 in the initial Today view.
 
-### 4. Finish PWA and deployment behavior
+### 4. Finish PWA and deployment behavior (complete)
 
 Add:
 

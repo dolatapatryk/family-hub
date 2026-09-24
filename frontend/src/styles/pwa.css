@@ -1,0 +1,81 @@
+@media (max-width: 800px) {
+  .app.auth-shell {
+    width: min(calc(100% - 28px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)), 640px);
+  }
+
+  .auth-shell .header {
+    padding-top: calc(30px + env(safe-area-inset-top, 0px));
+  }
+
+  .auth-shell main {
+    padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebar {
+    padding: calc(12px + env(safe-area-inset-top, 0px))
+      max(16px, env(safe-area-inset-left, 0px))
+      10px
+      max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  .main {
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(42px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+  }
+}
+
+@media (max-width: 620px) {
+  .main {
+    padding-right: max(14px, env(safe-area-inset-right, 0px));
+    padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px));
+    padding-left: max(14px, env(safe-area-inset-left, 0px));
+  }
+}
+
+@media (max-width: 600px) {
+  .auth-shell .header {
+    padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  }
+
+  .auth-shell main {
+    padding-top: 22px;
+    padding-bottom: calc(35px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (pointer: coarse) {
+  .nav-link,
+  .signout-button,
+  .primary-button,
+  .button-quiet,
+  .text-button,
+  .link-button,
+  .task-archive,
+  .agenda-switch button,
+  .calendar-tools button {
+    min-height: 44px;
+  }
+
+  .signout-button {
+    flex-basis: 44px;
+    width: 44px;
+    padding: 11px;
+  }
+
+  .signout-button.mobile-signout {
+    flex-basis: 44px;
+  }
+
+  input:not([type="checkbox"]),
+  select {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input[type="checkbox"] {
+    flex-basis: 22px;
+    width: 22px;
+    height: 22px;
+  }
+}

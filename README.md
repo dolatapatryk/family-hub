@@ -54,6 +54,40 @@ Frontend values are read at build time:
 
 Restart Vite after changing .env.local.
 
+## PWA and deployment
+
+The production build is an installable PWA. To inspect it locally, build and
+serve the static output:
+
+    cd frontend
+    npm run build
+    npm run preview
+
+The service worker is enabled for production builds and is served at the site
+root. It caches the app shell and versioned Vite assets; Supabase data still
+needs a network connection. Keep the app at the domain root, or update the
+manifest start URL, scope, service worker registration, and asset paths before
+deploying it below a path. Browsers require HTTPS for installation outside
+localhost. If you change the fixed app-shell assets, increment `CACHE_NAME` in
+`frontend/public/sw.js` so installed copies replace the previous shell cache.
+
+For a hosted build, set `VITE_SUPABASE_URL` and
+`VITE_SUPABASE_PUBLISHABLE_KEY` in the build environment. These values are
+compiled into the frontend; use only the publishable key. In Supabase Auth,
+set the Site URL to the deployed app origin and allow that origin in the
+redirect URL list for the environment. Configure each preview and production
+environment separately. The `frontend/Dockerfile` builds the static app and
+serves it through the included Nginx configuration, which keeps the app shell
+and service worker revalidating while allowing fingerprinted Vite assets to
+use long-lived caching.
+
+When checking a release on a phone, confirm the app can be installed and
+reopened in standalone mode, navigation and account controls have comfortable
+touch targets, and content remains inside the cutout and home-indicator areas.
+Check both portrait and landscape layouts. Going offline can load the cached
+shell, but app data and writes remain unavailable until Supabase can be
+reached.
+
 ## Access over Tailscale
 
 To share the development frontend over Tailscale, keep the host awake and
