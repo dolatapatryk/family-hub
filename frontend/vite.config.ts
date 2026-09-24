@@ -8,6 +8,14 @@ export default defineConfig(({ mode }) => {
     .map(host => host.trim())
     .filter(Boolean)
   const supabaseUrl = env.VITE_SUPABASE_URL?.trim()
+  const supabaseProxy = supabaseUrl ? {
+    '/supabase': {
+      target: supabaseUrl,
+      changeOrigin: true,
+      ws: true,
+      rewrite: (path: string) => path.replace(/^\/supabase/, '') || '/',
+    },
+  } : undefined
 
   return {
     plugins: [react()],
@@ -15,14 +23,11 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       allowedHosts,
-      proxy: supabaseUrl ? {
-        '/supabase': {
-          target: supabaseUrl,
-          changeOrigin: true,
-          ws: true,
-          rewrite: path => path.replace(/^\/supabase/, '') || '/',
-        },
-      } : undefined,
+      proxy: supabaseProxy,
+    },
+    preview: {
+      port: 4173,
+      proxy: supabaseProxy,
     },
   }
 })
