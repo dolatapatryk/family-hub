@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase, supabaseConfig } from './supabase'
+import { createHouseholdInvitesApi } from '../household/api'
 
 interface Profile {
   id: string
@@ -104,7 +105,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!profile) {
-    return <AuthLayout><HouseholdOnboarding user={session.user} onCreated={() => void loadProfile(session.user.id)} onSignOut={signOut} /></AuthLayout>
+    return <AuthLayout><HouseholdOnboarding user={session.user} onCompleted={() => void loadProfile(session.user.id)} onSignOut={signOut} /></AuthLayout>
   }
 
   return (
@@ -166,7 +167,7 @@ function AuthForm() {
     <section className="card auth-card">
       <p className="eyebrow">Witaj</p>
       <h1>{mode === 'signIn' ? 'Zaloguj się do Family Hub.' : 'Utwórz konto Family Hub.'}</h1>
-      <p className="intro">{mode === 'signIn' ? 'Użyj konta utworzonego w Supabase Auth.' : 'Po rejestracji możesz utworzyć wspólny dom.'}</p>
+      <p className="intro">{mode === 'signIn' ? 'Użyj konta utworzonego w Supabase Auth.' : 'Po rejestracji utwórz dom lub dołącz do niego kodem zaproszenia.'}</p>
       <form className="auth-form" onSubmit={submit}>
         <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} /></label>
         <label>Hasło<input type="password" required minLength={6} autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'} value={password} onChange={event => setPassword(event.target.value)} /></label>
@@ -184,41 +185,68 @@ function AuthForm() {
   )
 }
 
-function HouseholdOnboarding({ user, onCreated, onSignOut }: { user: User; onCreated: () => void; onSignOut: () => Promise<void> }) {
+function HouseholdOnboarding({ user, onCompleted, onSignOut }: { user: User; onCompleted: () => void; onSignOut: () => Promise<void> }) {
+  const [mode, setMode] = useState<'create' | 'join'>('create')
   const defaultProfileName = String(user.user_metadata?.name ?? user.email?.split('@')[0] ?? '').trim()
   const [householdName, setHouseholdName] = useState('Family')
   const [profileName, setProfileName] = useState(defaultProfileName)
+  const [inviteToken, setInviteToken] = useState('')
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!supabase || pending || !householdName.trim() || !profileName.trim()) return
+    if (!supabase || pending || !profileName.trim()) return
+    if (mode === 'create' && !householdName.trim()) return
+    if (mode === 'join' && !inviteToken.trim()) return
     setPending(true)
     setError('')
-    const { error: createError } = await supabase.rpc('create_household', {
-      household_name: householdName.trim(),
-      profile_name: profileName.trim(),
-    })
-    setPending(false)
-    if (createError) {
-      const staleSession = createError.code === '23503' && createError.message.includes('profiles_id_fkey')
-        setError(staleSession
-        ? 'Ta zapisana sesja należy do użytkownika Supabase Auth, który już nie istnieje. Może się tak zdarzyć po zresetowaniu bazy danych. Wyloguj się i zaloguj ponownie. Jeśli konto także zostało usunięte, wybierz „Utwórz konto”, aby zarejestrować je ponownie.'
-        : createError.message)
-    } else onCreated()
+    try {
+      if (mode === 'create') {
+        const { error: createError } = await supabase.rpc('create_household', {
+          household_name: householdName.trim(),
+          profile_name: profileName.trim(),
+        })
+        if (createError) {
+          const staleSession = createError.code === '23503' && createError.message.includes('profiles_id_fkey')
+          throw new Error(staleSession
+            ? 'Ta zapisana sesja należy do użytkownika Supabase Auth, który już nie istnieje. Może się tak zdarzyć po zresetowaniu bazy danych. Wyloguj się i zaloguj ponownie. Jeśli konto także zostało usunięte, wybierz „Utwórz konto”, aby zarejestrować je ponownie.'
+            : createError.message)
+        }
+      } else {
+        await createHouseholdInvitesApi().join(inviteToken.trim(), profileName.trim())
+      }
+      onCompleted()
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : 'Nie udało się zapisać zmian.'
+      setError(message.includes('Invite is invalid')
+        ? 'Kod zaproszenia jest nieprawidłowy, wygasł lub został już wykorzystany.'
+        : message.includes('User already belongs')
+          ? 'To konto należy już do domu.'
+          : message)
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
     <section className="card auth-card">
       <p className="eyebrow">Pierwsze kroki</p>
-      <h1>Utwórz wspólny dom.</h1>
-      <p className="intro">Utworzymy wspólną przestrzeń i dodamy Twój profil jako pierwszego domownika.</p>
+      <h1>{mode === 'create' ? 'Utwórz wspólny dom.' : 'Dołącz do domu.'}</h1>
+      <p className="intro">{mode === 'create' ? 'Utworzymy wspólną przestrzeń i dodamy Twój profil jako pierwszego domownika.' : 'Wpisz jednorazowy kod od domownika. Dodamy Twój profil do jego domu.'}</p>
+      <div className="household-onboarding-mode" aria-label="Wybierz sposób dołączenia">
+        <button className="text-button" type="button" aria-pressed={mode === 'create'} onClick={() => { setMode('create'); setError('') }}>Utwórz dom</button>
+        <button className="text-button" type="button" aria-pressed={mode === 'join'} onClick={() => { setMode('join'); setError('') }}>Mam kod zaproszenia</button>
+      </div>
       <form className="auth-form" onSubmit={submit}>
         <label>Twoje imię<input required value={profileName} onChange={event => setProfileName(event.target.value)} autoComplete="name" /></label>
-        <label>Nazwa domu<input required value={householdName} onChange={event => setHouseholdName(event.target.value)} /></label>
+        {mode === 'create'
+          ? <label>Nazwa domu<input required value={householdName} onChange={event => setHouseholdName(event.target.value)} /></label>
+          : <label>Kod zaproszenia<input required value={inviteToken} onChange={event => setInviteToken(event.target.value)} autoComplete="off" spellCheck={false} placeholder="np. 123e4567-e89b-12d3-a456-426614174000" /></label>}
         {error && <p className="error-message" role="alert">{error}</p>}
-        <button className="primary-button" type="submit" disabled={pending || !profileName.trim() || !householdName.trim()}>{pending ? 'Tworzę…' : 'Utwórz dom'}</button>
+        <button className="primary-button" type="submit" disabled={pending || !profileName.trim() || (mode === 'create' ? !householdName.trim() : !inviteToken.trim())}>
+          {pending ? 'Zapisuję…' : mode === 'create' ? 'Utwórz dom' : 'Dołącz do domu'}
+        </button>
       </form>
       <p className="auth-switch"><button className="text-button" type="button" onClick={() => void onSignOut()}>Wyloguj się</button></p>
     </section>

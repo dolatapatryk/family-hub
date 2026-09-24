@@ -57,7 +57,8 @@ tokens in VITE_* variables or browser code.
 
 ### Current product gap
 
-- A second authenticated user still needs a safe join or invite flow.
+- The safe household invite and join flow is implemented; two-user Supabase
+  verification is still pending.
 - Today and Calendar are placeholders.
 - Calendar integration and event creation are not implemented.
 - PWA installation metadata and final deployment documentation are not
@@ -181,22 +182,24 @@ timestamps. Keep stable ordering by due date, creation time, and ID.
 
 ## Next milestones
 
-### 1. Add a safe household join or invite flow
+### 1. Verify the household join and invite flow
 
-Choose the smallest flow that supports the MVP, for example:
+The initial implementation uses this smallest flow:
 
-- an owner creates a short-lived invite token through a security-definer RPC;
+- a household member creates a short-lived invite token through a
+  security-definer RPC;
 - the second authenticated user submits the token;
 - the database validates the token and creates that user's profile
   atomically;
 - the token cannot be reused or used for an arbitrary household.
 
-Keep invite data minimal. Do not expose service-role credentials to the
-browser. Add database checks for expired, reused, invalid, and
-cross-household attempts.
+Invite records are stored in the private schema, and tokens expire after 24
+hours. The onboarding screen supports either household creation or joining.
+Verify expired, reused, invalid, and already-member attempts, plus isolation
+between two households. Do not expose service-role credentials to the browser.
 
-Add the member flow to the AuthGate/onboarding experience and verify two
-authenticated users see the same Tasks and Shopping data.
+Verify that two authenticated users in the same household see the same Tasks
+and Shopping data.
 
 ### 2. Add Calendar through a narrow Edge Function
 

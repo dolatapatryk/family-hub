@@ -16,6 +16,7 @@ const navigation = [
   { to: '/', label: 'Dziś', icon: 'today', end: true },
   { to: '/tasks', label: 'Zadania', icon: 'tasks', end: false },
   { to: '/shopping', label: 'Zakupy', icon: 'shopping', end: false },
+  { to: '/household', label: 'Domownicy', icon: 'members', end: false },
   { to: '/calendar', label: 'Kalendarz', icon: 'calendar', end: false },
 ] as const
 
@@ -24,6 +25,7 @@ function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] })
     today: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2m-8 4h2" /></>,
     tasks: <><path d="m5 6 2 2 4-4M5 13l2 2 4-4M5 20l2 2 4-4" /><path d="M15 7h5m-5 7h5m-5 7h5" /></>,
     shopping: <><path d="M3 4h2l2.1 11.1a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="18" cy="20" r="1" /></>,
+    members: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></>,
     calendar: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></>,
   }
 

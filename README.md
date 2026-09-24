@@ -33,8 +33,14 @@ The Vite development server proxies Supabase requests to the configured
 `127.0.0.1:54321` address directly.
 
 Local and hosted Supabase projects have separate Auth users. The first
-authenticated user can create a household from the onboarding screen. Never
-put a Supabase secret or service-role key in frontend environment variables.
+authenticated user can create a household from the onboarding screen. To add
+another person, an existing member opens **Domownicy**, creates a one-time
+invite code, and shares it with them. The code expires after 24 hours. The
+invitee signs in or creates an account, chooses **Mam kod zaproszenia**, and
+enters the code during onboarding. Invite records stay in the private database
+schema; the browser can only create or redeem a code through authenticated
+database functions. Never put a Supabase secret or service-role key in
+frontend environment variables.
 
 ## Configuration
 
