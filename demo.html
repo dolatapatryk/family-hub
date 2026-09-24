@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102f36">
+  <meta name="description" content="Interaktywny podgląd rodzinnego centrum planów, zadań i zakupów.">
+  <title>Family Hub — wspólny plan dnia</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #162f33;
+      --muted: #718184;
+      --line: #e1e9e7;
+      --paper: #f4f7f5;
+      --card: #fff;
+      --sidebar: #102f36;
+      --sidebar-soft: #1c4148;
+      --accent: #b9ef6d;
+      --accent-dark: #244516;
+      --blue: #3e7d79;
+      --blue-soft: #e7f2ef;
+      --orange: #f3a360;
+      --shadow: 0 14px 36px rgba(18, 47, 54, .055);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--paper); color: var(--ink); }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #6eaaa1; outline-offset: 3px; }
+    .shell { min-height: 100vh; display: grid; grid-template-columns: 252px minmax(0, 1fr); }
+    .sidebar { background: var(--sidebar); color: #f3faf7; padding: 27px 17px 20px; display: flex; flex-direction: column; min-height: 100vh; }
+    .brand { display: flex; gap: 11px; align-items: center; padding: 3px 11px 29px; }
+    .brand-mark { width: 36px; height: 36px; border-radius: 12px; background: var(--accent); display: grid; place-items: center; color: var(--sidebar); }
+    .brand-mark svg { width: 21px; height: 21px; }
+    .brand-name { font-size: 17px; font-weight: 750; letter-spacing: -.045em; }
+    .brand-sub { display: block; margin-top: 2px; color: #a7c0bd; font-size: 12px; font-weight: 500; letter-spacing: .01em; }
+    .nav-label { margin: 5px 12px 9px; color: #8da9a6; text-transform: uppercase; letter-spacing: .12em; font-size: 11px; font-weight: 700; }
+    .nav { display: grid; gap: 5px; }
+    .nav-button { border: 0; background: transparent; color: #c3d3d0; width: 100%; padding: 11px 12px; border-radius: 11px; text-align: left; display: flex; align-items: center; gap: 12px; cursor: pointer; font-size: 14px; font-weight: 570; transition: background .16s ease, color .16s ease, transform .16s ease; }
+    .nav-button:hover { background: rgba(255,255,255,.075); color: #fff; }
+    .nav-button:active { transform: scale(.99); }
+    .nav-button[aria-current="page"] { background: var(--sidebar-soft); color: #fff; box-shadow: inset 3px 0 0 var(--accent); }
+    .nav-icon { width: 19px; height: 19px; flex: 0 0 19px; opacity: .9; }
+    .nav-badge { margin-left: auto; min-width: 23px; height: 22px; border-radius: 7px; background: rgba(185,239,109,.17); color: #d2f7a2; font-size: 11px; display: grid; place-items: center; padding: 0 6px; }
+    .sidebar-bottom { margin-top: auto; }
+    .demo-card { background: #193d43; border: 1px solid rgba(207,231,226,.1); border-radius: 14px; padding: 14px; }
+    .demo-top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; }
+    .demo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    .demo-card p { margin: 9px 0 0; color: #a9c2bf; font-size: 12px; line-height: 1.55; }
+    .side-foot { margin: 14px 4px 0; color: #799793; font-size: 11px; }
+    .main { width: min(100%, 1480px); margin: 0 auto; padding: 38px clamp(22px, 4vw, 58px) 60px; }
+    .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 22px; }
+    .eyebrow { margin: 0 0 8px; color: var(--blue); font-size: 12px; line-height: 1.3; font-weight: 760; letter-spacing: .09em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(29px, 3.1vw, 39px); letter-spacing: -.055em; line-height: 1.1; font-weight: 720; }
+    .page-subtitle { color: var(--muted); margin: 9px 0 0; font-size: 15px; line-height: 1.5; }
+    .primary-button { background: var(--sidebar); border: 0; color: white; padding: 11px 16px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 680; cursor: pointer; box-shadow: 0 5px 13px rgba(16,47,54,.12); transition: transform .16s ease, background .16s ease; white-space: nowrap; }
+    .primary-button:hover { background: #20494e; transform: translateY(-1px); }
+    .primary-button svg { width: 17px; height: 17px; }
+    .sample-note { min-height: 43px; border: 1px solid #dce9db; background: #f0f7e9; color: #385538; border-radius: 10px; display: flex; align-items: center; gap: 10px; padding: 9px 13px; margin-bottom: 22px; font-size: 13px; }
+    .sample-note strong { font-weight: 730; }
+    .sample-note .note-icon { width: 19px; height: 19px; border-radius: 6px; color: #375c2a; background: #deefcd; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex: 0 0 19px; }
+    .sample-note .note-tail { margin-left: auto; color: #6a8066; font-size: 12px; }
+    .quick-form { display: flex; gap: 9px; margin: -7px 0 20px; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); }
+    .quick-form[hidden] { display: none; }
+    .quick-form input, .shopping-form input { min-width: 0; flex: 1; border: 1px solid var(--line); background: #fbfdfc; color: var(--ink); border-radius: 9px; padding: 10px 12px; font-size: 14px; }
+    .text-button { border: 0; background: transparent; color: var(--muted); padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 650; }
+    .text-button:hover { background: #f1f5f3; color: var(--ink); }
+    .view[hidden] { display: none !important; }
+    .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 17px; }
+    .metric { min-height: 107px; border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 16px 18px; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 16px rgba(18,47,54,.025); }
+    .metric-icon { width: 41px; height: 41px; border-radius: 13px; display: grid; place-items: center; flex: 0 0 41px; }
+    .metric-icon svg { width: 20px; height: 20px; }
+    .metric-icon.lime { background: #eff8df; color: #547a30; }
+    .metric-icon.blue { background: #e9f2ef; color: #39716c; }
+    .metric-icon.orange { background: #fff1e4; color: #b96c32; }
+    .metric-number { font-size: 25px; font-weight: 740; letter-spacing: -.055em; line-height: 1; }
+    .metric-label { margin-top: 7px; color: var(--muted); font-size: 13px; }
+    .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.23fr) minmax(280px, .77fr); gap: 17px; }
+    .lower-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); gap: 17px; margin-top: 17px; }
+    .panel { border: 1px solid var(--line); border-radius: 15px; background: var(--card); box-shadow: 0 4px 16px rgba(18,47,54,.025); overflow: hidden; }
+    .panel-head { min-height: 62px; padding: 17px 19px 14px; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+    .panel-title { margin: 0; font-size: 16px; letter-spacing: -.025em; font-weight: 710; }
+    .panel-kicker { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .link-button { border: 0; background: transparent; color: var(--blue); padding: 5px 0; font-size: 13px; font-weight: 680; cursor: pointer; white-space: nowrap; }
+    .link-button:hover { color: #1c514d; }
+    .link-button .arrow { font-size: 17px; vertical-align: -1px; margin-left: 3px; }
+    .task-list, .shopping-list, .event-list { margin: 0; padding: 0 19px; list-style: none; }
+    .task-row, .shopping-row { min-height: 55px; border-top: 1px solid #eef2f0; display: flex; align-items: center; gap: 12px; }
+    .task-row:first-child, .shopping-row:first-child { border-top: 0; }
+    .check-button { width: 22px; height: 22px; flex: 0 0 22px; border: 1.5px solid #b6c8c4; border-radius: 7px; background: white; display: grid; place-items: center; cursor: pointer; transition: .15s ease; }
+    .check-button:hover { border-color: var(--blue); background: #f1f8f5; }
+    .check-button[aria-checked="true"] { color: var(--accent-dark); border-color: var(--accent); background: var(--accent); }
+    .check-button svg { width: 13px; height: 13px; }
+    .row-content { min-width: 0; flex: 1; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 560; }
+    .is-done .row-title { color: #899594; text-decoration: line-through; }
+    .row-meta { color: #83918f; font-size: 12px; white-space: nowrap; }
+    .tag { padding: 5px 8px; color: #54716d; background: #f0f5f3; border-radius: 7px; font-size: 11px; font-weight: 620; }
+    .panel-foot { padding: 12px 19px; background: #fbfcfb; border-top: 1px solid #eef2f0; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; }
+    .progress-track { height: 6px; width: 82px; background: #eaf0ed; border-radius: 9px; overflow: hidden; }
+    .progress-bar { display: block; height: 100%; width: 0; border-radius: inherit; background: #8fbd59; transition: width .22s ease; }
+    .agenda-switch { display: flex; gap: 4px; padding: 3px; border-radius: 9px; background: #f3f6f4; }
+    .agenda-switch button { border: 0; background: transparent; color: #74817f; border-radius: 7px; padding: 6px 8px; font-size: 11px; font-weight: 650; cursor: pointer; }
+    .agenda-switch button[aria-pressed="true"] { background: white; color: var(--ink); box-shadow: 0 1px 4px rgba(16,47,54,.11); }
+    .event-list { padding-bottom: 8px; }
+    .event-row { display: grid; grid-template-columns: 47px 12px 1fr; gap: 9px; align-items: stretch; min-height: 58px; }
+    .event-time { color: var(--muted); font-size: 12px; padding-top: 1px; }
+    .event-track { position: relative; display: flex; justify-content: center; }
+    .event-track::before { content: ""; position: absolute; width: 1px; top: 5px; bottom: -3px; background: #dce8e4; }
+    .event-row:last-child .event-track::before { display: none; }
+    .event-dot { position: relative; margin-top: 3px; width: 9px; height: 9px; border: 2px solid #fff; outline: 1px solid #82aaa3; background: #82aaa3; border-radius: 50%; z-index: 1; }
+    .event-row:first-child .event-dot { background: var(--orange); outline-color: var(--orange); }
+    .event-title { font-size: 13px; line-height: 1.3; font-weight: 640; }
+    .event-detail { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .empty-state { padding: 17px 0; color: var(--muted); font-size: 13px; }
+    .shopping-form { padding: 0 19px 15px; display: flex; gap: 8px; }
+    .shopping-form input { padding: 9px 11px; font-size: 13px; }
+    .add-small { width: 39px; border: 0; border-radius: 9px; background: var(--sidebar); color: #fff; display: grid; place-items: center; cursor: pointer; }
+    .add-small:hover { background: #20494e; }
+    .add-small svg { width: 17px; height: 17px; }
+    .list-actions { display: flex; align-items: center; gap: 12px; }
+    .small-muted { font-size: 12px; color: var(--muted); }
+    .week-note { padding: 20px; min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(135deg, #e9f5ee 0%, #f3f7e9 100%); }
+    .week-note .note-mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: #d7ebc2; color: #46682c; }
+    .week-note .note-mark svg { width: 18px; height: 18px; }
+    .week-note h2 { font-size: 16px; margin: 16px 0 5px; letter-spacing: -.03em; }
+    .week-note p { margin: 0; color: #66766d; font-size: 13px; line-height: 1.5; max-width: 370px; }
+    .page-panel { margin-top: 17px; }
+    .page-panel .task-list, .page-panel .shopping-list, .page-panel .event-list { padding-left: 20px; padding-right: 20px; }
+    .page-panel .task-row, .page-panel .shopping-row { min-height: 61px; }
+    .page-panel .row-title { font-size: 15px; }
+    .shopping-count { border-radius: 8px; background: #eff7e4; color: #52742e; font-size: 12px; font-weight: 700; padding: 6px 9px; }
+    .calendar-tools { display: flex; gap: 7px; padding: 4px; background: #f2f6f4; border-radius: 10px; }
+    .calendar-tools button { border: 0; border-radius: 7px; padding: 8px 12px; color: #72817e; background: transparent; cursor: pointer; font-size: 13px; font-weight: 620; }
+    .calendar-tools button[aria-pressed="true"] { color: var(--ink); background: #fff; box-shadow: 0 1px 5px rgba(16,47,54,.1); }
+    .calendar-summary { padding: 19px 20px 4px; color: var(--muted); font-size: 13px; }
+    .calendar-summary strong { color: var(--ink); }
+    .wide-event { min-height: 75px; grid-template-columns: 64px 14px 1fr; gap: 13px; }
+    .wide-event .event-time { font-size: 13px; }
+    .wide-event .event-title { font-size: 15px; }
+    .wide-event .event-detail { font-size: 12px; }
+    .site-toast { position: fixed; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: 11px; color: #f5fbf8; background: var(--sidebar); box-shadow: 0 12px 30px rgba(16,47,54,.2); font-size: 13px; font-weight: 600; opacity: 0; transform: translateY(8px); pointer-events: none; transition: .2s ease; z-index: 5; }
+    .site-toast.visible { opacity: 1; transform: translateY(0); }
+    .mobile-nav-title { display: none; }
+    @media (max-width: 1050px) {
+      .shell { grid-template-columns: 220px minmax(0,1fr); }
+      .main { padding: 30px 25px 50px; }
+      .dashboard-grid { grid-template-columns: minmax(0, 1fr) minmax(250px, .82fr); }
+      .metric { padding: 14px; gap: 10px; }
+      .metric-icon { width: 36px; height: 36px; flex-basis: 36px; }
+    }
+    @media (max-width: 800px) {
+      .shell { display: block; padding-bottom: 75px; }
+      .sidebar { min-height: 0; height: auto; padding: 12px 16px 10px; position: sticky; top: 0; z-index: 4; display: block; box-shadow: 0 3px 15px rgba(16,47,54,.12); }
+      .brand { padding: 0 2px 10px; gap: 9px; }
+      .brand-mark { width: 31px; height: 31px; border-radius: 10px; }
+      .brand-mark svg { width: 18px; height: 18px; }
+      .brand-name { font-size: 15px; }
+      .brand-sub, .nav-label, .sidebar-bottom { display: none; }
+      .nav { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+      .nav::-webkit-scrollbar { display: none; }
+      .nav-button { flex: 0 0 auto; width: auto; padding: 9px 11px; font-size: 13px; gap: 8px; }
+      .nav-button[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--accent); }
+      .nav-icon { width: 16px; height: 16px; flex-basis: 16px; }
+      .nav-badge { display: none; }
+      .main { padding: 26px 18px 42px; }
+    }
+    @media (max-width: 620px) {
+      .main { padding: 23px 14px 35px; }
+      .page-head { align-items: flex-start; margin-bottom: 17px; gap: 12px; }
+      .page-subtitle { font-size: 14px; max-width: 310px; }
+      .page-head .primary-button { padding: 10px 11px; font-size: 13px; }
+      .page-head .primary-button .button-label { display: none; }
+      .page-head .primary-button svg { width: 19px; height: 19px; }
+      .sample-note { align-items: flex-start; font-size: 12px; flex-wrap: wrap; }
+      .sample-note .note-tail { display: block; width: 100%; margin: 0 0 0 29px; }
+      .metrics { gap: 8px; }
+      .metric { padding: 11px 9px; min-height: 93px; gap: 8px; align-items: flex-start; flex-direction: column; }
+      .metric-icon { display: none; }
+      .metric-number { font-size: 23px; }
+      .metric-label { margin-top: 5px; font-size: 11px; line-height: 1.25; }
+      .dashboard-grid, .lower-grid { grid-template-columns: 1fr; gap: 12px; }
+      .lower-grid { margin-top: 12px; }
+      .panel-head { padding: 15px 15px 12px; }
+      .task-list, .shopping-list, .event-list { padding-left: 15px; padding-right: 15px; }
+      .row-title { font-size: 13px; }
+      .row-meta, .tag { font-size: 11px; }
+      .agenda-switch button { padding: 6px 7px; }
+      .week-note { min-height: 136px; }
+      .calendar-tools { gap: 3px; }
+      .calendar-tools button { padding: 8px 9px; font-size: 12px; }
+      .quick-form { flex-wrap: wrap; }
+      .quick-form input { flex-basis: 100%; }
+      .quick-form .primary-button { flex: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Nawigacja aplikacji">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 10 8.5-7 8.5 7v10a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/></svg>
+        </div>
+        <div><div class="brand-name">Family Hub</div><span class="brand-sub">Wspólny plan dnia</span></div>
+      </div>
+      <p class="nav-label">Przestrzeń domowa</p>
+      <nav class="nav" aria-label="Główna nawigacja">
+        <button class="nav-button" type="button" data-view-target="today" aria-current="page">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2m-8 4h2"/></svg>
+          Dziś
+        </button>
+        <button class="nav-button" type="button" data-view-target="tasks">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 6 2 2 4-4M8 13l2 2 4-4M8 20l2 2 4-4"/><path d="M18 7h3m-3 7h3m-3 7h3"/></svg>
+          Zadania <span class="nav-badge" id="nav-task-count">3</span>
+        </button>
+        <button class="nav-button" type="button" data-view-target="shopping">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.1 11.1a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg>
+          Zakupy <span class="nav-badge" id="nav-shopping-count">4</span>
+        </button>
+        <button class="nav-button" type="button" data-view-target="calendar">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/></svg>
+          Kalendarz
+        </button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="demo-card">
+          <div class="demo-top"><span class="demo-dot"></span>Tryb demonstracyjny</div>
+          <p>Przykładowy plan. Zmiany zapisują się tylko w tej przeglądarce.</p>
+        </div>
+        <p class="side-foot">Family Hub · podgląd interaktywny</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow" id="page-date">WSPÓLNY PLAN</p>
+          <h1 id="page-title">Dziś w domu</h1>
+          <p class="page-subtitle" id="page-subtitle">Zadania, zakupy i najbliższe plany w jednym miejscu.</p>
+        </div>
+        <button class="primary-button" id="quick-add-button" type="button" aria-expanded="false" aria-controls="new-task-form">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span class="button-label">Dodaj zadanie</span>
+        </button>
+      </header>
+
+      <div class="sample-note" role="note">
+        <span class="note-icon" aria-hidden="true">i</span>
+        <span><strong>Widok demonstracyjny.</strong> Dane są przykładowe — nie łączą się z żadnym kontem.</span>
+        <span class="note-tail">Zmiany pozostają w tej przeglądarce.</span>
+      </div>
+
+      <form class="quick-form" id="new-task-form" hidden>
+        <input id="new-task-input" type="text" maxlength="90" placeholder="Co trzeba zrobić?" aria-label="Treść nowego zadania" required>
+        <button class="primary-button" type="submit">Dodaj</button>
+        <button class="text-button" id="cancel-task-button" type="button">Anuluj</button>
+      </form>
+
+      <section class="view" id="today-view" aria-label="Podsumowanie dnia">
+        <div class="metrics">
+          <article class="metric">
+            <div class="metric-icon lime" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m8 6 2 2 4-4M8 13l2 2 4-4M8 20l2 2 4-4"/><path d="M18 7h3m-3 7h3m-3 7h3"/></svg></div>
+            <div><div class="metric-number" id="metric-tasks">3</div><div class="metric-label">otwarte zadania</div></div>
+          </article>
+          <article class="metric">
+            <div class="metric-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2"/></svg></div>
+            <div><div class="metric-number" id="metric-events">3</div><div class="metric-label">plany na dziś</div></div>
+          </article>
+          <article class="metric">
+            <div class="metric-icon orange" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.1 11.1a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg></div>
+            <div><div class="metric-number" id="metric-shopping">4</div><div class="metric-label">pozycji na liście</div></div>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <section class="panel" aria-labelledby="today-tasks-title">
+            <div class="panel-head">
+              <div><h2 class="panel-title" id="today-tasks-title">Plan na dziś</h2><p class="panel-kicker">Małe rzeczy, które robią różnicę</p></div>
+              <button class="link-button" type="button" data-view-target="tasks">Wszystkie <span class="arrow" aria-hidden="true">›</span></button>
+            </div>
+            <ul class="task-list" id="today-task-list"></ul>
+            <div class="panel-foot"><span id="task-progress-label">Ukończone 1 z 4</span><span class="progress-track" aria-hidden="true"><span class="progress-bar" id="task-progress"></span></span></div>
+          </section>
+
+          <section class="panel" aria-labelledby="today-calendar-title">
+            <div class="panel-head">
+              <div><h2 class="panel-title" id="today-calendar-title">Najbliższe plany</h2><p class="panel-kicker" id="agenda-day-label">Dziś · przykładowy kalendarz</p></div>
+              <div class="agenda-switch" role="group" aria-label="Wybierz dzień">
+                <button type="button" data-agenda-day="today" aria-pressed="true">Dziś</button>
+                <button type="button" data-agenda-day="tomorrow" aria-pressed="false">Jutro</button>
+                <button type="button" data-agenda-day="weekend" aria-pressed="false">Weekend</button>
+              </div>
+            </div>
+            <ol class="event-list" id="today-event-list"></ol>
+            <div class="panel-foot"><span>Przykładowe wydarzenia</span><button class="link-button" type="button" data-view-target="calendar">Otwórz kalendarz <span class="arrow" aria-hidden="true">›</span></button></div>
+          </section>
+        </div>
+
+        <div class="lower-grid">
+          <section class="panel" aria-labelledby="shopping-preview-title">
+            <div class="panel-head">
+              <div><h2 class="panel-title" id="shopping-preview-title">Lista zakupów</h2><p class="panel-kicker">Wspólna lista, zawsze pod ręką</p></div>
+              <button class="link-button" type="button" data-view-target="shopping">Otwórz listę <span class="arrow" aria-hidden="true">›</span></button>
+            </div>
+            <ul class="shopping-list" id="shopping-preview-list"></ul>
+          </section>
+          <article class="panel week-note">
+            <div class="note-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12m-8.48 8.48-2.12 2.12"/><circle cx="12" cy="12" r="4"/></svg></div>
+            <div><h2>Prościej, kiedy plan jest wspólny</h2><p>Dodaj zadanie, odhacz zakupy albo sprawdź, co jest w kalendarzu. Ten podgląd działa bez logowania.</p></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" id="tasks-view" aria-label="Wszystkie zadania" hidden>
+        <section class="panel page-panel">
+          <div class="panel-head"><div><h2 class="panel-title">Wszystkie zadania</h2><p class="panel-kicker">Dodawaj i odhaczaj przykładowe sprawy</p></div><span class="small-muted" id="task-page-summary"></span></div>
+          <ul class="task-list" id="all-task-list"></ul>
+          <div class="panel-foot"><span>Dane są zapisywane lokalnie</span><button class="text-button" id="clear-tasks-button" type="button">Usuń ukończone</button></div>
+        </section>
+      </section>
+
+      <section class="view" id="shopping-view" aria-label="Lista zakupów" hidden>
+        <section class="panel page-panel">
+          <div class="panel-head"><div><h2 class="panel-title">Lista zakupów</h2><p class="panel-kicker">Dopisz, czego brakuje, i odhacz po drodze</p></div><span class="shopping-count" id="shopping-page-count">4 do kupienia</span></div>
+          <form class="shopping-form" id="shopping-form">
+            <input id="shopping-input" type="text" maxlength="70" placeholder="Dodaj produkt do listy" aria-label="Nowy produkt" required>
+            <button class="add-small" type="submit" aria-label="Dodaj produkt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+          </form>
+          <ul class="shopping-list" id="all-shopping-list"></ul>
+          <div class="panel-foot"><span>Lista demonstracyjna · zmiany tylko w tej przeglądarce</span><button class="text-button" id="clear-shopping-button" type="button">Usuń kupione</button></div>
+        </section>
+      </section>
+
+      <section class="view" id="calendar-view" aria-label="Kalendarz" hidden>
+        <section class="panel page-panel">
+          <div class="panel-head">
+            <div><h2 class="panel-title">Kalendarz domowy</h2><p class="panel-kicker">Podgląd przykładowych wydarzeń</p></div>
+            <div class="calendar-tools" role="group" aria-label="Wybierz dzień kalendarza">
+              <button type="button" data-agenda-day="today" aria-pressed="true">Dziś</button>
+              <button type="button" data-agenda-day="tomorrow" aria-pressed="false">Jutro</button>
+              <button type="button" data-agenda-day="weekend" aria-pressed="false">Weekend</button>
+            </div>
+          </div>
+          <div class="calendar-summary" id="calendar-summary"></div>
+          <ol class="event-list" id="calendar-event-list"></ol>
+          <div class="panel-foot"><span>To tylko przykładowy widok — nie pobiera wydarzeń z zewnętrznego kalendarza.</span></div>
+        </section>
+      </section>
+      <div class="site-toast" id="site-toast" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const STORAGE_KEY = "family-hub-demo-v1";
+      const initialState = {
+        tasks: [
+          { id: "t1", title: "Przejrzeć plan na tydzień", category: "Planowanie", done: false },
+          { id: "t2", title: "Odebrać przesyłkę", category: "Sprawy", done: false },
+          { id: "t3", title: "Podlać rośliny", category: "Dom", done: true },
+          { id: "t4", title: "Uzupełnić zapasy w spiżarni", category: "Dom", done: false }
+        ],
+        shopping: [
+          { id: "s1", title: "Mleko owsiane", detail: "2 szt.", done: false },
+          { id: "s2", title: "Pomidory", detail: "1 opak.", done: false },
+          { id: "s3", title: "Płyn do naczyń", detail: "1 szt.", done: false },
+          { id: "s4", title: "Ryż basmati", detail: "1 opak.", done: false }
+        ]
+      };
+      const agenda = {
+        today: { label: "Dziś", title: "Plany na dziś", events: [
+          { time: "09:00", title: "Przegląd planu", detail: "Krótka chwila na ustalenia" },
+          { time: "13:30", title: "Odbiór przesyłki", detail: "Sprawa do załatwienia" },
+          { time: "18:00", title: "Przygotować kolację", detail: "Wspólny czas w domu" }
+        ]},
+        tomorrow: { label: "Jutro", title: "Plany na jutro", events: [
+          { time: "10:00", title: "Zakupy spożywcze", detail: "Lista jest w zakładce Zakupy" },
+          { time: "15:30", title: "Porządek w planach", detail: "Sprawdź, co zostało na tydzień" }
+        ]},
+        weekend: { label: "Weekend", title: "Pomysły na weekend", events: [
+          { time: "10:30", title: "Poranny spacer", detail: "Czas na świeżym powietrzu" },
+          { time: "14:00", title: "Domowe sprawy", detail: "Bez pośpiechu, według potrzeb" }
+        ]}
+      };
+      const viewCopy = {
+        today: ["Dziś w domu", "Zadania, zakupy i najbliższe plany w jednym miejscu."],
+        tasks: ["Zadania", "Zbierz drobne sprawy w jednym, wspólnym planie."],
+        shopping: ["Zakupy", "Lista, którą można szybko uzupełnić i odhaczać."],
+        calendar: ["Kalendarz", "Przejrzyj najbliższe plany w przykładowym widoku."]
+      };
+      let state = readState();
+      let activeView = "today";
+      let selectedDay = "today";
+      let toastTimer;
+
+      function readState() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (!saved) return structuredClone(initialState);
+          const parsed = JSON.parse(saved);
+          if (!Array.isArray(parsed.tasks) || !Array.isArray(parsed.shopping)) return structuredClone(initialState);
+          return parsed;
+        } catch (_) { return structuredClone(initialState); }
+      }
+      function saveState(message = "Zapisano w tej przeglądarce") {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch (_) { message = "Zmiana działa do zamknięcia tej karty"; }
+        showToast(message);
+      }
+      function showToast(message) {
+        const toast = document.getElementById("site-toast");
+        toast.textContent = message;
+        toast.classList.add("visible");
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => toast.classList.remove("visible"), 2300);
+      }
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+      }
+      const checkSvg = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 8 3.2 3.2L13 4.8"/></svg>';
+      function taskMarkup(task) {
+        return `<li class="task-row ${task.done ? "is-done" : ""}"><button class="check-button" type="button" role="checkbox" aria-checked="${task.done}" aria-label="${task.done ? "Przywróć" : "Ukończ"}: ${escapeHtml(task.title)}" data-task-id="${escapeHtml(task.id)}">${task.done ? checkSvg : ""}</button><div class="row-content"><span class="row-title">${escapeHtml(task.title)}</span><span class="tag">${escapeHtml(task.category || "Dom")}</span></div></li>`;
+      }
+      function shoppingMarkup(item) {
+        return `<li class="shopping-row ${item.done ? "is-done" : ""}"><button class="check-button" type="button" role="checkbox" aria-checked="${item.done}" aria-label="${item.done ? "Przywróć" : "Odhacz"}: ${escapeHtml(item.title)}" data-shopping-id="${escapeHtml(item.id)}">${item.done ? checkSvg : ""}</button><div class="row-content"><span class="row-title">${escapeHtml(item.title)}</span><span class="row-meta">${escapeHtml(item.detail || "")}</span></div></li>`;
+      }
+      function eventMarkup(event, wide = false) {
+        return `<li class="event-row ${wide ? "wide-event" : ""}"><time class="event-time">${escapeHtml(event.time)}</time><span class="event-track"><span class="event-dot"></span></span><div><div class="event-title">${escapeHtml(event.title)}</div><div class="event-detail">${escapeHtml(event.detail)}</div></div></li>`;
+      }
+      function renderTasks() {
+        const active = state.tasks.filter(task => !task.done).length;
+        const done = state.tasks.length - active;
+        document.getElementById("today-task-list").innerHTML = state.tasks.slice(0, 4).map(taskMarkup).join("") || '<li class="empty-state">Nie ma jeszcze zadań. Dodaj pierwsze zadanie.</li>';
+        document.getElementById("all-task-list").innerHTML = state.tasks.map(taskMarkup).join("") || '<li class="empty-state">Lista jest pusta. Dodaj nowe zadanie.</li>';
+        document.getElementById("metric-tasks").textContent = active;
+        document.getElementById("nav-task-count").textContent = active;
+        document.getElementById("task-page-summary").textContent = `${active} otwarte · ${done} ukończone`;
+        document.getElementById("task-progress-label").textContent = `Ukończone ${done} z ${state.tasks.length}`;
+        const percentage = state.tasks.length ? (done / state.tasks.length) * 100 : 0;
+        document.getElementById("task-progress").style.width = `${percentage}%`;
+      }
+      function renderShopping() {
+        const active = state.shopping.filter(item => !item.done).length;
+        document.getElementById("shopping-preview-list").innerHTML = state.shopping.slice(0, 3).map(shoppingMarkup).join("") || '<li class="empty-state">Lista jest pusta. Dodaj produkt.</li>';
+        document.getElementById("all-shopping-list").innerHTML = state.shopping.map(shoppingMarkup).join("") || '<li class="empty-state">Lista jest pusta. Dodaj produkt.</li>';
+        document.getElementById("metric-shopping").textContent = active;
+        document.getElementById("nav-shopping-count").textContent = active;
+        document.getElementById("shopping-page-count").textContent = `${active} do kupienia`;
+      }
+      function renderAgenda() {
+        const selected = agenda[selectedDay];
+        document.querySelectorAll("[data-agenda-day]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.agendaDay === selectedDay)));
+        document.getElementById("today-event-list").innerHTML = selected.events.slice(0, 3).map(event => eventMarkup(event)).join("");
+        document.getElementById("calendar-event-list").innerHTML = selected.events.map(event => eventMarkup(event, true)).join("");
+        document.getElementById("agenda-day-label").textContent = `${selected.label} · przykładowy kalendarz`;
+        document.getElementById("calendar-summary").innerHTML = `<strong>${escapeHtml(selected.title)}</strong> · ${selected.events.length} ${selected.events.length === 1 ? "wydarzenie" : "wydarzenia"}`;
+        document.getElementById("metric-events").textContent = agenda.today.events.length;
+      }
+      function render() { renderTasks(); renderShopping(); renderAgenda(); }
+      function setView(view) {
+        if (!viewCopy[view]) return;
+        activeView = view;
+        document.querySelectorAll(".view").forEach(section => { section.hidden = section.id !== `${view}-view`; });
+        document.querySelectorAll("[data-view-target]").forEach(button => {
+          if (button.classList.contains("nav-button")) {
+            if (button.dataset.viewTarget === view) button.setAttribute("aria-current", "page");
+            else button.removeAttribute("aria-current");
+          }
+        });
+        document.getElementById("page-title").textContent = viewCopy[view][0];
+        document.getElementById("page-subtitle").textContent = viewCopy[view][1];
+        document.getElementById("quick-add-button").hidden = view === "shopping";
+        document.getElementById("new-task-form").hidden = true;
+        document.getElementById("quick-add-button").setAttribute("aria-expanded", "false");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      document.querySelectorAll("[data-view-target]").forEach(button => button.addEventListener("click", () => setView(button.dataset.viewTarget)));
+      document.querySelectorAll("[data-agenda-day]").forEach(button => button.addEventListener("click", () => { selectedDay = button.dataset.agendaDay; renderAgenda(); }));
+      document.addEventListener("click", event => {
+        const taskButton = event.target.closest("[data-task-id]");
+        if (taskButton) {
+          const task = state.tasks.find(item => item.id === taskButton.dataset.taskId);
+          if (task) { task.done = !task.done; render(); saveState(task.done ? "Zadanie ukończone" : "Zadanie przywrócone"); }
+          return;
+        }
+        const shoppingButton = event.target.closest("[data-shopping-id]");
+        if (shoppingButton) {
+          const item = state.shopping.find(product => product.id === shoppingButton.dataset.shoppingId);
+          if (item) { item.done = !item.done; render(); saveState(item.done ? "Dodano do kupionych" : "Przywrócono na listę"); }
+        }
+      });
+      document.getElementById("quick-add-button").addEventListener("click", () => {
+        const form = document.getElementById("new-task-form");
+        form.hidden = !form.hidden;
+        document.getElementById("quick-add-button").setAttribute("aria-expanded", String(!form.hidden));
+        if (!form.hidden) document.getElementById("new-task-input").focus();
+      });
+      document.getElementById("cancel-task-button").addEventListener("click", () => {
+        document.getElementById("new-task-form").hidden = true;
+        document.getElementById("quick-add-button").setAttribute("aria-expanded", "false");
+      });
+      document.getElementById("new-task-form").addEventListener("submit", event => {
+        event.preventDefault();
+        const input = document.getElementById("new-task-input");
+        const title = input.value.trim();
+        if (!title) return;
+        state.tasks.unshift({ id: `t${Date.now()}`, title, category: "Dom", done: false });
+        input.value = "";
+        document.getElementById("new-task-form").hidden = true;
+        document.getElementById("quick-add-button").setAttribute("aria-expanded", "false");
+        render(); saveState("Dodano nowe zadanie");
+      });
+      document.getElementById("shopping-form").addEventListener("submit", event => {
+        event.preventDefault();
+        const input = document.getElementById("shopping-input");
+        const title = input.value.trim();
+        if (!title) return;
+        state.shopping.unshift({ id: `s${Date.now()}`, title, detail: "", done: false });
+        input.value = "";
+        render(); saveState("Dodano produkt do listy");
+      });
+      document.getElementById("clear-tasks-button").addEventListener("click", () => {
+        const before = state.tasks.length;
+        state.tasks = state.tasks.filter(task => !task.done);
+        if (before === state.tasks.length) { showToast("Nie ma ukończonych zadań do usunięcia"); return; }
+        render(); saveState("Usunięto ukończone zadania");
+      });
+      document.getElementById("clear-shopping-button").addEventListener("click", () => {
+        const before = state.shopping.length;
+        state.shopping = state.shopping.filter(item => !item.done);
+        if (before === state.shopping.length) { showToast("Nie ma kupionych produktów do usunięcia"); return; }
+        render(); saveState("Usunięto kupione produkty");
+      });
+      const date = new Intl.DateTimeFormat("pl-PL", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+      document.getElementById("page-date").textContent = date.toLocaleUpperCase("pl-PL");
+      render();
+    })();
+  </script>
+</body>
+</html>

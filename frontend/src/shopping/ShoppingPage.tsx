@@ -1,40 +1,46 @@
 import { useRef, useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
+import { PageHeader } from '../components/PageHeader'
 import { createShoppingApi } from './api'
+import { refreshShoppingItems } from './cache'
+import { ShoppingItemRow } from './ShoppingItemRow'
 import type { ShoppingItem } from './shopping'
 
-type ShoppingApi = ReturnType<typeof createShoppingApi>
-
-async function refreshItems(client: QueryClient, queryKey: readonly unknown[], saved: ShoppingItem) {
-  await client.cancelQueries({ queryKey })
-  // Keep a successful write visible even if the subsequent refresh fails.
-  client.setQueryData<ShoppingItem[]>(queryKey, items => items
-    ? [...items.filter(item => item.id !== saved.id), saved]
-    : undefined)
-  await client.invalidateQueries({ queryKey })
+function storeGroups(items: ShoppingItem[]) {
+  const groups = new Map<string, { key: string; label: string; items: ShoppingItem[] }>()
+  for (const item of items) {
+    const value = item.store?.trim() || ''
+    const label = value || 'Bez sklepu'
+    const key = value.toLocaleLowerCase('pl-PL')
+    const group = groups.get(key)
+    if (group) group.items.push(item)
+    else groups.set(key, { key, label, items: [item] })
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (!a.key) return 1
+    if (!b.key) return -1
+    return a.label.localeCompare(b.label, 'pl-PL', { sensitivity: 'base' })
+  })
 }
 
-function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; api: ShoppingApi; queryKey: readonly unknown[] }) {
-  const client = useQueryClient()
-  const update = useMutation({
-    mutationFn: (completed: boolean) => api.setCompleted(item.id, completed),
-    onSuccess: saved => refreshItems(client, queryKey, saved),
-  })
+function ShoppingGroupList({ items, api, queryKey, emptyTitle, emptyMessage }: {
+  items: ShoppingItem[]
+  api: ReturnType<typeof createShoppingApi>
+  queryKey: readonly unknown[]
+  emptyTitle: string
+  emptyMessage: string
+}) {
+  if (items.length === 0) {
+    return <div className="panel empty-panel"><h3>{emptyTitle}</h3><p>{emptyMessage}</p></div>
+  }
 
-  return (
-    <li className={`task-item${item.completed ? ' shopping-purchased' : ''}`}>
-      <label className="task-check shopping-check">
-        <input type="checkbox" checked={item.completed} disabled={update.isPending}
-          onChange={event => update.mutate(event.target.checked)}
-          aria-label={`${item.completed ? 'Mark as needed' : 'Mark as purchased'}: ${item.name}`} />
-        <span className="shopping-name">{item.name}</span>
-        {item.quantity && <span className="shopping-quantity">{item.quantity}</span>}
-      </label>
-      {update.isPending && <p className="task-feedback" role="status">Saving…</p>}
-      {update.isError && <p className="error-message" role="alert">{update.error.message} Try checking the item again.</p>}
-    </li>
-  )
+  return <div className="shopping-store-groups">
+    {storeGroups(items).map(group => <section className="shopping-store-group" key={group.key || 'no-store'} aria-label={group.label}>
+      <h3>{group.label}<span className="task-count">{group.items.length}</span></h3>
+      <ul className="task-list">{group.items.map(item => <ShoppingItemRow key={item.id} item={item} api={api} queryKey={queryKey} />)}</ul>
+    </section>)}
+  </div>
 }
 
 export function ShoppingPage() {
@@ -54,9 +60,9 @@ export function ShoppingPage() {
       setName('')
       setQuantity('')
       setStore('')
-      setNotice(`${saved.name} added.`)
+      setNotice(`${saved.name} dodano do listy.`)
       nameInput.current?.focus()
-      await refreshItems(client, queryKey, saved)
+      await refreshShoppingItems(client, queryKey, saved)
     },
   })
 
@@ -71,77 +77,40 @@ export function ShoppingPage() {
   const active = sorted.filter(item => !item.completed)
   const purchased = sorted.filter(item => item.completed)
 
-  function storeGroups(groupItems: ShoppingItem[]) {
-    const groups = new Map<string, { key: string; label: string; items: ShoppingItem[] }>()
-    for (const item of groupItems) {
-      const value = item.store?.trim() || ''
-      const label = value || 'No store'
-      const key = value.toLocaleLowerCase()
-      const group = groups.get(key)
-      if (group) group.items.push(item)
-      else groups.set(key, { key, label, items: [item] })
-    }
-    return [...groups.values()].sort((a, b) => {
-      if (!a.key) return 1
-      if (!b.key) return -1
-      return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
-    })
-  }
-
-  function renderStoreGroups(groupItems: ShoppingItem[], emptyTitle: string, emptyMessage: string) {
-    if (groupItems.length === 0) {
-      return <div className="card"><h2>{emptyTitle}</h2><p>{emptyMessage}</p></div>
-    }
-    return <div className="shopping-store-groups">
-      {storeGroups(groupItems).map(group => <section className="shopping-store-group" key={group.key || 'no-store'} aria-label={group.label}>
-        <h3>{group.label}<span className="task-count">{group.items.length}</span></h3>
-        <ul className="task-list">{group.items.map(item => <ShoppingItemRow key={item.id} item={item} api={api} queryKey={queryKey} />)}</ul>
-      </section>)}
-    </div>
-  }
-
   return (
     <>
-      <p className="eyebrow">Shopping</p>
-      <h1>The next grocery run, sorted.</h1>
-      <p className="intro">One shopping list for the whole family.</p>
-      <form className="card shopping-form" onSubmit={submit} aria-label="Add a shopping item">
+      <PageHeader eyebrow="Wspólny plan" title="Lista zakupów" description="Dopisz, czego brakuje, i odhaczaj po drodze." />
+      <form className="panel shopping-form" onSubmit={submit} aria-label="Dodaj produkt do listy zakupów">
+        <div className="panel-head"><div><h2 className="panel-title">Dodaj produkt</h2><p className="panel-kicker">Lista dla całego domu</p></div><span className="shopping-count">{items.data ? `${active.length} do kupienia` : '—'}</span></div>
         <div className="shopping-form-fields">
-          <label className="shopping-name-field" htmlFor="shopping-name">Item
-            <input id="shopping-name" ref={nameInput} required value={name} readOnly={create.isPending}
-              onChange={event => setName(event.target.value)} placeholder="Add item…" autoComplete="off" />
+          <label className="shopping-name-field" htmlFor="shopping-name">Produkt
+            <input id="shopping-name" ref={nameInput} required value={name} readOnly={create.isPending} onChange={event => setName(event.target.value)} placeholder="Dodaj produkt…" autoComplete="off" />
           </label>
-          <label className="shopping-quantity-field" htmlFor="shopping-quantity">Quantity <span className="optional">(optional)</span>
-            <input id="shopping-quantity" value={quantity} readOnly={create.isPending}
-              onChange={event => setQuantity(event.target.value)} placeholder="e.g. 2 or 1 kg" autoComplete="off" />
+          <label className="shopping-quantity-field" htmlFor="shopping-quantity">Ilość <span className="optional">(opcjonalnie)</span>
+            <input id="shopping-quantity" value={quantity} readOnly={create.isPending} onChange={event => setQuantity(event.target.value)} placeholder="np. 2 szt. lub 1 kg" autoComplete="off" />
           </label>
-          <label className="shopping-store-field" htmlFor="shopping-store">Store <span className="optional">(optional)</span>
-            <input id="shopping-store" value={store} readOnly={create.isPending}
-              onChange={event => setStore(event.target.value)} placeholder="e.g. Lidl" autoComplete="off" />
+          <label className="shopping-store-field" htmlFor="shopping-store">Sklep <span className="optional">(opcjonalnie)</span>
+            <input id="shopping-store" value={store} readOnly={create.isPending} onChange={event => setStore(event.target.value)} placeholder="np. Lidl" autoComplete="off" />
           </label>
-          <button className="button-primary shopping-add" type="submit" disabled={!name.trim() || create.isPending}
-            aria-label={create.isPending ? 'Adding item' : 'Add item'}>{create.isPending ? 'Adding…' : '+ Add'}</button>
+          <button className="primary-button shopping-add" type="submit" disabled={!name.trim() || create.isPending}>{create.isPending ? 'Dodaję…' : '+ Dodaj'}</button>
         </div>
-        <p className="task-meta">Adding as {profile.name}</p>
-        {create.isError && <div className="error-message" role="alert">{create.error.message}</div>}
+        <div className="shopping-form-foot"><p className="task-meta">Dodajesz jako <strong>{profile.name}</strong></p>{create.isError && <p className="error-message" role="alert">{create.error.message}</p>}</div>
       </form>
       <p className="shopping-notice" role="status">{notice}</p>
-      {items.isPending && <p role="status">Loading shopping list…</p>}
+      {items.isPending && <p className="panel-message" role="status">Ładuję listę zakupów…</p>}
       {items.isError && <div className="error-message" role="alert">
         <p>{items.error.message}</p>
-        {items.data && <p>The list below may be out of date.</p>}
-        <button className="button-quiet" disabled={items.isFetching} onClick={() => void items.refetch()}>
-          {items.isFetching ? 'Retrying…' : 'Try again'}
-        </button>
+        {items.data && <p>Lista poniżej może być nieaktualna.</p>}
+        <button className="button-quiet" disabled={items.isFetching} onClick={() => void items.refetch()}>{items.isFetching ? 'Ponawiam…' : 'Spróbuj ponownie'}</button>
       </div>}
-      {items.data && <div className="task-sections">
+      {items.data && <div className="task-sections shopping-sections">
         <section className="task-section" aria-labelledby="shopping-needed-heading">
-          <h2 id="shopping-needed-heading">To buy<span className="task-count">{active.length}</span></h2>
-          {renderStoreGroups(active, purchased.length ? 'All stocked up.' : 'Start your shopping list.', purchased.length ? 'Everything is checked off. Add anything else you need above.' : 'Add your first item above. Include a quantity or store if you need one.')}
+          <h2 id="shopping-needed-heading">Do kupienia<span className="task-count">{active.length}</span></h2>
+          <ShoppingGroupList items={active} api={api} queryKey={queryKey} emptyTitle={purchased.length ? 'Wszystko na miejscu.' : 'Zacznij swoją listę.'} emptyMessage={purchased.length ? 'Wszystkie produkty są odhaczone. Dodaj coś nowego powyżej.' : 'Dodaj pierwszy produkt powyżej. W razie potrzeby podaj ilość lub sklep.'} />
         </section>
         {purchased.length > 0 && <section className="task-section" aria-labelledby="shopping-purchased-heading">
-          <h2 id="shopping-purchased-heading">Purchased<span className="task-count">{purchased.length}</span></h2>
-          {renderStoreGroups(purchased, 'No purchases yet.', 'Purchased items will appear here.')}
+          <h2 id="shopping-purchased-heading">Kupione<span className="task-count">{purchased.length}</span></h2>
+          <ShoppingGroupList items={purchased} api={api} queryKey={queryKey} emptyTitle="Brak kupionych produktów." emptyMessage="Odhaczone produkty pojawią się tutaj." />
         </section>}
       </div>}
     </>

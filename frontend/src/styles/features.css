@@ -1,0 +1,380 @@
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.23fr) minmax(280px, .77fr);
+  gap: 17px;
+}
+
+.lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  gap: 17px;
+  margin-top: 17px;
+}
+
+.week-note {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  background: linear-gradient(135deg, #e9f5ee 0%, #f3f7e9 100%);
+}
+
+.note-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: #d7ebc2;
+  color: #46682c;
+}
+
+.note-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.week-note h2 {
+  margin: 16px 0 5px;
+  font-size: 16px;
+  letter-spacing: -.03em;
+}
+
+.week-note p {
+  max-width: 370px;
+  margin: 0;
+  color: #66766d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dashboard-list {
+  padding-inline: 19px;
+}
+
+.page-panel {
+  margin-top: 17px;
+}
+
+.tasks-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -4px 0 20px;
+}
+
+.tasks-toolbar p {
+  margin: 0;
+}
+
+.task-form {
+  margin-bottom: 24px;
+  padding-bottom: 19px;
+}
+
+.task-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0 19px;
+  border: 0;
+}
+
+.task-form label,
+.shopping-form label {
+  display: block;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 640;
+}
+
+.task-form input,
+.task-form select,
+.shopping-form input {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+}
+
+.task-form-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin: 17px 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.task-sections {
+  display: grid;
+  gap: 25px;
+}
+
+.task-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  font-size: 17px;
+  letter-spacing: -.02em;
+}
+
+.section-empty {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.task-list {
+  margin: 0;
+  padding: 0 19px;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-card);
+  list-style: none;
+}
+
+.panel .task-list {
+  padding-inline: 19px;
+  border: 0;
+  border-radius: 0;
+}
+
+.task-item {
+  min-height: 58px;
+  padding: 0;
+  border-top: 1px solid #eef2f0;
+}
+
+.task-item:first-child {
+  border-top: 0;
+}
+
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 57px;
+}
+
+.task-check {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.task-check input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  accent-color: #78a946;
+}
+
+.task-details,
+.shopping-item-copy {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.task-title,
+.shopping-name {
+  display: block;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-meta {
+  display: block;
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.task-completed .task-title,
+.shopping-purchased .shopping-name {
+  color: #899594;
+  text-decoration: line-through;
+}
+
+.task-archive {
+  min-height: 34px;
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.shopping-form {
+  margin-bottom: 15px;
+  padding: 0 0 15px;
+}
+
+.shopping-form-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 150px) minmax(0, 180px) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 0 19px;
+}
+
+.shopping-add {
+  min-height: 42px;
+}
+
+.shopping-form-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 19px 0;
+}
+
+.shopping-form-foot .task-meta,
+.shopping-form-foot .error-message {
+  margin: 0;
+}
+
+.shopping-notice {
+  min-height: 1.5em;
+  margin: 12px 0 17px;
+  color: var(--color-blue);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.shopping-store-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.shopping-store-group {
+  display: grid;
+  gap: 8px;
+}
+
+.shopping-store-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.shopping-item {
+  min-height: 58px;
+}
+
+.shopping-check {
+  gap: 12px;
+}
+
+.shopping-detail {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.shopping-purchased {
+  background: #fbfcfb;
+}
+
+.shopping-purchased .shopping-detail {
+  color: #9ba5a3;
+}
+
+@media (max-width: 1050px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, .82fr);
+  }
+}
+
+@media (max-width: 800px) {
+  .dashboard-grid,
+  .lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .lower-grid {
+    margin-top: 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .dashboard-grid,
+  .lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-list,
+  .panel .task-list {
+    padding-inline: 15px;
+  }
+
+  .task-form fieldset {
+    padding-inline: 15px;
+  }
+
+  .task-form-options {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .task-row {
+    gap: 8px;
+  }
+
+  .task-check {
+    gap: 9px;
+  }
+
+  .shopping-form-fields {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .shopping-name-field {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .shopping-add {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .shopping-quantity-field,
+  .shopping-store-field {
+    grid-column: 1 / -1;
+  }
+
+  .shopping-quantity-field {
+    grid-row: 2;
+  }
+
+  .shopping-store-field {
+    grid-row: 3;
+  }
+
+  .shopping-form-fields {
+    padding-inline: 15px;
+  }
+
+  .shopping-form-foot {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-inline: 15px;
+  }
+}

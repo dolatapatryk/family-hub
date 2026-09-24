@@ -92,7 +92,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (authLoading || profileLoading) {
-    return <AuthLayout><p role="status">Checking your Family Hub session…</p></AuthLayout>
+    return <AuthLayout><p role="status">Sprawdzam sesję Family Hub…</p></AuthLayout>
   }
 
   if (!session) {
@@ -119,7 +119,7 @@ function AuthLayout({ children }: { children: ReactNode }) {
     <div className="app auth-shell">
       <header className="header">
         <span className="brand"><span className="brand-mark" aria-hidden="true">F</span>Family Hub</span>
-        <span className="header-note">Our everyday, together</span>
+        <span className="header-note">Wspólny plan dnia</span>
       </header>
       <main>{children}</main>
     </div>
@@ -129,9 +129,9 @@ function AuthLayout({ children }: { children: ReactNode }) {
 function ConfigurationMessage() {
   return (
     <section className="card auth-card">
-      <p className="eyebrow">Setup</p>
-      <h1>Connect Family Hub</h1>
-      <p className="intro">Add the Supabase URL and publishable key to <code>frontend/.env.local</code>, then restart Vite.</p>
+      <p className="eyebrow">Konfiguracja</p>
+      <h1>Połącz Family Hub</h1>
+      <p className="intro">Dodaj adres Supabase i klucz publiczny do <code>frontend/.env.local</code>, a następnie uruchom ponownie Vite.</p>
       <pre className="auth-config">{`VITE_SUPABASE_URL=${supabaseConfig.url || 'http://127.0.0.1:54321'}\nVITE_SUPABASE_PUBLISHABLE_KEY=…`}</pre>
     </section>
   )
@@ -158,26 +158,26 @@ function AuthForm() {
     if (result.error) {
       setError(result.error.message)
     } else if (mode === 'signUp' && !result.data.session) {
-      setNotice('Account created. Confirm your email, then sign in to continue.')
+      setNotice('Konto utworzone. Potwierdź e-mail, a potem zaloguj się, aby kontynuować.')
     }
   }
 
   return (
     <section className="card auth-card">
-      <p className="eyebrow">Welcome</p>
-      <h1>{mode === 'signIn' ? 'Sign in to Family Hub.' : 'Create your Family Hub account.'}</h1>
-      <p className="intro">{mode === 'signIn' ? 'Use the account created in Supabase Auth.' : 'You can create the household after signing up.'}</p>
+      <p className="eyebrow">Witaj</p>
+      <h1>{mode === 'signIn' ? 'Zaloguj się do Family Hub.' : 'Utwórz konto Family Hub.'}</h1>
+      <p className="intro">{mode === 'signIn' ? 'Użyj konta utworzonego w Supabase Auth.' : 'Po rejestracji możesz utworzyć wspólny dom.'}</p>
       <form className="auth-form" onSubmit={submit}>
-        <label>Email<input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} /></label>
-        <label>Password<input type="password" required minLength={6} autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'} value={password} onChange={event => setPassword(event.target.value)} /></label>
+        <label>E-mail<input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} /></label>
+        <label>Hasło<input type="password" required minLength={6} autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'} value={password} onChange={event => setPassword(event.target.value)} /></label>
         {error && <p className="error-message" role="alert">{error}</p>}
         {notice && <p className="task-notice" role="status">{notice}</p>}
-        <button className="button-primary" type="submit" disabled={pending}>{pending ? 'Working…' : mode === 'signIn' ? 'Sign in' : 'Create account'}</button>
+        <button className="primary-button" type="submit" disabled={pending}>{pending ? 'Pracuję…' : mode === 'signIn' ? 'Zaloguj się' : 'Utwórz konto'}</button>
       </form>
       <p className="auth-switch">
-        {mode === 'signIn' ? 'Need an account?' : 'Already have an account?'}{' '}
-        <button className="button-quiet" type="button" onClick={() => { setMode(mode === 'signIn' ? 'signUp' : 'signIn'); setError(''); setNotice('') }}>
-          {mode === 'signIn' ? 'Create one' : 'Sign in'}
+        {mode === 'signIn' ? 'Nie masz konta?' : 'Masz już konto?'}{' '}
+        <button className="text-button" type="button" onClick={() => { setMode(mode === 'signIn' ? 'signUp' : 'signIn'); setError(''); setNotice('') }}>
+          {mode === 'signIn' ? 'Utwórz konto' : 'Zaloguj się'}
         </button>
       </p>
     </section>
@@ -203,24 +203,24 @@ function HouseholdOnboarding({ user, onCreated, onSignOut }: { user: User; onCre
     setPending(false)
     if (createError) {
       const staleSession = createError.code === '23503' && createError.message.includes('profiles_id_fkey')
-      setError(staleSession
-        ? 'This saved session belongs to a Supabase Auth user that no longer exists. This can happen after resetting the database. Sign out, then sign in again; if the account was also removed, choose “Create one” to register it again.'
+        setError(staleSession
+        ? 'Ta zapisana sesja należy do użytkownika Supabase Auth, który już nie istnieje. Może się tak zdarzyć po zresetowaniu bazy danych. Wyloguj się i zaloguj ponownie. Jeśli konto także zostało usunięte, wybierz „Utwórz konto”, aby zarejestrować je ponownie.'
         : createError.message)
     } else onCreated()
   }
 
   return (
     <section className="card auth-card">
-      <p className="eyebrow">First steps</p>
-      <h1>Create your household.</h1>
-      <p className="intro">This creates the shared space and adds your profile as its first member.</p>
+      <p className="eyebrow">Pierwsze kroki</p>
+      <h1>Utwórz wspólny dom.</h1>
+      <p className="intro">Utworzymy wspólną przestrzeń i dodamy Twój profil jako pierwszego domownika.</p>
       <form className="auth-form" onSubmit={submit}>
-        <label>Your name<input required value={profileName} onChange={event => setProfileName(event.target.value)} autoComplete="name" /></label>
-        <label>Household name<input required value={householdName} onChange={event => setHouseholdName(event.target.value)} /></label>
+        <label>Twoje imię<input required value={profileName} onChange={event => setProfileName(event.target.value)} autoComplete="name" /></label>
+        <label>Nazwa domu<input required value={householdName} onChange={event => setHouseholdName(event.target.value)} /></label>
         {error && <p className="error-message" role="alert">{error}</p>}
-        <button className="button-primary" type="submit" disabled={pending || !profileName.trim() || !householdName.trim()}>{pending ? 'Creating…' : 'Create household'}</button>
+        <button className="primary-button" type="submit" disabled={pending || !profileName.trim() || !householdName.trim()}>{pending ? 'Tworzę…' : 'Utwórz dom'}</button>
       </form>
-      <p className="auth-switch"><button className="button-quiet" type="button" onClick={() => void onSignOut()}>Sign out</button></p>
+      <p className="auth-switch"><button className="text-button" type="button" onClick={() => void onSignOut()}>Wyloguj się</button></p>
     </section>
   )
 }
@@ -228,12 +228,12 @@ function HouseholdOnboarding({ user, onCreated, onSignOut }: { user: User; onCre
 function ErrorState({ message, onRetry, onSignOut }: { message: string; onRetry: () => void; onSignOut: () => Promise<void> }) {
   return (
     <section className="card auth-card">
-      <p className="eyebrow">Something went wrong</p>
-      <h1>We couldn’t load your profile.</h1>
+      <p className="eyebrow">Coś poszło nie tak</p>
+      <h1>Nie udało się wczytać profilu.</h1>
       <p className="error-message" role="alert">{message}</p>
       <div className="form-actions">
-        <button className="button-primary" onClick={onRetry}>Try again</button>
-        <button className="button-quiet" onClick={() => void onSignOut()}>Sign out</button>
+        <button className="primary-button" onClick={onRetry}>Spróbuj ponownie</button>
+        <button className="button-quiet" onClick={() => void onSignOut()}>Wyloguj się</button>
       </div>
     </section>
   )

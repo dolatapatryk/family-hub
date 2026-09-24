@@ -23,5 +23,5 @@ export function groupTasks(tasks: Task[], today = localDate()) {
 export function formatDueDate(date: string) {
   // Parse date-only values locally, avoiding a UTC shift to the previous day.
   const [year, month, day] = date.split('-').map(Number)
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(year, month - 1, day))
+  return new Intl.DateTimeFormat('pl-PL', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(year, month - 1, day))
 }

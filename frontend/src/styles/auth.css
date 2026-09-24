@@ -1,0 +1,114 @@
+.app.auth-shell {
+  width: min(100% - 40px, 640px);
+  margin-inline: auto;
+}
+
+.auth-shell .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 30px 0;
+}
+
+.auth-shell .brand {
+  padding: 0;
+  color: var(--color-ink);
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.auth-shell .brand-mark {
+  background: var(--color-accent);
+}
+
+.auth-shell .header-note {
+  color: var(--color-muted);
+  font-size: 14px;
+}
+
+.auth-shell main {
+  padding: 54px 0;
+}
+
+.card {
+  padding: 24px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.auth-card {
+  margin-inline: auto;
+}
+
+.auth-card h1 {
+  margin-bottom: 12px;
+}
+
+.auth-card .intro {
+  margin: 0 0 24px;
+  color: var(--color-muted);
+  line-height: 1.6;
+}
+
+.auth-form {
+  display: grid;
+  gap: 18px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-form input {
+  width: 100%;
+}
+
+.auth-form .error-message,
+.auth-form .task-notice {
+  margin: 0;
+}
+
+.auth-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.auth-config {
+  overflow-x: auto;
+  padding: 14px;
+  border-radius: 10px;
+  background: #f2f6f4;
+  color: #365e50;
+}
+
+@media (max-width: 600px) {
+  .app.auth-shell {
+    width: min(100% - 28px, 640px);
+  }
+
+  .auth-shell .header {
+    padding: 24px 0;
+  }
+
+  .auth-shell .header-note {
+    display: none;
+  }
+
+  .auth-shell main {
+    padding: 22px 0 35px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+}

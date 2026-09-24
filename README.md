@@ -26,6 +26,12 @@ Start the frontend in another terminal:
 Open [localhost:5173](http://localhost:5173). Supabase Auth and Postgres run
 locally on the ports reported by the Supabase CLI.
 
+To use the development app from another device on the same Wi-Fi, open
+`http://<computer-LAN-IP>:5173` (for example, `http://192.168.1.62:5173`).
+The Vite development server proxies Supabase requests to the configured
+`VITE_SUPABASE_URL`, so the phone does not need to reach the computer's local
+`127.0.0.1:54321` address directly.
+
 Local and hosted Supabase projects have separate Auth users. The first
 authenticated user can create a household from the onboarding screen. Never
 put a Supabase secret or service-role key in frontend environment variables.
