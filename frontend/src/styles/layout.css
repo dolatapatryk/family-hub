@@ -26,8 +26,11 @@
   text-decoration: none;
 }
 
-.mobile-profile-name,
-.mobile-signout {
+.mobile-profile-name {
+  display: none;
+}
+
+.signout-button.mobile-signout {
   display: none;
 }
 
@@ -294,7 +297,7 @@
     white-space: nowrap;
   }
 
-  .mobile-signout {
+  .signout-button.mobile-signout {
     display: grid;
     flex-basis: 34px;
     width: 34px;
