@@ -15,27 +15,22 @@ the connection owner chooses what their household can see.
 - Today presentation: `frontend/src/dashboard/DashboardPage.tsx`.
 - No Google adapter, integration tables, or Edge Functions currently exist in the repository.
 
-## 1. Fix the integration contract and recurrence design
+## 1. Fix the integration contract and keep the MVP to future one-off events
 
 Use these proposed MVP defaults:
 
 - One connected Google account per member initially; model each connection separately so this can grow later.
 - Multiple selected calendars per connection, each private by default.
-- Calendar sharing plus owner-controlled event exclusions. An exclusion makes the item owner-only, not deleted in Google.
-- For recurring events, support excluding either one occurrence or the entire series; exclusions survive resynchronization.
+- Sharing is controlled only per selected Google calendar: the owner sets each calendar to Private or Household. This applies to all imported events from that calendar, including its retained history; there are no per-event privacy exclusions.
+- The initial import includes only one-off events that are ongoing or in the future. It does not backfill completed historical events.
+- Recurring series and their instances/exceptions are out of scope for the MVP and are not imported. Request unexpanded events, then skip recurring masters (`recurrence`) and instances/exceptions (`recurringEventId`); do not expand recurrence rules or add a source-events table.
 - Synchronization starts only when the connection owner clicks Refresh/Synchronize. This applies to the initial import and every subsequent update; connecting an account, selecting calendars, opening a page, and navigating dates do not start a Google event sync.
-- Store only fields used by the UI: title, description, optional location/link, schedule, source identity, timestamps, and recurrence data needed for display. Do not copy raw Google payloads, guests, or attachments by default.
+- Store only fields used by the UI: title, description, optional location/link, schedule, source identity, and timestamps. Do not copy raw Google payloads, guests, or attachments by default.
 
-Start with the three core tables in step 3. Resolve recurrence and synchronization together before deciding whether a fourth table is needed:
+- On initial sync, use Google's `timeMin` filter starting at the sync time and do not set a `timeMax`, so there is no historical backfill or arbitrary future coverage boundary. Ongoing events may be included because their end is still in the future.
+- Google does not allow `timeMin` or `timeMax` with `syncToken`. Incremental syncs use the saved token without a local date filter: apply Google changes and cancellations regardless of event date, and retain imported events that have passed. On `410 Gone`, preserve already-imported past events while rebuilding/reconciling the current and future set with the initial `timeMin` cutoff.
 
-- **Expand recurring events server-side:** keep a minimal unexpanded source mirror (`singleEvents=false`) in an additional `private.google_source_events` table, including recurrence rules and exceptions. Generate display occurrences using a tested recurrence library. This supports the parent plan's full/incremental source-sync approach; it is separate from Family Hub's annual-date helper.
-- **Retrieve occurrences expanded by Google for a bounded range:** store the returned occurrences directly in `imported_calendar_events`, without a source-events table. This alternative requires revising the parent plan's synchronization contract: range-filtered fetches cannot simply be combined with its incremental sync-token requests. Define complete range replacement, deletion reconciliation, and coverage extension before choosing it.
-
-Do not add `google_source_events` until the recurrence decision establishes a need for it. Preserve stable occurrence identity when an instance moves in either approach. Step 6 describes the existing incremental-sync contract; update it and the parent plan if the range-based alternative is selected.
-
-Materialize a bounded occurrence window during the initial user-requested sync (proposed: one year back and two years forward). If users navigate outside it, show coverage status and a Refresh/Synchronize action to extend the range; an unprepared range must never look like an empty calendar. Validate unending series, DST, moved/cancelled instances, and series edits in a short technical spike. Do not attempt to enumerate an infinite series during full sync. Google's [recurrence guide](https://developers.google.com/workspace/calendar/api/guides/recurringevents) describes masters, exceptions, and stable original-start identity.
-
-Completion: documented request parameters, recurrence representation, coverage behavior, and sharing semantics.
+Completion: documented request parameters, initial-import cutoff, historical retention, recurring-event exclusion, and per-calendar sharing semantics.
 
 ## 2. Configure Google and Supabase environments
 
@@ -54,12 +49,10 @@ Create a new migration with three core tables; do not mix imported events into n
 | Proposed object | Purpose |
 | --- | --- |
 | `private.google_connections` | Owner, household, encrypted credentials or secret references, granted scopes, lifecycle status, one pending OAuth state hash and expiry |
-| `private.google_calendars` | Connection/calendar identity, selection, timezone, sharing, privacy exclusions in JSONB, sync token, request configuration, run/progress/lease fields, generation, range coverage, last success/error |
-| `public.imported_calendar_events` | Normalized one-off/occurrence rows used by Calendar and Today |
+| `private.google_calendars` | Connection/calendar identity, selection, timezone, Private/Household sharing mode, sync token, request configuration, run/progress/lease fields, generation, last success/error |
+| `public.imported_calendar_events` | Normalized one-off event rows used by Calendar and Today |
 
-An optional fourth table, `private.google_source_events`, stores minimal series definitions and exceptions only if step 1 selects server-side recurrence expansion. There are no separate OAuth-state, exclusion, or sync-job tables in the MVP.
-
-Store exclusions in a validated `privacy_exclusions` JSONB field on each selected calendar, using stable source event IDs, series IDs, or series ID plus original occurrence start. Keep this field independent of imported rows so rebuilding the mirror cannot erase privacy choices. Owner-only database operations add/remove individual exclusions atomically to avoid lost updates between sessions. Retain exclusions across sync resets and calendar deselection/reselection; remove them on connection deletion.
+There are no separate OAuth-state, recurrence-source, per-event exclusion, or sync-job tables in the MVP.
 
 Store a single pending OAuth state on the connection. Starting another authorization attempt replaces it and invalidates the previous attempt without clearing working credentials. Store synchronization checkpoints and expiring leases per calendar, rather than introducing a separate job queue.
 
@@ -67,12 +60,12 @@ Enforce these database rules:
 
 - RLS on application tables; no browser grants for private integration tables or credentials.
 - Public mirror has authenticated SELECT only. Browser INSERT/UPDATE/DELETE are denied.
-- Readers must belong to the row's household and either own it or have access through the current calendar-sharing policy, with exclusions applied.
+- Readers must belong to the row's household and either own it or have access through the current Private/Household setting of the source calendar.
 - Owner-only management operations validate the current profile and ownership server-side. Client-supplied owner/household IDs never authorize an operation.
-- Uniqueness uses `(connection_id, google_calendar_id, google_event_id)` for imported Google events and a stable source occurrence identity for generated rows. Apply source-event uniqueness to the optional source table only if it is introduced. Do not deduplicate unrelated copies by title or `iCalUID`.
+- Uniqueness uses `(connection_id, google_calendar_id, google_event_id)` for imported Google events. Do not deduplicate unrelated copies by title or `iCalUID`.
 - Schedule checks preserve date-only all-day values and exclusive ends; timed rows preserve timezone information.
 - Add household/range and connection/source indexes. Keep Google update timestamps separate from local import timestamps.
-- Sharing and JSONB exclusion changes take effect transactionally for existing rows; sync must never overwrite exclusions or publish using stale sharing settings. RLS must enforce these preferences through a narrowly scoped private helper or transactionally maintained visibility fields, without exposing the private calendar metadata to the browser.
+- Changing a calendar between Private and Household takes effect transactionally for all its existing rows. Sync must never overwrite the owner's sharing choice or publish using stale settings. RLS must enforce the current calendar setting through a narrowly scoped private helper or transactionally maintained visibility fields, without exposing private calendar metadata to the browser.
 
 Edge Functions need an explicit route to private storage: a server-only database connection or narrowly scoped service-only RPCs with fixed search paths and revoked browser execution. A private schema cannot simply be queried through the ordinary exposed PostgREST API.
 
@@ -96,11 +89,11 @@ Completion: a member can connect, refresh credentials, and reconnect without exp
 ## 5. Implement calendar selection and privacy controls
 
 1. Fetch every page of the connected account's calendar list server-side; return safe display metadata only.
-2. Let the owner select calendars and choose Private or Household for each. Explain that household sharing includes imported event details and future events from that calendar.
+2. Let the owner select calendars and choose Private or Household for each. Explain that Household sharing exposes all imported event details, including retained history, and future imports from that calendar.
 3. Persist choices through owner-authorized management actions, then show Refresh/Synchronize to let the owner start the import.
-4. Support a private preview after a user-requested import and adding exclusions before publishing a calendar to the household.
-5. Add owner-only event/series privacy actions that atomically update the selected calendar's JSONB exclusions; other members get read-only event details.
-6. Deselecting a calendar invalidates its active run and purges its imported data, retaining its private exclusion preferences for reselection. Switching it to Private immediately removes household access in the database.
+4. Support a private preview after a user-requested import before the owner chooses whether to share the whole calendar with the household.
+5. Do not add event-level privacy actions; other household members get read-only details for events from calendars shared with the household.
+6. Deselecting a calendar invalidates its active run and purges its imported data. Switching it to Private immediately removes household access to all of its events in the database.
 
 Completion: selected private events are visible only to the owner, and sharing is deliberate and enforceable outside the UI.
 
@@ -110,16 +103,16 @@ Implement one reusable per-calendar worker for user-requested runs:
 
 1. Atomically acquire a lease on `google_calendars`, set the run ID, and capture the current connection/calendar generation.
 2. Refresh credentials when necessary.
-3. On initial sync, fetch all pages using the fixed request configuration. Process cancellations before requiring title/date fields because deletion records may be sparse.
-4. Upsert normalized imported records idempotently and remove cancelled items/instances. If server-side recurrence expansion was selected, also update the optional source mirror and rebuild affected occurrences.
-5. Persist the new sync token only after all pages and required mirror changes succeed. Retried pages must be harmless.
-6. On later runs, use that calendar's saved token and the same request parameters; no incremental `timeMin`, `timeMax`, or `orderBy` filters. Apply display-range filtering in Supabase.
-7. On `410 Gone`, invalidate only that calendar's sync state and rebuild its mirror. Use generation-tagged mirror rows and a per-calendar published generation to remove obsolete rows without exposing an incomplete rebuild. Preserve the calendar's JSONB exclusions throughout.
+3. On initial sync, fetch all pages using the fixed request configuration, with `timeMin` set to the run start and no `timeMax`. Process cancellations before requiring title/date fields because deletion records may be sparse. Exclude recurring series and their instances/exceptions.
+4. Upsert one-off events idempotently and remove events Google marks cancelled. Ignore recurring masters/instances/exceptions in every response; if an update turns an imported one-off into a recurring event, remove its local row. Apply incremental upserts and cancellations regardless of event date; do not prune or hide imported events just because they have passed.
+5. Persist the new sync token only after all pages and row changes succeed. Retried pages must be harmless.
+6. On later runs, use that calendar's saved token and supported request settings; do not send `timeMin`, `timeMax`, or `orderBy` with the token. Do not add a local date filter to token results.
+7. On `410 Gone`, invalidate only that calendar's sync state and rebuild the current/future set using the initial future-only request. Preserve already-imported events that have ended; reconcile only the current/future set against the rebuilt snapshot, so recovery does not erase retained history.
 8. Commit only while the lease and generation remain valid. Disconnect, deselection, and newer runs must prevent stale workers from restoring rows.
 
 Checkpoint work in the selected calendar's progress fields across bounded Edge Function invocations rather than relying on one request to finish a large calendar. The frontend can request successive batches within the same user-started run; each request must validate ownership and run identity. If the session closes or the run fails, the next Refresh/Synchronize click resumes or safely restarts it. A failed run must not advance the sync token. Google's [sync guide](https://developers.google.com/workspace/calendar/api/guides/sync) and [events.list contract](https://developers.google.com/workspace/calendar/api/v3/reference/events/list) define pagination, incremental parameters, and token invalidation.
 
-Completion: initial imports, edits, deletions, recurring exceptions, retries, and per-calendar resets converge without duplicate rows.
+Completion: the initial import avoids historical backfill; incremental changes converge without date filtering while retaining imported history, including through per-calendar token resets.
 
 ## 7. Add the Refresh/Synchronize action and recovery
 
@@ -140,9 +133,9 @@ Add `frontend/src/googleCalendar/` with types, a small Supabase/Edge Function ad
 - Include household, viewer user ID, range, and viewer timezone in its query key. The parent plan's abbreviated imported key should be expanded to protect private cached data across account switches.
 - Extend `AgendaSource` with a distinct Google variant; do not pass imported items to native edit/delete handlers.
 - Merge imports using the existing overlap and ordering conventions in Calendar and Today. Label source and read-only status; offer a safe Google link for editing there.
-- Provide independent loading/error/empty/coverage states so Google failures do not hide native events or tasks.
+- Provide independent loading/error/empty states so Google failures do not hide native events or tasks.
 - Paginate Supabase reads when a range exceeds the API row limit.
-- Invalidate both views after a user-requested sync, sharing, exclusion, deselection, and disconnect. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization.
+- Invalidate both views after a user-requested sync, calendar sharing changes, deselection, and disconnect. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization.
 - On permission reduction, drop stale private/shared data from the current client immediately. RLS prevents subsequent unauthorized reads; information already delivered to another session cannot be retroactively erased.
 - Keep integration responses and event data out of the static service-worker cache.
 
@@ -151,7 +144,7 @@ Completion: the owner's private imports and household-visible imports appear con
 ## 9. Implement complete disconnect and cleanup
 
 1. Verify connection ownership and atomically mark it disabled, invalidate active per-calendar runs, and make its mirrored rows unreadable.
-2. Purge imported rows and selected-calendar records, including their sync state and JSONB exclusions. Purge source records as well if the optional source table exists.
+2. Purge imported rows and selected-calendar records, including their sync state.
 3. Attempt Google token revocation, then delete stored credentials and OAuth state. If revocation fails, finish local disconnect and report that remote revocation was not confirmed; do not keep an active credential indefinitely.
 4. Clear current-client caches and make repeated disconnect requests harmless.
 5. Apply equivalent local cleanup on owner/household deletion; test disconnect during a running sync.
@@ -166,8 +159,8 @@ Add meaningful automated tests for:
 
 - OAuth state expiry/replay/replacement on the connection, wrong owner, denied consent, token refresh, and reconnect.
 - Multi-page imports, repeated pages, partial failures, cancellations, token advancement, isolated `410` recovery, and overlapping workers.
-- Timed/all-day/multi-day events, timezone and DST boundaries, infinite recurring series, moved/cancelled occurrences, and series changes.
-- Anonymous access denial, owner-only credentials/management, private versus shared imports, JSONB exclusions surviving resets and deselection/reselection, atomic concurrent exclusion updates, and cross-household isolation.
+- Timed/all-day/multi-day one-off events, timezone and DST boundaries, initial historical cutoff, no local date filtering on token results, retaining past rows on incremental sync and `410` recovery, and cancellations.
+- Anonymous access denial, owner-only credentials/management, Private versus Household calendar visibility for the owner's and other household members' views, visibility changes applying to existing rows, and cross-household isolation.
 - Direct REST writes to imported content denied; the transport issues no Google event mutation requests.
 - Privacy changes during sync, revoked access, disconnect races, and account switching without cached-data leakage.
 - Shared events readable by a household member with no Google connection.
@@ -185,9 +178,9 @@ Run frontend clean-install tests/build, Edge Function unit tests, and repeatable
 6. Document rollback: disable new connections and synchronization requests, hide integration UI, and preserve native Calendar/Today operation; never revert by exposing private tables.
 
 Suggested reviewable implementation batches: (1) contract/schema/RLS, (2) OAuth and selection,
-(3) manual sync/recurrence, (4) UI/sharing/disconnect, (5) end-to-end verification and rollout.
+(3) manual one-off event sync, (4) UI/sharing/disconnect, (5) end-to-end verification and rollout.
 
 The integration is done when a member can connect and privately import selected calendars,
-explicitly share them with a member who has no Google connection, import Google changes and
-deletions by clicking Refresh/Synchronize, exclude sensitive events, and disconnect completely—while
+set each calendar to Private or Household, share it with a member who has no Google connection,
+import Google changes and deletions by clicking Refresh/Synchronize, and disconnect completely—while
 native calendar features remain usable and credentials never reach the browser.
