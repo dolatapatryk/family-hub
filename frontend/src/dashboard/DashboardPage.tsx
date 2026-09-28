@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { AgendaSwitcher, EventList } from '../calendar/AgendaComponents'
-import { agenda, type AgendaDay } from '../calendar/agenda'
+import { CalendarAgenda, CalendarQueryState } from '../calendar/AgendaComponents'
+import { buildAgenda } from '../calendar/agenda'
+import { addDays, localDate } from '../calendar/dates'
+import { useCalendarSources } from '../calendar/queries'
 import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../auth/AuthGate'
 import { createShoppingApi } from '../shopping/api'
@@ -39,9 +41,11 @@ export function DashboardPage() {
   const shoppingApi = createShoppingApi(profile.household_id, profile.id)
   const taskKey = ['tasks', profile.household_id]
   const shoppingKey = ['shoppingItems', profile.household_id]
-  const tasks = useQuery({ queryKey: taskKey, queryFn: ({ signal }) => tasksApi.list(signal) })
   const shopping = useQuery({ queryKey: shoppingKey, queryFn: ({ signal }) => shoppingApi.list(signal) })
-  const [selectedDay, setSelectedDay] = useState<AgendaDay>('today')
+  const today = localDate()
+  const todayRange = { start: today, end: addDays(today, 1) }
+  const { events, annualDates, tasks } = useCalendarSources(todayRange)
+  const todayAgenda = buildAgenda(events.data ?? [], annualDates.data ?? [], [], todayRange)
   const [formOpen, setFormOpen] = useState(false)
   const [title, setTitle] = useState('')
   const input = useRef<HTMLInputElement>(null)
@@ -69,9 +73,8 @@ export function DashboardPage() {
   const openTasks = allTasks.filter(task => !task.completed)
   const doneCount = allTasks.length - openTasks.length
   const openShopping = (shopping.data ?? []).filter(item => !item.completed)
-  const selectedAgenda = agenda[selectedDay]
   const dateLabel = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toLocaleUpperCase('pl-PL')
-  const visibleTasks = openTasks.slice(0, 4)
+  const visibleTasks = openTasks.filter(task => task.dueDate === today)
   const visibleShopping = openShopping.slice(0, 3)
   const progress = allTasks.length ? Math.round((doneCount / allTasks.length) * 100) : 0
 
@@ -98,7 +101,7 @@ export function DashboardPage() {
 
       <section className="metrics" aria-label="Podsumowanie">
         <Metric kind="tasks" tone="lime" number={tasks.isPending ? '—' : openTasks.length} label="otwarte zadania" />
-        <Metric kind="calendar" tone="blue" number={agenda.today.events.length} label="plany na dziś" />
+        <Metric kind="calendar" tone="blue" number={events.isPending || annualDates.isPending || events.isError || annualDates.isError ? '—' : todayAgenda.length} label="plany na dziś" />
         <Metric kind="shopping" tone="orange" number={shopping.isPending ? '—' : openShopping.length} label="pozycji na liście" />
       </section>
 
@@ -111,7 +114,7 @@ export function DashboardPage() {
           {tasks.isPending && <p className="panel-message" role="status">Ładuję zadania…</p>}
           {tasks.isError && <div className="panel-message error-message" role="alert">Nie udało się pobrać zadań. <button className="link-button" type="button" onClick={() => void tasks.refetch()}>Spróbuj ponownie</button></div>}
           {tasks.data && <ul className="task-list dashboard-list">
-            {visibleTasks.length ? visibleTasks.map(task => <TaskItem key={task.id} task={task} api={tasksApi} queryKey={taskKey} showArchive={false} />) : <li className="empty-state">Nie ma otwartych zadań. Dodaj pierwsze zadanie.</li>}
+            {visibleTasks.length ? visibleTasks.map(task => <TaskItem key={task.id} task={task} api={tasksApi} queryKey={taskKey} showArchive={false} />) : <li className="empty-state">Nie ma zadań z terminem na dziś.</li>}
           </ul>}
           {tasks.data && <div className="panel-foot">
             <span>Ukończone {doneCount} z {allTasks.length}</span>
@@ -121,11 +124,12 @@ export function DashboardPage() {
 
         <section className="panel" aria-labelledby="dashboard-agenda-title">
           <div className="panel-head">
-            <div><h2 className="panel-title" id="dashboard-agenda-title">Najbliższe plany</h2><p className="panel-kicker">{selectedAgenda.label} · przykładowy kalendarz</p></div>
-            <AgendaSwitcher selectedDay={selectedDay} onSelect={setSelectedDay} />
+            <div><h2 className="panel-title" id="dashboard-agenda-title">Dzisiejsze wydarzenia</h2><p className="panel-kicker">Kalendarz i ważne daty</p></div>
           </div>
-          <EventList events={selectedAgenda.events.slice(0, 3)} label={selectedAgenda.title} />
-          <div className="panel-foot"><span>Przykładowe wydarzenia</span><Link className="link-button" to="/calendar">Otwórz kalendarz <span className="arrow" aria-hidden="true">›</span></Link></div>
+          <CalendarQueryState label="wydarzenia" pending={events.isPending} error={events.error} onRetry={() => void events.refetch()} />
+          <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
+          {(todayAgenda.length > 0 || (events.isSuccess && annualDates.isSuccess)) && <CalendarAgenda entries={todayAgenda} empty="Na dziś nie ma wydarzeń." />}
+          <div className="panel-foot"><span>Dzisiejsze plany</span><Link className="link-button" to="/calendar">Otwórz kalendarz <span className="arrow" aria-hidden="true">›</span></Link></div>
         </section>
       </div>
 
@@ -143,7 +147,7 @@ export function DashboardPage() {
         </section>
         <article className="panel week-note">
           <div className="note-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12m-8.48 8.48-2.12 2.12" /><circle cx="12" cy="12" r="4" /></svg></div>
-          <div><h2>Prościej, kiedy plan jest wspólny</h2><p>Dodaj zadanie, odhacz zakupy albo sprawdź przykładowe wydarzenia z kalendarza.</p></div>
+          <div><h2>Prościej, kiedy plan jest wspólny</h2><p>Dodaj zadanie, odhacz zakupy albo sprawdź najbliższe wydarzenia z kalendarza.</p></div>
         </article>
       </div>
     </>

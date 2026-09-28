@@ -18,6 +18,7 @@ const navigation = [
   { to: '/shopping', label: 'Zakupy', icon: 'shopping', end: false },
   { to: '/household', label: 'Domownicy', icon: 'members', end: false },
   { to: '/calendar', label: 'Kalendarz', icon: 'calendar', end: false },
+  { to: '/annual-dates', label: 'Ważne daty', icon: 'annual', end: false },
 ] as const
 
 function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] }) {
@@ -27,6 +28,7 @@ function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] })
     shopping: <><path d="M3 4h2l2.1 11.1a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="18" cy="20" r="1" /></>,
     members: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></>,
     calendar: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></>,
+    annual: <><rect x="3" y="8" width="18" height="13" rx="2" /><path d="M3 12h18M12 8v13" /><path d="M12 8H8.5a2.5 2.5 0 1 1 2.4-3.2L12 8Zm0 0h3.5a2.5 2.5 0 1 0-2.4-3.2L12 8Z" /></>,
   }
 
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>

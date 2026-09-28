@@ -92,7 +92,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <AuthLayout><ConfigurationMessage /></AuthLayout>
   }
 
-  if (authLoading || profileLoading) {
+  // Do not render the previous user's private calendar cache while the new
+  // session's profile is being loaded after an account change.
+  if (authLoading || profileLoading || (session && profile && profile.id !== session.user.id)) {
     return <AuthLayout><p role="status">Sprawdzam sesję Family Hub…</p></AuthLayout>
   }
 
@@ -109,7 +111,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ profile, signOut }}>
+    <AuthContext.Provider key={profile.id} value={{ profile, signOut }}>
       {children}
     </AuthContext.Provider>
   )

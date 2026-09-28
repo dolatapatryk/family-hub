@@ -33,7 +33,7 @@ handling, query caching, and mapping database rows into frontend models.
       React Query
       Tasks
       Shopping
-      Today and Calendar placeholders
+      Today, Calendar, and annual dates
             |
             | Supabase JS + authenticated session
             v
@@ -108,13 +108,16 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
 - Frontend adapter tests and production build checks.
 - Installable PWA manifest, application icons, and static shell caching.
 - Mobile touch targets and safe-area spacing; static Nginx deployment guidance.
+- Native calendar and annual-date implementation: schema migration, scoped
+  adapters, separate forms, 14-day agenda, and generated annual occurrences in
+  Calendar and Today. Migration application and runtime verification are pending.
 
 ### Current product gap
 
 - The safe household invite and join flow is implemented; two-user Supabase
   verification is still pending.
-- Today and Calendar are placeholders.
-- First-party calendar event storage and event creation are not implemented.
+- Native Calendar and Today data integration are implemented; frontend and
+  database verification are still pending.
 - Google Calendar import is not implemented.
 - RLS and migration behavior still need a repeatable two-user integration
   verification pass.
@@ -197,8 +200,10 @@ First-party, normal one-off events created and managed in the Calendar tab:
 - id, household_id, title, description
 - created_by: authenticated creator
 - visibility: `household` or `private`
-- timed-event start/end and time zone, or date-only all-day start/end
-- created_at, updated_at, archived_at or deleted_at as needed
+- `all_day`: chooses the event's schedule shape
+- timed `starts_at`/`ends_at` timestamps and `time_zone`, or date-only
+  `start_date`/`end_date`; end values are exclusive
+- created_at, updated_at; deletion removes the row
 
 This table contains only normal one-off events. Its create/edit form does not
 offer birthdays, anniversaries, or annual recurrence. Household events can be
@@ -216,7 +221,7 @@ the separate `Ważne daty` tab:
 - kind: `birthday`, `anniversary`, or `other`
 - birthday/anniversary `initial_date DATE`, including year
 - `other` month and day, with no year and no placeholder date
-- created_at, updated_at, archived_at or deleted_at as needed
+- created_at, updated_at; deletion removes the definition
 
 Birthdays and anniversaries require the full initial date. `Other` (for
 example, namedays) requires only month and day. Household annual dates can be
@@ -281,6 +286,9 @@ Keep these invariants in Postgres rather than relying on frontend checks:
   creator.
 - First-party household events and annual dates are visible to household
   members.
+- Household members can edit/delete shared first-party items. Only their
+  creator can change visibility; private items can be managed only by that
+  creator. Creation/update timestamps are controlled by the database.
 - Imported Google event details are visible to the owner by default. Other
   household members can read them only when the owner has explicitly shared
   the source/calendar or event with the household.
@@ -327,7 +335,8 @@ Use household-scoped React Query keys:
 - tasks, household ID
 - shopping items, household ID
 - members, household ID
-- calendar events, household ID, start, and end
+- calendar events, household ID, start, end, user ID, and viewer time zone
+- annual dates, household ID, and user ID
 - imported calendar events, household ID, start, and end
 
 The calendar agenda merges first-party events, Google events readable under
@@ -360,6 +369,9 @@ Verify that two authenticated users in the same household see the same Tasks
 and Shopping data.
 
 ### 2. Add first-party calendar events in Supabase
+
+Implementation is complete; the migration has not been applied and tests,
+builds, and application/manual verification have not been run for this change.
 
 - Add `calendar_events` and `annual_dates` migrations with constraints,
   indexes, RLS, and explicit column grants.
@@ -463,6 +475,23 @@ authenticated users:
 
 Run the manual pass on a narrow mobile viewport and a desktop viewport. Check
 refresh, sign-out/sign-in, and a second browser session.
+
+For the native calendar milestone, also verify:
+
+- Create/edit/delete timed and multi-day all-day events. Confirm a midnight
+  end is exclusive and all-day dates keep their day in different browser zones.
+- Switch between private and household visibility as the creator. A second
+  member can edit shared content but cannot change its visibility; private
+  events and annual dates remain inaccessible to that member and another household.
+- Try direct writes to IDs, household/owner fields, and timestamps; verify
+  grants reject them and database constraints reject mixed or invalid schedules.
+- Create a birthday/anniversary and an `Inne` month/day definition. Confirm no
+  occurrence in the initial year, the correct subsequent count, and February
+  29 falling on February 28 in non-leap years.
+- Confirm annual occurrences open read-only details in Calendar and Today,
+  and editing/deletion is available only for definitions in `Ważne daty`.
+- Edit an event into/out of the visible range and delete an annual definition;
+  check cached Calendar/Today views after navigation and a failed refresh.
 
 ## Definition of done
 

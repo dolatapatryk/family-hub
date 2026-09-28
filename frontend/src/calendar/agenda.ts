@@ -1,43 +1,51 @@
-export type AgendaDay = 'today' | 'tomorrow' | 'weekend'
+import { annualOccurrences, type AnnualDate, type AnnualOccurrence } from '../annualDates/annualDates'
+import type { Task } from '../tasks/tasks'
+import { addDays, eventOverlaps, localDate } from './dates'
+import type { CalendarEvent, DateRange } from './types'
 
-export interface AgendaEvent {
-  time: string
+export type AgendaSource =
+  | { kind: 'event'; event: CalendarEvent }
+  | { kind: 'annual'; occurrence: AnnualOccurrence }
+  | { kind: 'task'; task: Task }
+
+export interface AgendaEntry {
+  id: string
+  date: string
   title: string
-  detail: string
+  time: string
+  order: string
+  createdAt: string
+  source: AgendaSource
 }
 
-export const agenda: Record<AgendaDay, { label: string; title: string; events: AgendaEvent[] }> = {
-  today: {
-    label: 'Dziś',
-    title: 'Plany na dziś',
-    events: [
-      { time: '09:00', title: 'Przegląd planu', detail: 'Krótka chwila na ustalenia' },
-      { time: '13:30', title: 'Odbiór przesyłki', detail: 'Sprawa do załatwienia' },
-      { time: '18:00', title: 'Przygotować kolację', detail: 'Wspólny czas w domu' },
-    ],
-  },
-  tomorrow: {
-    label: 'Jutro',
-    title: 'Plany na jutro',
-    events: [
-      { time: '10:00', title: 'Zakupy spożywcze', detail: 'Lista jest w zakładce Zakupy' },
-      { time: '15:30', title: 'Porządek w planach', detail: 'Sprawdź, co zostało na tydzień' },
-    ],
-  },
-  weekend: {
-    label: 'Weekend',
-    title: 'Pomysły na weekend',
-    events: [
-      { time: '10:30', title: 'Poranny spacer', detail: 'Czas na świeżym powietrzu' },
-      { time: '14:00', title: 'Domowe sprawy', detail: 'Bez pośpiechu, według potrzeb' },
-    ],
-  },
-}
-
-export const agendaDays: AgendaDay[] = ['today', 'tomorrow', 'weekend']
-
-export const agendaDayLabels: Record<AgendaDay, string> = {
-  today: 'Dziś',
-  tomorrow: 'Jutro',
-  weekend: 'Weekend',
+export function buildAgenda(events: CalendarEvent[], annualDates: AnnualDate[], tasks: Task[], range: DateRange): AgendaEntry[] {
+  const entries: AgendaEntry[] = []
+  const timeFormat = new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digit' })
+  for (let date = range.start; date < range.end; date = addDays(date, 1)) {
+    for (const event of events) {
+      if (!eventOverlaps(event, { start: date, end: addDays(date, 1) })) continue
+      const ongoing = !event.allDay && localDate(new Date(event.startsAt)) < date
+      entries.push({
+        id: `event:${event.id}:${date}`, date, title: event.title,
+        time: event.allDay ? 'Cały dzień' : ongoing ? 'W trakcie' : timeFormat.format(new Date(event.startsAt)),
+        order: event.allDay || ongoing ? '' : new Date(event.startsAt).toISOString(),
+        createdAt: event.createdAt, source: { kind: 'event', event },
+      })
+    }
+  }
+  for (const occurrence of annualOccurrences(annualDates, range)) {
+    entries.push({
+      id: `annual:${occurrence.id}`, date: occurrence.date, title: occurrence.title, time: 'Cały dzień',
+      order: '', createdAt: occurrence.definition.createdAt, source: { kind: 'annual', occurrence },
+    })
+  }
+  for (const task of tasks) {
+    if (task.completed || !task.dueDate || task.dueDate < range.start || task.dueDate >= range.end) continue
+    entries.push({
+      id: `task:${task.id}`, date: task.dueDate, title: task.title, time: 'Termin',
+      order: '', createdAt: task.createdAt, source: { kind: 'task', task },
+    })
+  }
+  return entries.sort((a, b) => a.date.localeCompare(b.date) || a.order.localeCompare(b.order)
+    || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
 }

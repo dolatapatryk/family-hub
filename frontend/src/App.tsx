@@ -1,5 +1,6 @@
 import { Link, Route, Routes } from 'react-router-dom'
 import { AuthGate, useAuth } from './auth/AuthGate'
+import { AnnualDatesPage } from './annualDates/AnnualDatesPage'
 import { CalendarPage } from './calendar/CalendarPage'
 import { DashboardPage } from './dashboard/DashboardPage'
 import { HouseholdPage } from './household/HouseholdPage'
@@ -18,6 +19,7 @@ function AuthenticatedApp() {
         <Route path="/shopping" element={<ShoppingPage />} />
         <Route path="/household" element={<HouseholdPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/annual-dates" element={<AnnualDatesPage />} />
         <Route path="*" element={<section className="panel empty-panel"><h1>Nie znaleziono strony</h1><Link to="/">Wróć do dziś</Link></section>} />
       </Routes>
     </AppShell>

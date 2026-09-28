@@ -1,0 +1,174 @@
+.calendar-form fieldset {
+  display: grid;
+  gap: 16px;
+}
+
+.calendar-form textarea,
+.calendar-range-input input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 7px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: #fbfdfc;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.calendar-form textarea {
+  resize: vertical;
+}
+
+.calendar-form .task-form-options,
+.calendar-form .task-meta {
+  margin: 0;
+}
+
+.calendar-form .calendar-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.calendar-checkbox input {
+  width: 20px;
+  min-height: 20px;
+  margin: 0;
+  accent-color: var(--color-blue);
+}
+
+.calendar-delete {
+  margin-bottom: 17px;
+}
+
+.calendar-delete .form-actions {
+  margin-top: 14px;
+}
+
+.calendar-range-head {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.calendar-range-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-range-input {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.calendar-range-input input {
+  width: 160px;
+}
+
+.agenda-day h3 {
+  margin: 0;
+  padding: 15px 19px;
+  border-top: 1px solid var(--color-line);
+  background: #fbfcfb;
+  font-size: 14px;
+}
+
+.calendar-agenda .event-row {
+  padding-top: 15px;
+}
+
+.calendar-agenda .event-title {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.agenda-entry {
+  min-width: 0;
+}
+
+.agenda-details {
+  color: var(--color-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.event-description {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agenda-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agenda-actions button {
+  min-height: 44px;
+}
+
+.annual-date-list {
+  margin: 0;
+  padding: 0 19px;
+  list-style: none;
+}
+
+.annual-date-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 18px 0;
+  border-top: 1px solid var(--color-line);
+  font-size: 13px;
+}
+
+.annual-date-row > div:first-child {
+  min-width: 0;
+}
+
+.annual-date-row h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.annual-date-row p:last-child {
+  margin-bottom: 0;
+}
+
+.calendar-form textarea:focus-visible,
+.calendar-agenda summary:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 620px) {
+  .annual-date-list {
+    padding-inline: 15px;
+  }
+
+  .annual-date-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agenda-day h3 {
+    padding-inline: 15px;
+  }
+
+  .calendar-agenda .wide-event {
+    grid-template-columns: 62px 10px minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (pointer: coarse) {
+  .calendar-form textarea {
+    font-size: 16px;
+  }
+}

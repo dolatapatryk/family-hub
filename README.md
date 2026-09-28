@@ -1,8 +1,8 @@
 # Family Hub
 
 A shared family app built with React, TypeScript, Vite, and Supabase. Users
-can sign in, create a household, manage shared Tasks and Shopping data, and
-use the upcoming Today and Calendar views.
+can sign in, create or join a household, manage shared Tasks and Shopping,
+and keep one-off events and annual dates in a Supabase-backed calendar.
 
 ## Local development
 
@@ -54,6 +54,34 @@ Frontend values are read at build time:
 | DEV_ALLOWED_HOSTS | Optional comma-separated development hostnames without scheme, port, or path |
 
 Restart Vite after changing .env.local.
+
+## Calendar and annual dates
+
+**Kalendarz** displays a 14-day agenda with one-off events, annual occurrences,
+and active tasks with due dates. Create, edit, and delete normal events there.
+Timed events store start/end instants and an IANA time zone; the agenda shows
+times in the viewer's browser time zone. All-day events store date-only values.
+The form's last day is inclusive; the database stores an exclusive end date.
+The timed form rejects nonexistent or repeated hours during a daylight-saving
+transition rather than silently choosing an instant.
+
+**Ważne daty** has a separate form and list for birthdays, anniversaries, and
+other annual dates. Birthdays and anniversaries store their full initial date
+and first appear a year later, with the calculated birthday/anniversary number.
+Other dates store only month/day. Occurrences are generated in memory for
+Calendar and Today; no yearly copies are inserted. February 29 uses February
+28 in non-leap years. Edit or delete annual definitions only in **Ważne daty**.
+
+New items default to private. Household members can read, edit, and delete
+shared items; private items are accessible only to their creator. Only the
+creator can change visibility. RLS and column grants enforce these rules in
+both `calendar_events` and `annual_dates`. Calendar query keys also include the
+current user to keep private cached items separate after an account switch.
+
+The schema is defined in
+`supabase/migrations/20260928000000_create_calendar_schema.sql`. This migration
+must be applied to your Supabase project before using these features. It has
+not been applied or tested as part of this implementation.
 
 ## PWA and deployment
 
@@ -117,5 +145,6 @@ Reset the local Supabase database when testing migration changes:
 - frontend/: React application, authentication, feature pages, and Supabase adapters.
 - supabase/: local Supabase configuration and migrations.
 
-Today and Calendar are currently placeholders. The implementation roadmap is
-in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Today shows today's tasks and visible native calendar events, including annual
+occurrences. Google Calendar import is still planned. The implementation
+roadmap is in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
