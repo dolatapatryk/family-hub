@@ -60,29 +60,38 @@ state must stay in server-controlled storage.
   records their Google calendar and event IDs so later syncs update or remove
   the corresponding mirror rows instead of creating duplicates.
 - The owner controls whether each imported calendar is private or shared with
-  the household. Private is the default. An event-level exclusion should be
-  available for sensitive events in a shared source calendar.
+  the household. Private is the default. The choice applies to every imported
+  event from that calendar, including retained history; there are no per-event
+  privacy exclusions.
 - Imported event content can include reservation details or other personal
-  information. Make the sharing choice clear before importing or sharing a
-  calendar. RLS must enforce the choice; hiding an event in the UI is not an
-  access-control boundary.
+  information. Explain that household sharing exposes all imported details
+  from the selected calendar. RLS must enforce the current calendar choice;
+  hiding an event in the UI is not an access-control boundary.
+- The MVP imports only ongoing and future one-off events. It requests
+  unexpanded events and skips recurring masters, instances, and exceptions.
+- Start the initial import and every later sync only after the connection owner
+  clicks Refresh/Synchronize. Connecting, selecting a calendar, opening a page,
+  and navigating dates do not call Google's event API.
 - Google synchronization is read-only. Users edit or delete imported events
-  in Google Calendar; Family Hub refreshes the mirrored copy on the next sync.
+  in Google Calendar; Family Hub refreshes the mirror when the owner next
+  clicks Refresh/Synchronize.
 - Use the narrowest Google OAuth scopes that support the selected-calendar
   picker and event reads. Likely scopes are `calendar.events.readonly` and,
   only if needed for calendar selection, `calendar.calendarlist.readonly`.
   Confirm Google OAuth verification requirements before production release.
-- For each connected account and selected Google calendar, keep an independent
-  sync token and sync state. Run one paginated initial full sync, then use the
-  returned `nextSyncToken` for incremental syncs of that same calendar.
+- For each selected Google calendar, keep an independent sync token and sync
+  state. The initial paginated sync uses `timeMin` set to the run start, with no
+  `timeMax`; this avoids historical backfill while including ongoing events.
 - Keep the list-request parameters consistent across syncs. Process every
-  page, apply inserts/updates and Google cancellation/deletion records
+  page, apply one-off inserts/updates and Google cancellation/deletion records
   idempotently, and persist the new `nextSyncToken` only after all pages have
-  been applied successfully. Filter the date range in Supabase rather than
-  adding `timeMin` or `timeMax` to incremental sync requests.
+  been applied successfully. Incremental requests use the saved token without
+  `timeMin`, `timeMax`, `orderBy`, or a local date filter. Retain imported rows
+  after their events have passed.
 - If Google returns `410 Gone` for an expired or invalid token, discard that
-  calendar's sync state and run a fresh full sync. Do not reset sync state for
-  other calendars connected to the same account.
+  calendar's sync state and rebuild its current/future set using a new initial
+  cutoff. Preserve imported past rows. Do not reset sync state for other
+  calendars connected to the same account.
 - On disconnect, stop future syncs, delete/revoke the stored credentials, and
   remove that connection's imported mirror rows. Do not delete the original
   Google events.
@@ -119,6 +128,8 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
 - Native Calendar and Today data integration are implemented; frontend and
   database verification are still pending.
 - Google Calendar import is not implemented.
+- The Google Calendar integration schema and read policies are in a local
+  migration; database application and two-user RLS verification are pending.
 - RLS and migration behavior still need a repeatable two-user integration
   verification pass.
 
@@ -263,11 +274,13 @@ Store only normalized fields needed by Family Hub for imported Google events.
 This is a persistent synchronized copy, not a temporary browser cache. Its
 purpose is to let RLS serve shared events to household members who do not have
 Google connections of their own.
-Each imported row needs its household, owning profile, source calendar ID,
-source event ID, source update time, event dates/times, and the owner's sharing
-choice. Enforce uniqueness on the Google source identity so incremental sync
-updates a row instead of duplicating it. Treat cancelled/deleted Google
-events as removals from the imported view.
+Each imported row needs its household, connection and source calendar/event
+identity, normalized title/description/location/link, schedule, Google update
+time, and local import/sync timestamps. Keep the owner's sharing choice on the
+private source-calendar row, not on each event. Enforce uniqueness on the
+Google source identity so incremental sync updates a row instead of
+duplicating it. Treat cancelled/deleted Google events as removals from the
+imported view.
 
 The Google mirror is read-only in Family Hub. The original Google event
 remains authoritative: edits and deletions in Google update or remove the
@@ -289,9 +302,10 @@ Keep these invariants in Postgres rather than relying on frontend checks:
 - Household members can edit/delete shared first-party items. Only their
   creator can change visibility; private items can be managed only by that
   creator. Creation/update timestamps are controlled by the database.
-- Imported Google event details are visible to the owner by default. Other
-  household members can read them only when the owner has explicitly shared
-  the source/calendar or event with the household.
+- Imported Google event details are visible to the owner when the source
+  calendar is selected. Other household members can read them only when the
+  owner has set that calendar to Household; the current setting applies to all
+  events from that source.
 - Insert policies require household membership and the current Auth user for
   audit/owner columns.
 - Browser writes cannot change IDs, household scope, ownership, source IDs, or
@@ -393,19 +407,25 @@ builds, and application/manual verification have not been run for this change.
 
 - Let a household member connect Google through OAuth and select calendars to
   import. The connecting user must be able to disconnect at any time.
-- Ask whether imported calendar data should remain private or be shared with
-  the household. Default to private and provide an event-level way to keep a
-  sensitive item private when its source calendar is shared.
+- Let the owner set each selected calendar to Private or Household, defaulting
+  to Private. Explain that sharing applies to all imported event details and
+  retained history from that calendar; do not add per-event privacy controls.
 - Handle OAuth callbacks and sync only in a narrow Supabase Edge Function.
 - Store refresh tokens and per-account/per-calendar sync metadata in
   server-controlled storage.
-- For each selected calendar, perform a paginated initial full sync, then
-  incremental syncs with its own `nextSyncToken`. Keep request parameters
-  consistent, apply every page idempotently, and persist the next token only
-  after all page changes have been applied successfully.
+- Start initial and incremental sync only from an owner-clicked
+  Refresh/Synchronize action. Use an initial `timeMin` at run start and no
+  `timeMax`; incremental syncs use their calendar's `nextSyncToken` with no
+  date filters. Keep request parameters consistent, apply every page
+  idempotently, and persist the next token only after all page changes have
+  been applied successfully.
+- Import only ongoing/future one-off events. Request unexpanded events and skip
+  recurrence masters, instances, and exceptions. Keep past imported rows during
+  incremental sync and `410 Gone` recovery.
 - Propagate Google cancellation/deletion records to the imported-event mirror.
-  If a sync request returns `410 Gone`, rebuild that calendar's mirror with a
-  full sync; leave other calendars' sync state untouched.
+  If a sync request returns `410 Gone`, rebuild that calendar's current/future
+  set while retaining its imported past rows; leave other calendars' sync
+  state untouched.
 - Return normalized rows only. Do not write, edit, or delete events in Google.
 - Other household members must be able to see explicitly shared imported
   events without connecting Google themselves.
@@ -461,8 +481,8 @@ authenticated users:
 - audit columns cannot be impersonated;
 - private first-party events are visible only to their owner;
 - household first-party events are visible to household members;
-- imported Google events remain private unless the owner explicitly shares
-  them;
+- imported Google events remain private unless the owner shares their source
+  calendar, and changing that choice affects existing imported rows;
 - household members without Google connections can read shared imported rows;
 - Google sync updates and deletions do not create duplicates;
 - disconnect removes that connection's imported mirror and credentials;

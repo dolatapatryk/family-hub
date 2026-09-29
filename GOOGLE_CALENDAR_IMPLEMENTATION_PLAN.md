@@ -1,6 +1,9 @@
 # Google Calendar integration — implementation plan
 
-Status: proposed implementation sequence; no integration code or infrastructure has been changed.
+Status: the first implementation batch adds the integration schema and RLS
+locally. Supabase application/security verification is pending; Google Cloud
+configuration, Edge Functions, OAuth credentials, and imported events do not
+exist yet.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -9,11 +12,12 @@ the connection owner chooses what their household can see.
 ## Existing foundation
 
 - Native calendar schema: `supabase/migrations/20260928000000_create_calendar_schema.sql`.
+- Google connection/calendar tables and imported-event RLS: `supabase/migrations/20260929000000_google_calendar_integration.sql` (added locally; database application and verification are pending).
 - Shared Calendar/Today queries: `frontend/src/calendar/queries.ts`.
 - Shared agenda construction: `frontend/src/calendar/agenda.ts`.
 - Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
 - Today presentation: `frontend/src/dashboard/DashboardPage.tsx`.
-- No Google adapter, integration tables, or Edge Functions currently exist in the repository.
+- No Google frontend adapter or Edge Functions currently exist in the repository.
 
 ## 1. Fix the integration contract and keep the MVP to future one-off events
 

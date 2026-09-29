@@ -146,5 +146,7 @@ Reset the local Supabase database when testing migration changes:
 - supabase/: local Supabase configuration and migrations.
 
 Today shows today's tasks and visible native calendar events, including annual
-occurrences. Google Calendar import is still planned. The implementation
-roadmap is in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+occurrences. Google Calendar OAuth and synchronization are not implemented
+yet; the integration schema and RLS migration have been added but still need to
+be applied and verified. The implementation roadmap is in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
