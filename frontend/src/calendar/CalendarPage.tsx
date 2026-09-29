@@ -12,6 +12,7 @@ import { EventForm } from './EventForm'
 import { AddItemButton } from './ItemFields'
 import { useCalendarSources } from './queries'
 import type { CalendarEvent, EventInput } from './types'
+import { GoogleCalendarSettings } from '../googleCalendar/GoogleCalendarSettings'
 
 export function CalendarPage() {
   const { profile } = useAuth()
@@ -54,6 +55,7 @@ export function CalendarPage() {
   return <>
     <PageHeader eyebrow="Wspólny plan" title="Kalendarz domowy" description="Wydarzenia, ważne daty i terminy zadań w jednym miejscu."
       action={<AddItemButton label="Dodaj wydarzenie" expanded={!!form} disabled={busy} onClick={() => openForm(null)} />} />
+    <GoogleCalendarSettings />
     {notice && <p className="task-notice" role="status">{notice}</p>}
     {form && <EventForm key={form.item?.id ?? 'new'} item={form.item} defaultDate={start} userId={profile.id} pending={save.isPending}
       error={save.error?.message} onSave={input => save.mutate(input)} onCancel={() => setForm(null)} />}

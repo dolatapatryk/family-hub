@@ -1,9 +1,10 @@
 # Google Calendar integration — implementation plan
 
-Status: the integration schema and RLS migration have been applied to the
-current test Supabase database and manually verified. Google Cloud
-configuration, Edge Functions, OAuth credentials, and imported events do not
-exist yet.
+Status: the base integration schema and RLS migration have been applied to the
+current test Supabase database and manually verified. OAuth and calendar
+management code is now in the repository. The follow-up RPC migration has not
+yet been applied; Google Cloud credentials, deployed function secrets, and
+imported events are still not configured.
 
 ## Progress snapshot
 
@@ -23,15 +24,26 @@ Completed:
 The manual checks verify database behavior. Repeatable automated RLS tests and
 verification in staging/production remain part of rollout.
 
-### Resume here: OAuth and calendar selection
+Added in the current OAuth and selection batch:
 
-The next implementation batch is OAuth and selection. Start by configuring a
-Google development OAuth client and server-side secrets, and decide how Edge
-Functions will securely access the unexposed `private` schema (a server-only
-database connection or narrowly scoped service-only RPCs). Then implement the
-authenticated connect action, state-validated OAuth callback, token storage,
-and owner-only calendar list/selection/sharing controls. Do not start event
-sync automatically; the owner-triggered sync is the following batch.
+- Added `supabase/migrations/20260930000000_google_calendar_oauth_management.sql`
+  with service-role-only RPCs for OAuth state, connection credentials, calendar
+  list metadata, owner choices, and serialized token refresh leases. The
+  migration is not yet applied to a Supabase project.
+- Added authenticated management and state-validated callback Edge Functions,
+  AES-GCM refresh-token storage, read-only Google consent scopes, full calendar
+  list pagination, and owner-only selection/sharing controls in Calendar.
+- Added development setup instructions. No Google credentials were available,
+  so deployment and a real consent/reconnect pass remain pending. Calendar
+  selection and list loading do not start event synchronization.
+
+### Resume here: configure and exercise OAuth
+
+Apply the follow-up migration, configure a Google development OAuth client and
+server-side secrets, then complete a real connect/reconnect pass. The private
+schema bridge uses narrowly scoped, service-role-only RPCs. After the OAuth
+flow works in development, continue with the owner-triggered event sync batch;
+do not start it automatically.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -48,7 +60,9 @@ the connection owner chooses what their household can see.
 - Shared agenda construction: `frontend/src/calendar/agenda.ts`.
 - Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
 - Today presentation: `frontend/src/dashboard/DashboardPage.tsx`.
-- No Google frontend adapter or Edge Functions currently exist in the repository.
+- Google settings UI: `frontend/src/googleCalendar/GoogleCalendarSettings.tsx`.
+- Google Edge Functions and private-schema RPC bridge: `supabase/functions/`
+  and `supabase/migrations/20260930000000_google_calendar_oauth_management.sql`.
 
 ## 1. Fix the integration contract and keep the MVP to future one-off events
 
@@ -220,7 +234,7 @@ Run frontend clean-install tests/build, Edge Function unit tests, and repeatable
 Suggested reviewable implementation batches:
 
 1. [x] Contract/schema/RLS — migration applied and manual access checks passed.
-2. [ ] OAuth and calendar selection — next.
+2. [~] OAuth and calendar selection — code added; migration, secrets, and real consent check pending.
 3. [ ] User-triggered one-off event sync.
 4. [ ] Calendar/Today UI, sharing, and disconnect.
 5. [ ] Automated and end-to-end verification, then rollout.

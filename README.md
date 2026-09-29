@@ -55,6 +55,51 @@ Frontend values are read at build time:
 
 Restart Vite after changing .env.local.
 
+## Google Calendar development setup
+
+The OAuth and calendar-selection code uses two Edge Functions. The management
+function requires a signed-in Supabase user. The Google callback has JWT
+verification disabled because Google cannot send the user's Supabase bearer
+token; it accepts only a short-lived, one-use state hash stored for the current
+member. Neither function returns Google tokens to the browser.
+
+To configure a development connection:
+
+1. Create a Google OAuth Web client, enable the Google Calendar API, and add
+   the local callback URL below as an authorized redirect URI. Add both
+   read-only scopes to the consent screen:
+   `calendar.events.readonly` and `calendar.calendarlist.readonly`.
+2. Copy `supabase/functions/.env.example` to the ignored file
+   `supabase/functions/.env.local`. Fill in the Web client ID and secret, then
+   generate a token-encryption key with `openssl rand -base64 32`. Keep the
+   callback URL and frontend URL exact; their local defaults are shown in the
+   example file.
+3. Start Supabase. If the local stack was already running when this migration
+   was added, apply pending local migrations with
+   `npx supabase migration up --local`. Then serve the functions with
+   `npx supabase functions serve --env-file supabase/functions/.env.local`.
+   Run Vite at `http://localhost:5173` and sign in to a local Family Hub
+   account before connecting Google.
+4. For a hosted Supabase project, register its exact
+   `https://<project-ref>.supabase.co/functions/v1/google-calendar-callback`
+   URL in Google Cloud and store the same server variables in that project's
+   Edge Function secrets. Apply pending database migrations before deploying
+   the functions. Do not put any of these values in `frontend/.env.local` or
+   `VITE_*` variables.
+
+`GOOGLE_CALENDAR_ALLOWED_ORIGINS` is the comma-separated browser-origin
+allowlist for the management function. `GOOGLE_CALENDAR_FRONTEND_URL` is the
+fixed page that receives a generic connection result after OAuth. The
+`GOOGLE_CALENDAR_TOKEN_ENCRYPTION_KEYS` JSON map is keyed by the stored key
+version; retain older keys there while encrypted credentials still use them.
+For a Google consent screen in Testing status, refresh-token lifetime is
+limited, so reconnect behavior needs to be checked during development.
+
+The Calendar page currently lets a member connect their account, load the
+Google calendar list, select calendars, and set each selected calendar to
+Private or Household. Loading that list does not import events. The explicit
+event synchronization action is a later implementation batch.
+
 ## Calendar and annual dates
 
 **Kalendarz** displays a 14-day agenda with one-off events, annual occurrences,
@@ -146,7 +191,8 @@ Reset the local Supabase database when testing migration changes:
 - supabase/: local Supabase configuration and migrations.
 
 Today shows today's tasks and visible native calendar events, including annual
-occurrences. Google Calendar OAuth and synchronization are not implemented
-yet; the integration schema and RLS migration have been added but still need to
-be applied and verified. The implementation roadmap is in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+occurrences. Google Calendar's OAuth and calendar-selection code is in place,
+but external credentials and a real Google consent pass are still pending;
+event synchronization and imported-event display are later implementation
+batches. The detailed roadmap is in
+[GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
