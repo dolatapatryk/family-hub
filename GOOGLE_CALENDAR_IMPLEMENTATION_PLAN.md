@@ -1,9 +1,37 @@
 # Google Calendar integration — implementation plan
 
-Status: the first implementation batch adds the integration schema and RLS
-locally. Supabase application/security verification is pending; Google Cloud
+Status: the integration schema and RLS migration have been applied to the
+current test Supabase database and manually verified. Google Cloud
 configuration, Edge Functions, OAuth credentials, and imported events do not
 exist yet.
+
+## Progress snapshot
+
+Completed:
+
+- Agreed on the read-only, future/ongoing one-off event MVP contract in this
+  plan.
+- Added `supabase/migrations/20260929000000_google_calendar_integration.sql`
+  with private connection/calendar metadata, the normalized imported-event
+  mirror, constraints, grants, and RLS policies.
+- Applied the migration and manually checked the imported-event access rules
+  with test rows and simulated authenticated users: the owner can read private
+  events; another household member cannot until the calendar is shared; a
+  household member can read after sharing; an outside household member cannot
+  read; authenticated users cannot write imported rows.
+
+The manual checks verify database behavior. Repeatable automated RLS tests and
+verification in staging/production remain part of rollout.
+
+### Resume here: OAuth and calendar selection
+
+The next implementation batch is OAuth and selection. Start by configuring a
+Google development OAuth client and server-side secrets, and decide how Edge
+Functions will securely access the unexposed `private` schema (a server-only
+database connection or narrowly scoped service-only RPCs). Then implement the
+authenticated connect action, state-validated OAuth callback, token storage,
+and owner-only calendar list/selection/sharing controls. Do not start event
+sync automatically; the owner-triggered sync is the following batch.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -12,7 +40,10 @@ the connection owner chooses what their household can see.
 ## Existing foundation
 
 - Native calendar schema: `supabase/migrations/20260928000000_create_calendar_schema.sql`.
-- Google connection/calendar tables and imported-event RLS: `supabase/migrations/20260929000000_google_calendar_integration.sql` (added locally; database application and verification are pending).
+- Google connection/calendar tables and imported-event RLS:
+  `supabase/migrations/20260929000000_google_calendar_integration.sql` (applied
+  and manually verified in the current test database; automated and
+  staging/production verification remain pending).
 - Shared Calendar/Today queries: `frontend/src/calendar/queries.ts`.
 - Shared agenda construction: `frontend/src/calendar/agenda.ts`.
 - Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
@@ -46,9 +77,12 @@ Completion: documented request parameters, initial-import cutoff, historical ret
 
 Completion: environment-specific configuration with a working development consent screen.
 
-## 3. Add integration schema and access controls
+## 3. Integration schema and access controls — implemented
 
-Create a new migration with three core tables; do not mix imported events into native `calendar_events`.
+The migration below is already implemented and applied in the current test
+database. Do not create a duplicate migration. Keep imported events separate
+from native `calendar_events`; use this section as the schema and security
+contract for the Edge Functions and frontend.
 
 | Proposed object | Purpose |
 | --- | --- |
@@ -73,7 +107,9 @@ Enforce these database rules:
 
 Edge Functions need an explicit route to private storage: a server-only database connection or narrowly scoped service-only RPCs with fixed search paths and revoked browser execution. A private schema cannot simply be queried through the ordinary exposed PostgREST API.
 
-Completion: migrations and RLS tests pass before credentials or real events are imported.
+Completion: the migration is applied and the manual owner/private, household
+sharing, cross-household, and browser-write checks pass. Add repeatable database
+tests before rollout and verify the same rules in staging.
 
 ## 4. Implement OAuth and credential lifecycle
 
@@ -181,8 +217,13 @@ Run frontend clean-install tests/build, Edge Function unit tests, and repeatable
 5. Complete applicable Google production requirements and repeat the smoke test in production.
 6. Document rollback: disable new connections and synchronization requests, hide integration UI, and preserve native Calendar/Today operation; never revert by exposing private tables.
 
-Suggested reviewable implementation batches: (1) contract/schema/RLS, (2) OAuth and selection,
-(3) manual one-off event sync, (4) UI/sharing/disconnect, (5) end-to-end verification and rollout.
+Suggested reviewable implementation batches:
+
+1. [x] Contract/schema/RLS — migration applied and manual access checks passed.
+2. [ ] OAuth and calendar selection — next.
+3. [ ] User-triggered one-off event sync.
+4. [ ] Calendar/Today UI, sharing, and disconnect.
+5. [ ] Automated and end-to-end verification, then rollout.
 
 The integration is done when a member can connect and privately import selected calendars,
 set each calendar to Private or Household, share it with a member who has no Google connection,
