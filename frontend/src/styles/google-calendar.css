@@ -57,6 +57,13 @@
   gap: 12px;
 }
 
+.google-calendar-toolbar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .google-calendar-list {
   margin: 0;
   padding: 0;
@@ -107,6 +114,26 @@
   font-size: 11px;
 }
 
+.google-calendar-choice-options {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+}
+
+.google-calendar-sync-state {
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.google-calendar-sync-running {
+  color: #315d85;
+}
+
+.google-calendar-sync-failed {
+  color: #9c3f37;
+}
+
 .google-calendar-sharing select {
   min-height: 38px;
   padding: 6px 9px;
@@ -154,6 +181,10 @@
 
   .google-calendar-sharing {
     margin-left: 30px;
+  }
+
+  .google-calendar-toolbar-actions {
+    width: 100%;
   }
 }
 

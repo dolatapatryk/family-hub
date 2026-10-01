@@ -1,5 +1,5 @@
 import { localDate } from '../tasks/tasks'
-import type { CalendarEvent, DateRange } from './types'
+import type { EventSchedule, DateRange } from './types'
 
 export { localDate }
 
@@ -40,7 +40,7 @@ export function rangeInstants(range: DateRange) {
   return { start: dateOnly(range.start).toISOString(), end: dateOnly(range.end).toISOString() }
 }
 
-export function eventOverlaps(event: CalendarEvent, range: DateRange): boolean {
+export function eventOverlaps(event: EventSchedule, range: DateRange): boolean {
   if (event.allDay) return event.startDate < range.end && event.endDate > range.start
   const instants = rangeInstants(range)
   return Date.parse(event.startsAt) < Date.parse(instants.end) && Date.parse(event.endsAt) > Date.parse(instants.start)

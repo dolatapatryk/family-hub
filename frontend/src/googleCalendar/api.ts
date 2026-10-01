@@ -7,8 +7,8 @@ function requireClient(): SupabaseClient {
   return supabase
 }
 
-async function invoke<T>(body: Record<string, unknown>): Promise<T> {
-  const { data, error } = await requireClient().functions.invoke('google-calendar-management', { body })
+async function invoke<T>(body: Record<string, unknown>, functionName = 'google-calendar-management'): Promise<T> {
+  const { data, error } = await requireClient().functions.invoke(functionName, { body })
   if (error) {
     const response = 'context' in error ? error.context : undefined
     if (response instanceof Response) {
@@ -40,6 +40,14 @@ export function createGoogleCalendarApi() {
 
     saveCalendars(choices: Array<{ calendarId: string } & GoogleCalendarChoiceDraft>): Promise<GoogleCalendarSettingsState> {
       return invoke({ action: 'save-calendars', choices })
+    },
+
+    startSync(): Promise<GoogleCalendarSettingsState> {
+      return invoke({ action: 'start' }, 'google-calendar-sync')
+    },
+
+    continueSync(): Promise<GoogleCalendarSettingsState> {
+      return invoke({ action: 'continue' }, 'google-calendar-sync')
     },
   }
 }

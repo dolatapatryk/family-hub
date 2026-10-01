@@ -20,7 +20,7 @@ export function CalendarPage() {
   const api = createCalendarEventsApi(profile.household_id, profile.id)
   const [start, setStart] = useState(() => localDate())
   const range = { start, end: addDays(start, 14) }
-  const { events, annualDates, tasks } = useCalendarSources(range)
+  const { events, importedEvents, annualDates, tasks } = useCalendarSources(range)
   const [form, setForm] = useState<{ item: CalendarEvent | null } | null>(null)
   const [deleting, setDeleting] = useState<CalendarEvent | null>(null)
   const [notice, setNotice] = useState('')
@@ -41,8 +41,8 @@ export function CalendarPage() {
     },
   })
   const busy = save.isPending || remove.isPending
-  const entries = buildAgenda(events.data ?? [], annualDates.data ?? [], tasks.data ?? [], range)
-  const showAgenda = entries.length > 0 || (events.isSuccess && annualDates.isSuccess && tasks.isSuccess)
+  const entries = buildAgenda(events.data ?? [], importedEvents.data ?? [], annualDates.data ?? [], tasks.data ?? [], range)
+  const showAgenda = entries.length > 0 || (events.isSuccess && importedEvents.isSuccess && annualDates.isSuccess && tasks.isSuccess)
 
   function openForm(item: CalendarEvent | null) {
     save.reset()
@@ -75,6 +75,7 @@ export function CalendarPage() {
         </div>
       </div>
       <CalendarQueryState label="wydarzenia" pending={events.isPending} error={events.error} onRetry={() => void events.refetch()} />
+      <CalendarQueryState label="wydarzenia Google" pending={importedEvents.isPending} error={importedEvents.error} onRetry={() => void importedEvents.refetch()} />
       <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
       <CalendarQueryState label="zadania" pending={tasks.isPending} error={tasks.error} onRetry={() => void tasks.refetch()} />
       {showAgenda && <CalendarAgenda entries={entries} busy={busy} onEdit={openForm} onDelete={item => { setForm(null); remove.reset(); setNotice(''); setDeleting(item) }} />}

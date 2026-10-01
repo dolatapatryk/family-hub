@@ -3,8 +3,9 @@ import { kindLabels } from '../annualDates/annualDates'
 import { addDays, formatDate } from './dates'
 import type { AgendaEntry } from './agenda'
 import type { CalendarEvent } from './types'
+import type { ImportedGoogleCalendarEvent } from '../googleCalendar/types'
 
-function eventDates(event: CalendarEvent): string {
+function eventDates(event: CalendarEvent | ImportedGoogleCalendarEvent): string {
   if (event.allDay) {
     const lastDate = addDays(event.endDate, -1)
     return event.startDate === lastDate ? formatDate(event.startDate) : `${formatDate(event.startDate)} – ${formatDate(lastDate)}`
@@ -28,8 +29,9 @@ export function CalendarAgenda({ entries, onEdit, onDelete, busy = false, empty 
         {entries.filter(entry => entry.date === date).map(entry => {
           const { source } = entry
           const definition = source.kind === 'annual' ? source.occurrence.definition : null
+          const calendarEvent = source.kind === 'event' || source.kind === 'google' ? source.event : null
           const visibility = source.kind === 'event' ? source.event.visibility : definition?.visibility
-          const description = source.kind === 'event' ? source.event.description : definition?.description
+          const description = calendarEvent?.description ?? definition?.description
           return <li className="event-row wide-event" key={entry.id}>
             <span className="event-time">{entry.time}</span>
             <span className="event-track" aria-hidden="true"><span className="event-dot" /></span>
@@ -38,7 +40,9 @@ export function CalendarAgenda({ entries, onEdit, onDelete, busy = false, empty 
                 <summary className="event-title">{entry.title}</summary>
                 <div className="agenda-details">
                   {description && <p className="event-description">{description}</p>}
-                  {source.kind === 'event' && <p>{eventDates(source.event)}</p>}
+                  {calendarEvent && <p>{eventDates(calendarEvent)}</p>}
+                  {source.kind === 'google' && source.event.location && <p>{source.event.location}</p>}
+                  {source.kind === 'google' && source.event.htmlLink && <p><a href={source.event.htmlLink} target="_blank" rel="noopener noreferrer">Otwórz w Google Calendar</a></p>}
                   {source.kind === 'annual' && <>
                     <p>{kindLabels[source.occurrence.definition.kind]}{source.occurrence.count !== null ? ` · ${source.occurrence.count}. ${source.occurrence.definition.kind === 'birthday' ? 'urodziny' : 'rocznica'}` : ''}</p>
                     {source.occurrence.definition.kind !== 'other' && <p>Data początkowa: {formatDate(source.occurrence.definition.initialDate)}</p>}
@@ -47,7 +51,7 @@ export function CalendarAgenda({ entries, onEdit, onDelete, busy = false, empty 
                   {source.kind === 'task' && <Link to="/tasks">Otwórz zadania</Link>}
                 </div>
               </details>
-              <p className="event-detail">{source.kind === 'task' ? 'Zadanie' : `${visibility === 'private' ? 'Prywatne' : 'Wspólne'} · ${source.kind === 'annual' ? `${kindLabels[source.occurrence.definition.kind]} · tylko odczyt` : 'Wydarzenie'}`}</p>
+              <p className="event-detail">{source.kind === 'task' ? 'Zadanie' : source.kind === 'google' ? 'Google Calendar · tylko odczyt' : `${visibility === 'private' ? 'Prywatne' : 'Wspólne'} · ${source.kind === 'annual' ? `${kindLabels[source.occurrence.definition.kind]} · tylko odczyt` : 'Wydarzenie'}`}</p>
               {source.kind === 'event' && (onEdit || onDelete) && <div className="agenda-actions">
                 {onEdit && <button type="button" className="text-button" disabled={busy} onClick={() => onEdit(source.event)} aria-label={`Edytuj: ${entry.title}`}>Edytuj</button>}
                 {onDelete && <button type="button" className="text-button" disabled={busy} onClick={() => onDelete(source.event)} aria-label={`Usuń: ${entry.title}`}>Usuń</button>}

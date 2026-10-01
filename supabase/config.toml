@@ -413,5 +413,8 @@ enabled = true
 [functions.google-calendar-management]
 verify_jwt = true
 
+[functions.google-calendar-sync]
+verify_jwt = true
+
 [functions.google-calendar-callback]
 verify_jwt = false

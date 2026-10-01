@@ -122,6 +122,23 @@ async function accessToken(client: SupabaseClient, ownerUserId: string, connecti
   }
 }
 
+export async function googleCalendarAccessToken(
+  client: SupabaseClient,
+  ownerUserId: string,
+  connectionId: string,
+): Promise<{ value: string; connectedAt: string | null }> {
+  return accessToken(client, ownerUserId, connectionId)
+}
+
+export async function markGoogleCalendarReconnectRequired(
+  client: SupabaseClient,
+  ownerUserId: string,
+  connectionId: string,
+  connectedAt: string | null,
+): Promise<void> {
+  await markReconnectRequired(client, ownerUserId, connectionId, connectedAt)
+}
+
 async function fetchCalendarList(accessTokenValue: string): Promise<Array<{ google_calendar_id: string; display_name: string | null; time_zone: string | null }>> {
   const calendars: Array<{ google_calendar_id: string; display_name: string | null; time_zone: string | null }> = []
   let pageToken: string | undefined

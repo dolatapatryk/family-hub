@@ -1,10 +1,11 @@
 # Google Calendar integration — implementation plan
 
 Status: the base integration schema and RLS migration have been applied to the
-current test Supabase database and manually verified. OAuth and calendar
-management code is now in the repository. The follow-up RPC migration has not
-yet been applied; Google Cloud credentials, deployed function secrets, and
-imported events are still not configured.
+current test Supabase database and manually verified. OAuth, calendar
+management, user-triggered sync, and imported-event display code are now in the
+repository. The OAuth-management and event-sync migrations have not yet been
+applied; Google Cloud credentials, deployed function secrets, and a real import
+are still pending.
 
 ## Progress snapshot
 
@@ -37,13 +38,26 @@ Added in the current OAuth and selection batch:
   so deployment and a real consent/reconnect pass remain pending. Calendar
   selection and list loading do not start event synchronization.
 
-### Resume here: configure and exercise OAuth
+Added in the user-triggered import batch:
 
-Apply the follow-up migration, configure a Google development OAuth client and
-server-side secrets, then complete a real connect/reconnect pass. The private
-schema bridge uses narrowly scoped, service-role-only RPCs. After the OAuth
-flow works in development, continue with the owner-triggered event sync batch;
-do not start it automatically.
+- Added `supabase/migrations/20261001000000_google_calendar_event_sync.sql` with
+  service-role-only sync start, lease, page-commit, failure, `410` rebuild, and
+  lost-calendar RPCs. The migration has not been applied to a Supabase project.
+- Added a bounded Google events worker that imports normalized one-off events,
+  saves per-page checkpoints, retries transient requests, applies cancellations,
+  skips recurring records, and retains past imports during incremental sync and
+  token rebuilds.
+- Added an owner-clicked import/synchronize action and Calendar/Today read-only
+  event display with Google links. A real Google import and automated database
+  verification remain pending.
+
+### Resume here: apply migrations and exercise an import
+
+Apply the pending migrations, configure a Google development OAuth client and
+server-side secrets, then complete a real connect/reconnect and button-triggered
+import pass. The private schema bridge uses narrowly scoped, service-role-only
+RPCs. Connecting, selecting calendars, opening a page, and navigating dates do
+not start event synchronization.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -235,8 +249,8 @@ Suggested reviewable implementation batches:
 
 1. [x] Contract/schema/RLS — migration applied and manual access checks passed.
 2. [~] OAuth and calendar selection — code added; migration, secrets, and real consent check pending.
-3. [ ] User-triggered one-off event sync.
-4. [ ] Calendar/Today UI, sharing, and disconnect.
+3. [~] User-triggered one-off event sync — worker and migration added; migration deployment and real Google validation pending.
+4. [~] Calendar/Today import display — read-only queries and user controls added; disconnect and shared-viewer stale-source status remain.
 5. [ ] Automated and end-to-end verification, then rollout.
 
 The integration is done when a member can connect and privately import selected calendars,

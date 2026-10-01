@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
 import { createGoogleCalendarApi } from './api'
-import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarSharingMode } from './types'
+import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
 
 const resultMessages: Record<string, string> = {
   connected: 'Konto Google połączone. Wybierz teraz kalendarze dostępne w Family Hub.',
@@ -20,6 +20,35 @@ function draftFor(calendar: GoogleCalendarChoice): GoogleCalendarChoiceDraft {
 
 export function googleCalendarSettingsKey(householdId: string, userId: string) {
   return ['googleCalendarSettings', householdId, userId] as const
+}
+
+async function invalidateImportedEvents(client: ReturnType<typeof useQueryClient>, householdId: string, clearCachedData = false) {
+  const queryKey = ['importedGoogleCalendarEvents', householdId]
+  if (clearCachedData) {
+    await client.cancelQueries({ queryKey })
+    client.setQueriesData<ImportedGoogleCalendarEvent[]>({ queryKey }, [])
+  }
+  await client.invalidateQueries({ queryKey })
+}
+
+function syncStateLabel(calendar: GoogleCalendarChoice): string {
+  if (calendar.syncStatus === 'running') return 'Import w toku…'
+  if (calendar.syncStatus === 'failed') {
+    const messages: Record<string, string> = {
+      network_error: 'Brak odpowiedzi z Google. Spróbuj ponownie.',
+      rate_limited: 'Google ograniczył żądania. Spróbuj ponownie za chwilę.',
+      google_error: 'Google nie udostępnił wydarzeń. Spróbuj ponownie.',
+      invalid_response: 'Google zwrócił nieprawidłowe dane. Spróbuj ponownie.',
+      reconnect_required: 'Połącz konto Google ponownie.',
+    }
+    return messages[calendar.syncErrorCode ?? ''] ?? 'Import przerwany. Spróbuj ponownie.'
+  }
+  if (calendar.lastSuccessfulSyncAt) {
+    const date = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short' })
+      .format(new Date(calendar.lastSuccessfulSyncAt))
+    return `Ostatni import: ${date}`
+  }
+  return 'Wydarzenia nie zostały jeszcze zaimportowane.'
 }
 
 export function GoogleCalendarSettings() {
@@ -63,9 +92,16 @@ export function GoogleCalendarSettings() {
     mutationFn: () => api.refreshCalendars(),
     onSuccess: async () => {
       setNotice('Lista kalendarzy Google została odświeżona. Nie zaimportowano wydarzeń.')
+      await invalidateImportedEvents(client, profile.household_id, true)
       await client.invalidateQueries({ queryKey })
     },
-    onError: () => client.invalidateQueries({ queryKey }),
+    onError: async () => {
+      const state = await api.status().catch(() => null)
+      if (state?.connection?.status === 'reconnect_required') {
+        await invalidateImportedEvents(client, profile.household_id, true)
+      }
+      await client.invalidateQueries({ queryKey })
+    },
   })
   const save = useMutation({
     mutationFn: () => api.saveCalendars(availableCalendars.map(calendar => ({
@@ -74,6 +110,37 @@ export function GoogleCalendarSettings() {
     }))),
     onSuccess: async () => {
       setNotice('Zapisano wybór i ustawienia prywatności kalendarzy.')
+      await invalidateImportedEvents(client, profile.household_id, true)
+      await client.invalidateQueries({ queryKey })
+    },
+  })
+
+  const sync = useMutation({
+    mutationFn: async () => {
+      let state = await api.startSync()
+      client.setQueryData(queryKey, state)
+      while (state.calendars.some(calendar => calendar.syncStatus === 'running')) {
+        const nextLease = state.calendars
+          .filter(calendar => calendar.syncStatus === 'running' && calendar.syncLeaseExpiresAt)
+          .map(calendar => Date.parse(calendar.syncLeaseExpiresAt!))
+          .filter(expiresAt => Number.isFinite(expiresAt) && expiresAt > Date.now())
+          .sort((a, b) => a - b)[0]
+        const delay = nextLease ? Math.min(5_000, Math.max(700, nextLease - Date.now() + 100)) : 500
+        await new Promise(resolve => setTimeout(resolve, delay))
+        state = await api.continueSync()
+        client.setQueryData(queryKey, state)
+      }
+      return state
+    },
+    onSuccess: async state => {
+      client.setQueryData(queryKey, state)
+      const failures = state.calendars.filter(calendar => calendar.selected && calendar.syncStatus === 'failed').length
+      setNotice(state.connection?.status === 'reconnect_required'
+        ? 'Google wymaga ponownego połączenia. Zapisane wydarzenia nie są teraz widoczne.'
+        : failures
+        ? `Import zakończony z błędem w ${failures} ${failures === 1 ? 'kalendarzu' : 'kalendarzach'}. Szczegóły są przy wybranych kalendarzach.`
+        : 'Import wydarzeń Google został zakończony.')
+      await invalidateImportedEvents(client, profile.household_id, state.connection?.status !== 'connected')
       await client.invalidateQueries({ queryKey })
     },
   })
@@ -84,7 +151,8 @@ export function GoogleCalendarSettings() {
     const draft = drafts[calendar.calendarId] ?? draftFor(calendar)
     return draft.selected !== calendar.selected || draft.sharingMode !== calendar.sharingMode
   })
-  const busy = connect.isPending || refresh.isPending || save.isPending
+  const busy = connect.isPending || refresh.isPending || save.isPending || sync.isPending
+  const selectedCalendars = calendars.filter(calendar => calendar.selected && calendar.accessStatus === 'available')
 
   function updateChoice(calendar: GoogleCalendarChoice, update: Partial<GoogleCalendarChoiceDraft>) {
     const current = drafts[calendar.calendarId] ?? draftFor(calendar)
@@ -123,10 +191,16 @@ export function GoogleCalendarSettings() {
         {settings.data?.connection?.status === 'connected' && <>
           <div className="google-calendar-toolbar">
             <p className="small-muted">Lista zawiera kalendarze dostępne na połączonym koncie Google.</p>
-            <button className="button-quiet" type="button" disabled={busy || hasChanges} onClick={() => refresh.mutate()}>{refresh.isPending ? 'Pobieram listę…' : calendars.length ? 'Odśwież listę kalendarzy' : 'Pobierz listę kalendarzy'}</button>
+            <div className="google-calendar-toolbar-actions">
+              <button className="button-quiet" type="button" disabled={busy || hasChanges} onClick={() => refresh.mutate()}>{refresh.isPending ? 'Pobieram listę…' : calendars.length ? 'Odśwież listę kalendarzy' : 'Pobierz listę kalendarzy'}</button>
+              {selectedCalendars.length > 0 && <button className="primary-button" type="button" disabled={busy || hasChanges} onClick={() => sync.mutate()}>
+                {sync.isPending ? 'Importuję wydarzenia…' : selectedCalendars.some(calendar => calendar.syncStatus === 'running') ? 'Kontynuuj import' : selectedCalendars.some(calendar => calendar.lastSuccessfulSyncAt) ? 'Synchronizuj teraz' : 'Importuj wydarzenia'}
+              </button>}
+            </div>
           </div>
           {refresh.isError && <p className="error-message" role="alert">{refresh.error.message}</p>}
           {save.isError && <p className="error-message" role="alert">{save.error.message}</p>}
+          {sync.isError && <p className="error-message" role="alert">{sync.error.message}</p>}
           {calendars.length === 0
             ? <p className="panel-message">Pobierz listę, aby wybrać kalendarze.</p>
             : <ul className="google-calendar-list">
@@ -143,7 +217,7 @@ export function GoogleCalendarSettings() {
             <p className="small-muted">Kalendarze ustawione jako prywatne są widoczne tylko dla Ciebie.</p>
             <button className="primary-button" type="button" disabled={busy} onClick={() => save.mutate()}>{save.isPending ? 'Zapisuję…' : 'Zapisz wybór'}</button>
           </div>}
-          <p className="google-calendar-sync-note">Połączenie, pobranie listy i wybór kalendarzy nie importują wydarzeń. Import będzie uruchamiany osobnym działaniem.</p>
+          <p className="google-calendar-sync-note">Import obejmuje wydarzenia trwające i przyszłe. Serie cykliczne są pomijane. Zmiany i usunięcia z Google można pobrać przyciskiem importu; samo otwarcie kalendarza nie uruchamia synchronizacji.</p>
         </>}
         {connect.isError && <p className="error-message" role="alert">{connect.error.message}</p>}
       </div>
@@ -170,12 +244,15 @@ function GoogleCalendarRow({
     </label>
     {calendar.accessStatus === 'lost'
       ? <span className="google-calendar-lost">Brak dostępu w Google</span>
-      : draft.selected && <label className="google-calendar-sharing">
-        <span>Dostęp</span>
-        <select value={draft.sharingMode} disabled={disabled} onChange={event => onChange({ sharingMode: event.target.value as GoogleCalendarSharingMode })}>
-          <option value="private">Prywatny</option>
-          <option value="household">Dla domowników</option>
-        </select>
-      </label>}
+      : <div className="google-calendar-choice-options">
+        {draft.selected && <label className="google-calendar-sharing">
+          <span>Dostęp</span>
+          <select value={draft.sharingMode} disabled={disabled} onChange={event => onChange({ sharingMode: event.target.value as GoogleCalendarSharingMode })}>
+            <option value="private">Prywatny</option>
+            <option value="household">Dla domowników</option>
+          </select>
+        </label>}
+        {calendar.selected && <span className={`google-calendar-sync-state google-calendar-sync-${calendar.syncStatus}`} role={calendar.syncStatus === 'failed' ? 'alert' : undefined}>{syncStateLabel(calendar)}</span>}
+      </div>}
   </li>
 }

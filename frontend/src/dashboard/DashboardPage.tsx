@@ -44,8 +44,8 @@ export function DashboardPage() {
   const shopping = useQuery({ queryKey: shoppingKey, queryFn: ({ signal }) => shoppingApi.list(signal) })
   const today = localDate()
   const todayRange = { start: today, end: addDays(today, 1) }
-  const { events, annualDates, tasks } = useCalendarSources(todayRange)
-  const todayAgenda = buildAgenda(events.data ?? [], annualDates.data ?? [], [], todayRange)
+  const { events, importedEvents, annualDates, tasks } = useCalendarSources(todayRange)
+  const todayAgenda = buildAgenda(events.data ?? [], importedEvents.data ?? [], annualDates.data ?? [], [], todayRange)
   const [formOpen, setFormOpen] = useState(false)
   const [title, setTitle] = useState('')
   const input = useRef<HTMLInputElement>(null)
@@ -101,7 +101,7 @@ export function DashboardPage() {
 
       <section className="metrics" aria-label="Podsumowanie">
         <Metric kind="tasks" tone="lime" number={tasks.isPending ? '—' : openTasks.length} label="otwarte zadania" />
-        <Metric kind="calendar" tone="blue" number={events.isPending || annualDates.isPending || events.isError || annualDates.isError ? '—' : todayAgenda.length} label="plany na dziś" />
+        <Metric kind="calendar" tone="blue" number={events.isPending || importedEvents.isPending || annualDates.isPending || events.isError || importedEvents.isError || annualDates.isError ? '—' : todayAgenda.length} label="plany na dziś" />
         <Metric kind="shopping" tone="orange" number={shopping.isPending ? '—' : openShopping.length} label="pozycji na liście" />
       </section>
 
@@ -127,8 +127,9 @@ export function DashboardPage() {
             <div><h2 className="panel-title" id="dashboard-agenda-title">Dzisiejsze wydarzenia</h2><p className="panel-kicker">Kalendarz i ważne daty</p></div>
           </div>
           <CalendarQueryState label="wydarzenia" pending={events.isPending} error={events.error} onRetry={() => void events.refetch()} />
+          <CalendarQueryState label="wydarzenia Google" pending={importedEvents.isPending} error={importedEvents.error} onRetry={() => void importedEvents.refetch()} />
           <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
-          {(todayAgenda.length > 0 || (events.isSuccess && annualDates.isSuccess)) && <CalendarAgenda entries={todayAgenda} empty="Na dziś nie ma wydarzeń." />}
+          {(todayAgenda.length > 0 || (events.isSuccess && importedEvents.isSuccess && annualDates.isSuccess)) && <CalendarAgenda entries={todayAgenda} empty="Na dziś nie ma wydarzeń." />}
           <div className="panel-foot"><span>Dzisiejsze plany</span><Link className="link-button" to="/calendar">Otwórz kalendarz <span className="arrow" aria-hidden="true">›</span></Link></div>
         </section>
       </div>

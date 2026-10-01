@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
+import { useQueryClient } from '@tanstack/react-query'
 import { supabase, supabaseConfig } from './supabase'
 import { createHouseholdInvitesApi } from '../household/api'
 
@@ -23,11 +24,25 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [profileLoading, setProfileLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const previousUserId = useRef<string | null>(null)
+
+  useEffect(() => {
+    const nextUserId = session?.user.id ?? null
+    if (previousUserId.current !== null && previousUserId.current !== nextUserId) {
+      for (const queryKey of [
+        ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'],
+      ]) {
+        void queryClient.cancelQueries({ queryKey }).then(() => queryClient.removeQueries({ queryKey }))
+      }
+    }
+    previousUserId.current = nextUserId
+  }, [queryClient, session?.user.id])
 
   useEffect(() => {
     if (!supabase) {

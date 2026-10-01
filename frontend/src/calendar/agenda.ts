@@ -2,9 +2,11 @@ import { annualOccurrences, type AnnualDate, type AnnualOccurrence } from '../an
 import type { Task } from '../tasks/tasks'
 import { addDays, eventOverlaps, localDate } from './dates'
 import type { CalendarEvent, DateRange } from './types'
+import type { ImportedGoogleCalendarEvent } from '../googleCalendar/types'
 
 export type AgendaSource =
   | { kind: 'event'; event: CalendarEvent }
+  | { kind: 'google'; event: ImportedGoogleCalendarEvent }
   | { kind: 'annual'; occurrence: AnnualOccurrence }
   | { kind: 'task'; task: Task }
 
@@ -18,7 +20,7 @@ export interface AgendaEntry {
   source: AgendaSource
 }
 
-export function buildAgenda(events: CalendarEvent[], annualDates: AnnualDate[], tasks: Task[], range: DateRange): AgendaEntry[] {
+export function buildAgenda(events: CalendarEvent[], importedEvents: ImportedGoogleCalendarEvent[], annualDates: AnnualDate[], tasks: Task[], range: DateRange): AgendaEntry[] {
   const entries: AgendaEntry[] = []
   const timeFormat = new Intl.DateTimeFormat('pl-PL', { hour: '2-digit', minute: '2-digit' })
   for (let date = range.start; date < range.end; date = addDays(date, 1)) {
@@ -30,6 +32,16 @@ export function buildAgenda(events: CalendarEvent[], annualDates: AnnualDate[], 
         time: event.allDay ? 'Cały dzień' : ongoing ? 'W trakcie' : timeFormat.format(new Date(event.startsAt)),
         order: event.allDay || ongoing ? '' : new Date(event.startsAt).toISOString(),
         createdAt: event.createdAt, source: { kind: 'event', event },
+      })
+    }
+    for (const event of importedEvents) {
+      if (!eventOverlaps(event, { start: date, end: addDays(date, 1) })) continue
+      const ongoing = !event.allDay && localDate(new Date(event.startsAt)) < date
+      entries.push({
+        id: `google:${event.id}:${date}`, date, title: event.title,
+        time: event.allDay ? 'Cały dzień' : ongoing ? 'W trakcie' : timeFormat.format(new Date(event.startsAt)),
+        order: event.allDay || ongoing ? '' : new Date(event.startsAt).toISOString(),
+        createdAt: event.importedAt, source: { kind: 'google', event },
       })
     }
   }

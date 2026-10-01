@@ -57,11 +57,12 @@ Restart Vite after changing .env.local.
 
 ## Google Calendar development setup
 
-The OAuth and calendar-selection code uses two Edge Functions. The management
-function requires a signed-in Supabase user. The Google callback has JWT
+Google Calendar uses three Edge Functions. The authenticated management and
+sync functions require a signed-in Supabase user. The Google callback has JWT
 verification disabled because Google cannot send the user's Supabase bearer
 token; it accepts only a short-lived, one-use state hash stored for the current
-member. Neither function returns Google tokens to the browser.
+member. No Edge Function returns Google tokens or raw Google event payloads to
+the browser; Calendar and Today load only the normalized, RLS-protected mirror.
 
 To configure a development connection:
 
@@ -74,8 +75,7 @@ To configure a development connection:
    generate a token-encryption key with `openssl rand -base64 32`. Keep the
    callback URL and frontend URL exact; their local defaults are shown in the
    example file.
-3. Start Supabase. If the local stack was already running when this migration
-   was added, apply pending local migrations with
+3. Start Supabase and apply pending local migrations with
    `npx supabase migration up --local`. Then serve the functions with
    `npx supabase functions serve --env-file supabase/functions/.env.local`.
    Run Vite at `http://localhost:5173` and sign in to a local Family Hub
@@ -95,10 +95,20 @@ version; retain older keys there while encrypted credentials still use them.
 For a Google consent screen in Testing status, refresh-token lifetime is
 limited, so reconnect behavior needs to be checked during development.
 
-The Calendar page currently lets a member connect their account, load the
-Google calendar list, select calendars, and set each selected calendar to
-Private or Household. Loading that list does not import events. The explicit
-event synchronization action is a later implementation batch.
+The Calendar page lets a member connect their account, load the Google calendar
+list, select calendars, and set each selected calendar to Private or Household.
+**Importuj wydarzenia** starts a user-requested import for all selected
+calendars; **Synchronizuj teraz** fetches later changes and deletions. The first
+import includes ongoing and future one-off events. Recurring events are skipped.
+Imported events appear read-only in Calendar and Today, with a link back to
+Google when one is available. Opening either page only reads the Supabase
+mirror and never starts Google synchronization.
+
+The sync worker checkpoints each Google page and its imported rows together, so
+a later click can resume a run after a temporary failure or closed page. An
+initial import does not backfill completed history; later syncs retain imported
+events after they pass. Each calendar's sharing setting applies to all its
+imported details.
 
 ## Calendar and annual dates
 
@@ -190,9 +200,9 @@ Reset the local Supabase database when testing migration changes:
 - frontend/: React application, authentication, feature pages, and Supabase adapters.
 - supabase/: local Supabase configuration and migrations.
 
-Today shows today's tasks and visible native calendar events, including annual
-occurrences. Google Calendar's OAuth and calendar-selection code is in place,
-but external credentials and a real Google consent pass are still pending;
-event synchronization and imported-event display are later implementation
-batches. The detailed roadmap is in
+Today shows today's tasks and visible calendar events, including annual
+occurrences and imported Google events. Google Calendar's OAuth,
+calendar-selection, user-triggered synchronization, and imported-event display
+code is in place, but external credentials, migration deployment, and a real
+Google import pass are still pending. The detailed roadmap is in
 [GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
