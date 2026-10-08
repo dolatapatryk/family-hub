@@ -291,6 +291,18 @@
   background: #fbfcfb;
 }
 
+.shopping-purchased-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.shopping-purchased-header h2 {
+  margin: 0;
+}
+
 .shopping-purchased .shopping-detail {
   color: #9ba5a3;
 }

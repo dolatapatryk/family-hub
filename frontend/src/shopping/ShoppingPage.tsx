@@ -65,6 +65,15 @@ export function ShoppingPage() {
       await refreshShoppingItems(client, queryKey, saved)
     },
   })
+  const clearCompleted = useMutation({
+    mutationFn: () => api.clearCompleted(),
+    onSuccess: async deletedCount => {
+      setNotice(deletedCount > 0 ? `Wyczyszczono kupione produkty z listy (${deletedCount}).` : 'Brak kupionych produktów do usunięcia.')
+      await client.cancelQueries({ queryKey })
+      client.setQueryData<ShoppingItem[]>(queryKey, current => current?.filter(item => !item.completed))
+      await client.invalidateQueries({ queryKey })
+    },
+  })
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -109,7 +118,13 @@ export function ShoppingPage() {
           <ShoppingGroupList items={active} api={api} queryKey={queryKey} emptyTitle={purchased.length ? 'Wszystko na miejscu.' : 'Zacznij swoją listę.'} emptyMessage={purchased.length ? 'Wszystkie produkty są odhaczone. Dodaj coś nowego powyżej.' : 'Dodaj pierwszy produkt powyżej. W razie potrzeby podaj ilość lub sklep.'} />
         </section>
         {purchased.length > 0 && <section className="task-section" aria-labelledby="shopping-purchased-heading">
-          <h2 id="shopping-purchased-heading">Kupione<span className="task-count">{purchased.length}</span></h2>
+          <div className="shopping-purchased-header">
+            <h2 id="shopping-purchased-heading">Kupione<span className="task-count">{purchased.length}</span></h2>
+            <button className="button-quiet" type="button" disabled={clearCompleted.isPending} onClick={() => { setNotice(''); clearCompleted.mutate() }} aria-label="Wyczyść kupione produkty">
+              {clearCompleted.isPending ? 'Czyszczę…' : 'Wyczyść'}
+            </button>
+          </div>
+          {clearCompleted.isError && <p className="error-message" role="alert">Nie udało się usunąć kupionych produktów: {clearCompleted.error.message}</p>}
           <ShoppingGroupList items={purchased} api={api} queryKey={queryKey} emptyTitle="Brak kupionych produktów." emptyMessage="Odhaczone produkty pojawią się tutaj." />
         </section>}
       </div>}

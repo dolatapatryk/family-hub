@@ -78,5 +78,16 @@ export function createShoppingApi(householdId: string, userId: string) {
       throwIfError(error)
       return toShoppingItem(data as ShoppingItemRow)
     },
+
+    async clearCompleted(): Promise<number> {
+      const { data, error } = await client
+        .from('shopping_items')
+        .delete()
+        .eq('household_id', householdId)
+        .eq('completed', true)
+        .select('id')
+      throwIfError(error)
+      return data?.length ?? 0
+    },
   }
 }
