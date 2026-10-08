@@ -141,10 +141,9 @@ using these features there.
 
 Manual checks of the household, calendar, and Google Calendar flows on the
 test database, plus the phone and desktop layouts, have been reported complete.
-The current automated frontend test suite covers task behavior only. Add
-focused regression tests for annual-date/calendar logic, Google sync behavior,
-and database RLS as those areas change; manual end-to-end checks remain useful
-for OAuth and cross-device behavior.
+Automated coverage includes task behavior, calendar and annual-date logic,
+Google request/event normalization, and database RLS. Worker retry, lease,
+concurrency, and expired-sync-token recovery still need dedicated tests.
 
 ## PWA and deployment
 
@@ -198,10 +197,12 @@ local Supabase API to be reachable from the tailnet.
     cd frontend
     npm test
     npm run build
+    cd ..
+    npx supabase test db
 
-The existing automated test file is `frontend/tests/tasks.test.mjs`. The
-calendar, Google sync, Edge Function, and RLS flows do not yet have dedicated
-automated regression tests. The user reports that those flows were checked
+`npm test` runs the frontend regression suite. `npx supabase test db` runs the
+pgTAP RLS and sync-lifecycle suites in `supabase/tests/` against the local
+Supabase database. The user reports that the product flows were also checked
 manually on the test database and that the app was checked on phone and desktop.
 
 Reset the local Supabase database when testing migration changes:

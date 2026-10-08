@@ -3,7 +3,10 @@
 Status: the integration code and migrations have been manually exercised on
 the test Supabase database. The user also reports successful manual checks on
 phone and desktop. Staging/production configuration and rollout are not
-confirmed. Automated regression coverage beyond the task tests is not in place.
+confirmed. Automated coverage now includes Google request/page contracts,
+normalized event cases, retry behavior, database privacy rules, sync leases,
+and `410 Gone` rebuild recovery. OAuth flow and full Edge Function scenarios
+still have useful automated coverage gaps.
 In-app disconnect is deferred until after the MVP.
 
 ## Progress snapshot
@@ -22,9 +25,9 @@ Completed:
   read; authenticated users cannot write imported rows.
 
 The user reports that the Google integration was manually tested and works on
-the test database.
-Repeatable automated RLS tests and verification in staging/production remain
-recommended rollout work.
+the test database. The pgTAP suites in `supabase/tests/` add repeatable local
+RLS and sync-lifecycle checks. Repeat those checks in staging/production as
+part of rollout.
 
 Added in the current OAuth and selection batch:
 
@@ -52,17 +55,19 @@ Added in the user-triggered import batch:
   token rebuilds.
 - Added an owner-clicked import/synchronize action and Calendar/Today read-only
   event display with Google links. The user reports that a manual import pass
-  on the test database works; automated regression tests remain to be added.
+  on the test database works. Automated regression tests now cover event
+  normalization, Google request retries, lease recovery, and `410` rebuilds.
 
-### Resume here: prepare rollout and add regression coverage
+### Resume here: prepare rollout and extend OAuth coverage
 
 The test-database migration and manual import pass are reported complete. For
 each new environment, apply the migrations, configure Google OAuth and
 server-side secrets, deploy the functions, and repeat the smoke test. Add
-focused automated regression tests for OAuth, sync, and RLS. The private schema
-bridge uses narrowly scoped, service-role-only RPCs. Connecting, selecting
-calendars, opening a page, and navigating dates do not start event
-synchronization. In-app disconnect remains deferred until after the MVP.
+focused automated regression tests for OAuth state/refresh behavior and full
+Edge Function flows. The private schema bridge uses narrowly scoped,
+service-role-only RPCs. Connecting, selecting calendars, opening a page, and
+navigating dates do not start event synchronization. In-app disconnect remains
+deferred until after the MVP.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -73,8 +78,9 @@ the connection owner chooses what their household can see.
 - Native calendar schema: `supabase/migrations/20260928000000_create_calendar_schema.sql`.
 - Google connection/calendar tables and imported-event RLS:
   `supabase/migrations/20260929000000_google_calendar_integration.sql` (applied
-  and manually verified in the current test database; repeatable automated and
-  staging/production verification remain recommended rollout work).
+  and manually verified in the current test database; repeatable automated RLS
+  tests are in `supabase/tests/rls.test.sql`; staging/production verification
+  remains rollout work).
 - Shared Calendar/Today queries: `frontend/src/calendar/queries.ts`.
 - Shared agenda construction: `frontend/src/calendar/agenda.ts`.
 - Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
@@ -142,8 +148,8 @@ Edge Functions need an explicit route to private storage: a server-only database
 
 Completion: the migration is applied and manual owner/private, household
 sharing, cross-household, and browser-write checks have passed on the test
-database, according to the user. Add repeatable database tests and verify the
-same rules in staging before production rollout.
+database, according to the user. Repeatable pgTAP coverage is in
+`supabase/tests/rls.test.sql`; run it in staging before production rollout.
 
 ## 4. Implement OAuth and credential lifecycle
 
@@ -243,21 +249,23 @@ Completion: disconnected data cannot reappear through an in-flight job or remain
 ## 10. Verify the integration
 
 Manual verification on the test database and on phone and desktop has been
-reported complete by the user. Add focused automated regression tests for:
+reported complete by the user. Current automated coverage includes:
 
-- OAuth state expiry/replay/replacement on the connection, wrong owner, denied consent, token refresh, and reconnect.
-- Multi-page imports, repeated pages, partial failures, cancellations, token advancement, isolated `410` recovery, and overlapping workers.
-- Timed/all-day/multi-day one-off events, timezone and DST boundaries, initial historical cutoff, no local date filtering on token results, retaining past rows on incremental sync and `410` recovery, and cancellations.
-- Anonymous access denial, owner-only credentials/management, Private versus Household calendar visibility for the owner's and other household members' views, visibility changes applying to existing rows, and cross-household isolation.
-- Direct REST writes to imported content denied; the transport issues no Google event mutation requests.
-- Privacy changes during sync, revoked access, and account switching without cached-data leakage.
-- Shared events readable by a household member with no Google connection.
-- Initial and incremental imports start only after Refresh/Synchronize is clicked; connecting, selecting calendars, page loads, focus changes, and date navigation do not trigger a Google event sync.
+- `frontend/tests/calendar.test.mjs`: annual dates, date/time boundaries, DST,
+  and agenda merging.
+- `frontend/tests/google-calendar.test.mjs`: Google request parameters,
+  pagination cursors, event normalization, cancellations, and recurring rows.
+- `frontend/tests/google-requests.test.mjs`: retries, `Retry-After`, terminal
+  error classification, and expired sync tokens.
+- `supabase/tests/rls.test.sql`: 38 assertions for household isolation,
+  calendar privacy, and browser write restrictions.
+- `supabase/tests/google_calendar_sync.test.sql`: 14 assertions for sync
+  claims, lease expiry, `410` recovery, and rebuild retention/pruning.
 
-The current automated frontend coverage includes `frontend/tests/tasks.test.mjs`;
-there are no dedicated calendar, Google sync, Edge Function, or repeatable RLS
-tests yet. Add focused tests for date/event normalization, annual occurrences,
-sync paging/token recovery, and RLS. These complement the completed manual
+Useful follow-up coverage includes OAuth state expiry/replay/replacement,
+refresh-token behavior, full multi-page Edge Function runs, true simultaneous
+workers, privacy changes during an in-flight sync, and verifying that no
+Google event mutation request is sent. These complement the completed manual
 pass; run the clean-install suite/build and repeat the smoke test for each
 staging/production environment.
 
@@ -278,7 +286,7 @@ Suggested reviewable implementation batches:
 2. [x] OAuth and calendar selection — code and migration exercised manually in the test environment.
 3. [x] User-triggered one-off event sync — worker and migration exercised manually in the test environment.
 4. [~] Calendar/Today import display — manual test pass reported complete; household viewers still lack a stale-source status.
-5. [~] Automated regression coverage and staging/production rollout remain.
+5. [~] Core automated regression suites pass locally; OAuth end-to-end coverage and staging/production rollout remain.
 
 The MVP Google integration is done when a member can connect and privately
 import selected calendars, set each calendar to Private or Household, share it

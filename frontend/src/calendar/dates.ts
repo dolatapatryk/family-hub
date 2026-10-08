@@ -1,4 +1,4 @@
-import { localDate } from '../tasks/tasks'
+import { localDate } from '../tasks/tasks.ts'
 import type { EventSchedule, DateRange } from './types'
 
 export { localDate }

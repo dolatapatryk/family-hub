@@ -131,10 +131,11 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
 
 ### Current product gap
 
-- No repeatable automated regression tests cover calendar/annual-date logic,
-  Google sync, or RLS yet. The current frontend test suite includes
-  `frontend/tests/tasks.test.mjs`; manual test-database and device checks are
-  reported complete.
+- Automated tests cover task behavior, calendar/annual-date logic, Google
+  request contracts, event normalization and retries, database RLS, sync
+  leases, and `410 Gone` rebuild recovery. OAuth end-to-end and truly
+  simultaneous worker cases remain useful follow-up coverage. Manual
+  test-database and device checks are reported complete.
 - Staging/production migration, secrets, OAuth consent, deployment, and smoke
   test status have not been confirmed. The test-database pass does not verify
   production configuration.
@@ -514,11 +515,14 @@ reported complete by the user. Repeat them after significant changes and before
 production release. Check refresh, sign-out/sign-in, and a second browser
 session.
 
-The existing automated suite is limited to task behavior. Add focused
-regression tests for annual-date occurrence generation and calendar date/time
-normalization, Google event normalization and sync behavior, and database RLS
-when those areas change. Keep the test-database manual pass as the end-to-end
-check; run clean-install tests/build for release verification.
+The frontend suite covers task behavior, annual-date recurrence, calendar
+date/time rules and agenda merging, Google request parameters and event
+normalization, and sync request retries/error handling. The pgTAP suites at
+`supabase/tests/rls.test.sql` and `supabase/tests/google_calendar_sync.test.sql`
+cover household isolation, calendar privacy, lease claims/recovery, and `410`
+rebuild behavior. OAuth end-to-end and truly simultaneous worker tests remain
+follow-up coverage. Keep the reported test-database manual pass as the
+end-to-end check; run clean-install tests/build for release verification.
 
 For the native calendar milestone, also verify:
 
@@ -563,10 +567,10 @@ The MVP is complete when:
 13. Today shows today's tasks and visible calendar events, including annual
     date occurrences.
 14. The app is usable as an installable mobile PWA.
-15. The frontend builds and the existing test suite succeeds from a clean
-    install. Focused automated regression tests for calendar, Google sync, and
-    RLS are recommended follow-up work; manual end-to-end verification has
-    been completed on the test environment.
+15. The frontend builds and the frontend plus pgTAP regression suites succeed
+    from a clean install. Calendar, Google sync, and RLS regression coverage is
+    implemented; manual end-to-end verification has been completed on the test
+    environment.
 16. Deployment requires only the frontend and configured Supabase services.
 
 OpenClaw integration is deferred. If it is added later, expose narrow,

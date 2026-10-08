@@ -21,7 +21,7 @@ test('date-only values use local dates near midnight', () => {
   try {
     process.env.TZ = 'America/Los_Angeles'
     assert.equal(localDate(new Date('2026-09-20T01:00:00Z')), '2026-09-19')
-    assert.equal(formatDueDate('2026-09-19'), new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(2026, 8, 19)))
+    assert.equal(formatDueDate('2026-09-19'), new Intl.DateTimeFormat('pl-PL', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(2026, 8, 19)))
   } finally {
     if (previous === undefined) delete process.env.TZ
     else process.env.TZ = previous

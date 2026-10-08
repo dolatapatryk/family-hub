@@ -1,4 +1,4 @@
-import { daysInMonth } from '../calendar/dates'
+import { daysInMonth } from '../calendar/dates.ts'
 import type { CalendarItem, DateRange } from '../calendar/types'
 
 export const kindLabels = { birthday: 'Urodziny', anniversary: 'Rocznica', other: 'Inne' } as const

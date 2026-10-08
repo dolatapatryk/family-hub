@@ -1,8 +1,8 @@
-import { annualOccurrences, type AnnualDate, type AnnualOccurrence } from '../annualDates/annualDates'
-import type { Task } from '../tasks/tasks'
-import { addDays, eventOverlaps, localDate } from './dates'
-import type { CalendarEvent, DateRange } from './types'
-import type { ImportedGoogleCalendarEvent } from '../googleCalendar/types'
+import { annualOccurrences, type AnnualDate, type AnnualOccurrence } from '../annualDates/annualDates.ts'
+import type { Task } from '../tasks/tasks.ts'
+import { addDays, eventOverlaps, localDate } from './dates.ts'
+import type { CalendarEvent, DateRange } from './types.ts'
+import type { ImportedGoogleCalendarEvent } from '../googleCalendar/types.ts'
 
 export type AgendaSource =
   | { kind: 'event'; event: CalendarEvent }
