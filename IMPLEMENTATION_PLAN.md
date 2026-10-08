@@ -92,9 +92,10 @@ state must stay in server-controlled storage.
   calendar's sync state and rebuild its current/future set using a new initial
   cutoff. Preserve imported past rows. Do not reset sync state for other
   calendars connected to the same account.
-- On disconnect, stop future syncs, delete/revoke the stored credentials, and
-  remove that connection's imported mirror rows. Do not delete the original
-  Google events.
+- **Post-MVP:** add an in-app disconnect flow that stops future syncs,
+  deletes/revokes stored credentials, and removes that connection's imported
+  mirror rows. Do not delete the original Google events. The current MVP has
+  no in-app disconnect action.
 
 Google documents the read-only event scopes and incremental sync flow in its
 [Calendar API authorization guide](https://developers.google.com/workspace/calendar/api/auth)
@@ -119,19 +120,27 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
 - Mobile touch targets and safe-area spacing; static Nginx deployment guidance.
 - Native calendar and annual-date implementation: schema migration, scoped
   adapters, separate forms, 14-day agenda, and generated annual occurrences in
-  Calendar and Today. Migration application and runtime verification are pending.
+  Calendar and Today. The user reports that the migrations and manual checks
+  passed on the test database, on both phone and desktop.
+- Google Calendar OAuth, calendar selection, user-triggered sync, imported-event
+  display, and the supporting migrations are implemented and manually verified
+  on the test database, according to the user.
+- Household join, household data isolation, Calendar/Today, and the responsive
+  app have been manually exercised by the user with two household members and
+  on phone and desktop.
 
 ### Current product gap
 
-- The safe household invite and join flow is implemented; two-user Supabase
-  verification is still pending.
-- Native Calendar and Today data integration are implemented; frontend and
-  database verification are still pending.
-- Google Calendar import is not implemented.
-- The Google Calendar integration schema and read policies are in a local
-  migration; database application and two-user RLS verification are pending.
-- RLS and migration behavior still need a repeatable two-user integration
-  verification pass.
+- No repeatable automated regression tests cover calendar/annual-date logic,
+  Google sync, or RLS yet. The current frontend test suite includes
+  `frontend/tests/tasks.test.mjs`; manual test-database and device checks are
+  reported complete.
+- Staging/production migration, secrets, OAuth consent, deployment, and smoke
+  test status have not been confirmed. The test-database pass does not verify
+  production configuration.
+- Google stale-source status for household viewers remains to be implemented.
+- In-app Google disconnect and credential revocation are explicitly deferred
+  until after the MVP.
 
 ## MVP scope
 
@@ -157,6 +166,7 @@ remain useful when no household member connects Google.
 Do not add yet:
 
 - projects, tags, subtasks, priorities, comments, or audit-history screens;
+- in-app Google disconnect and credential revocation (deferred until after MVP);
 - recurring tasks;
 - push notifications;
 - offline mutation queues or conflict resolution;
@@ -284,9 +294,9 @@ imported view.
 
 The Google mirror is read-only in Family Hub. The original Google event
 remains authoritative: edits and deletions in Google update or remove the
-corresponding Supabase mirror row during sync. On disconnect, purge the
-mirrored rows from that connection so previously shared events are no longer
-visible to the household.
+corresponding Supabase mirror row during sync. **Post-MVP:** on disconnect,
+purge the mirrored rows from that connection so previously shared events are
+no longer visible to the household.
 
 ## Security rules
 
@@ -361,9 +371,9 @@ Never allow a calendar UI action to update or delete the original Google event.
 Treat task due dates and all-day event dates as date-only values. Keep stable
 ordering by start/due date, creation time, and ID.
 
-## Next milestones
+## Implementation and verification status
 
-### 1. Verify the household join and invite flow
+### 1. Household join and invite flow — implemented and manually verified
 
 The initial implementation uses this smallest flow:
 
@@ -376,37 +386,38 @@ The initial implementation uses this smallest flow:
 
 Invite records are stored in the private schema, and tokens expire after 24
 hours. The onboarding screen supports either household creation or joining.
-Verify expired, reused, invalid, and already-member attempts, plus isolation
-between two households. Do not expose service-role credentials to the browser.
+The user reports that the two-user flow, invite cases, and household isolation
+were manually checked on the test database. The checks below remain regression
+cases for future changes; they are not outstanding manual work.
 
-Verify that two authenticated users in the same household see the same Tasks
-and Shopping data.
+Manual verification also confirmed that two authenticated users in the same
+household see the same Tasks and Shopping data.
 
-### 2. Add first-party calendar events in Supabase
+### 2. First-party calendar and annual dates — implemented and manually verified
 
-Implementation is complete; the migration has not been applied and tests,
-builds, and application/manual verification have not been run for this change.
+Implementation and manual verification on the test database and on phone and
+desktop are complete, according to the user. Apply the migration separately to
+staging/production. The following bullets describe delivered behavior.
 
-- Add `calendar_events` and `annual_dates` migrations with constraints,
+- `calendar_events` and `annual_dates` migrations define constraints,
   indexes, RLS, and explicit column grants.
-- Add the `Ważne daty` navigation tab, its list, and a dedicated form for
+- The `Ważne daty` navigation tab provides a list and dedicated form for
   birthdays, anniversaries, and `Inne` annual dates.
-- Keep the Calendar tab's event form limited to normal one-off events.
-- Store birthday/anniversary initial dates with their year; store `Inne` as
-  month/day only. Generate annual occurrences for the visible range without
-  inserting yearly copies, and show the calculated count in Calendar and
+- The Calendar tab's event form creates normal one-off events.
+- Birthday/anniversary initial dates include the year; `Inne` stores
+  month/day only. Annual occurrences are generated for the visible range
+  without inserting yearly copies; calculated counts appear in Calendar and
   Today as read-only occurrences.
-- Add small adapters for listing, creating, editing, and deleting or archiving
-  first-party events and annual-date definitions.
-- Ensure every member can create household items and each member can manage
-  their own private items.
-- Build the calendar view from first-party events, annual occurrences, and
-  due tasks. Use a 14-day default range and household-scoped query keys.
+- Adapters support listing, creating, editing, and deleting first-party events
+  and annual-date definitions.
+- Every member can create household items and manage their own private items.
+- The calendar view combines first-party events, annual occurrences, and
+  due tasks, with a 14-day default range and household-scoped query keys.
 
-### 3. Add optional read-only Google Calendar import
+### 3. Optional read-only Google Calendar import — implemented and manually verified
 
 - Let a household member connect Google through OAuth and select calendars to
-  import. The connecting user must be able to disconnect at any time.
+  import. **Post-MVP:** let the connecting user disconnect from Family Hub.
 - Let the owner set each selected calendar to Private or Household, defaulting
   to Private. Explain that sharing applies to all imported event details and
   retained history from that calendar; do not add per-event privacy controls.
@@ -429,12 +440,12 @@ builds, and application/manual verification have not been run for this change.
 - Return normalized rows only. Do not write, edit, or delete events in Google.
 - Other household members must be able to see explicitly shared imported
   events without connecting Google themselves.
-- On disconnect, stop sync, revoke/delete credentials, and purge the imported
-  event mirror for that connection.
+- **Post-MVP:** on disconnect, stop sync, revoke/delete credentials, and purge
+  the imported event mirror for that connection.
 
-### 4. Replace the Today placeholder
+### 4. Today view — implemented and manually verified
 
-Show:
+The view shows:
 
 - active tasks due today;
 - today's first-party and visible imported calendar events;
@@ -463,7 +474,13 @@ static hosting provider. Configure `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_PUBLISHABLE_KEY` at build time, and configure Supabase Auth site
 and redirect URLs for each environment.
 
-## Verification
+## Verification and release checklist
+
+The user reports that manual checks for household join/isolation, native and
+Google calendar flows on the test database, and phone/desktop usability have
+passed. The checklists below are regression cases to rerun after relevant code
+changes and for staging/production; they do not mean the reported manual pass
+is still outstanding.
 
 Run after frontend or adapter changes:
 
@@ -485,7 +502,6 @@ authenticated users:
   calendar, and changing that choice affects existing imported rows;
 - household members without Google connections can read shared imported rows;
 - Google sync updates and deletions do not create duplicates;
-- disconnect removes that connection's imported mirror and credentials;
 - the browser cannot read OAuth credentials or modify Google events;
 - foreign-household task assignments are rejected;
 - archived tasks remain immutable;
@@ -493,8 +509,16 @@ authenticated users:
 - a successful write remains visible after a refresh failure where the UI
   promises that behavior.
 
-Run the manual pass on a narrow mobile viewport and a desktop viewport. Check
-refresh, sign-out/sign-in, and a second browser session.
+Manual checks on phone and desktop, including a test-database pass, have been
+reported complete by the user. Repeat them after significant changes and before
+production release. Check refresh, sign-out/sign-in, and a second browser
+session.
+
+The existing automated suite is limited to task behavior. Add focused
+regression tests for annual-date occurrence generation and calendar date/time
+normalization, Google event normalization and sync behavior, and database RLS
+when those areas change. Keep the test-database manual pass as the end-to-end
+check; run clean-install tests/build for release verification.
 
 For the native calendar milestone, also verify:
 
@@ -539,7 +563,10 @@ The MVP is complete when:
 13. Today shows today's tasks and visible calendar events, including annual
     date occurrences.
 14. The app is usable as an installable mobile PWA.
-15. The frontend builds and tests successfully from a clean install.
+15. The frontend builds and the existing test suite succeeds from a clean
+    install. Focused automated regression tests for calendar, Google sync, and
+    RLS are recommended follow-up work; manual end-to-end verification has
+    been completed on the test environment.
 16. Deployment requires only the frontend and configured Supabase services.
 
 OpenClaw integration is deferred. If it is added later, expose narrow,

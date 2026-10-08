@@ -1,11 +1,10 @@
 # Google Calendar integration — implementation plan
 
-Status: the base integration schema and RLS migration have been applied to the
-current test Supabase database and manually verified. OAuth, calendar
-management, user-triggered sync, and imported-event display code are now in the
-repository. The OAuth-management and event-sync migrations have not yet been
-applied; Google Cloud credentials, deployed function secrets, and a real import
-are still pending.
+Status: the integration code and migrations have been manually exercised on
+the test Supabase database. The user also reports successful manual checks on
+phone and desktop. Staging/production configuration and rollout are not
+confirmed. Automated regression coverage beyond the task tests is not in place.
+In-app disconnect is deferred until after the MVP.
 
 ## Progress snapshot
 
@@ -22,42 +21,48 @@ Completed:
   household member can read after sharing; an outside household member cannot
   read; authenticated users cannot write imported rows.
 
-The manual checks verify database behavior. Repeatable automated RLS tests and
-verification in staging/production remain part of rollout.
+The user reports that the Google integration was manually tested and works on
+the test database.
+Repeatable automated RLS tests and verification in staging/production remain
+recommended rollout work.
 
 Added in the current OAuth and selection batch:
 
 - Added `supabase/migrations/20260930000000_google_calendar_oauth_management.sql`
   with service-role-only RPCs for OAuth state, connection credentials, calendar
   list metadata, owner choices, and serialized token refresh leases. The
-  migration is not yet applied to a Supabase project.
+  migration has been applied and manually exercised on the test database.
 - Added authenticated management and state-validated callback Edge Functions,
   AES-GCM refresh-token storage, read-only Google consent scopes, full calendar
   list pagination, and owner-only selection/sharing controls in Calendar.
-- Added development setup instructions. No Google credentials were available,
-  so deployment and a real consent/reconnect pass remain pending. Calendar
-  selection and list loading do not start event synchronization.
+- Added development setup instructions. The user reports that the test setup
+  and manual connection flow work. Production OAuth credentials, secrets, and
+  consent verification remain to be configured. Calendar selection and list
+  loading do not start event synchronization.
 
 Added in the user-triggered import batch:
 
 - Added `supabase/migrations/20261001000000_google_calendar_event_sync.sql` with
   service-role-only sync start, lease, page-commit, failure, `410` rebuild, and
-  lost-calendar RPCs. The migration has not been applied to a Supabase project.
+  lost-calendar RPCs. The migration has been applied and manually exercised on
+  the test database.
 - Added a bounded Google events worker that imports normalized one-off events,
   saves per-page checkpoints, retries transient requests, applies cancellations,
   skips recurring records, and retains past imports during incremental sync and
   token rebuilds.
 - Added an owner-clicked import/synchronize action and Calendar/Today read-only
-  event display with Google links. A real Google import and automated database
-  verification remain pending.
+  event display with Google links. The user reports that a manual import pass
+  on the test database works; automated regression tests remain to be added.
 
-### Resume here: apply migrations and exercise an import
+### Resume here: prepare rollout and add regression coverage
 
-Apply the pending migrations, configure a Google development OAuth client and
-server-side secrets, then complete a real connect/reconnect and button-triggered
-import pass. The private schema bridge uses narrowly scoped, service-role-only
-RPCs. Connecting, selecting calendars, opening a page, and navigating dates do
-not start event synchronization.
+The test-database migration and manual import pass are reported complete. For
+each new environment, apply the migrations, configure Google OAuth and
+server-side secrets, deploy the functions, and repeat the smoke test. Add
+focused automated regression tests for OAuth, sync, and RLS. The private schema
+bridge uses narrowly scoped, service-role-only RPCs. Connecting, selecting
+calendars, opening a page, and navigating dates do not start event
+synchronization. In-app disconnect remains deferred until after the MVP.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -68,8 +73,8 @@ the connection owner chooses what their household can see.
 - Native calendar schema: `supabase/migrations/20260928000000_create_calendar_schema.sql`.
 - Google connection/calendar tables and imported-event RLS:
   `supabase/migrations/20260929000000_google_calendar_integration.sql` (applied
-  and manually verified in the current test database; automated and
-  staging/production verification remain pending).
+  and manually verified in the current test database; repeatable automated and
+  staging/production verification remain recommended rollout work).
 - Shared Calendar/Today queries: `frontend/src/calendar/queries.ts`.
 - Shared agenda construction: `frontend/src/calendar/agenda.ts`.
 - Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
@@ -135,9 +140,10 @@ Enforce these database rules:
 
 Edge Functions need an explicit route to private storage: a server-only database connection or narrowly scoped service-only RPCs with fixed search paths and revoked browser execution. A private schema cannot simply be queried through the ordinary exposed PostgREST API.
 
-Completion: the migration is applied and the manual owner/private, household
-sharing, cross-household, and browser-write checks pass. Add repeatable database
-tests before rollout and verify the same rules in staging.
+Completion: the migration is applied and manual owner/private, household
+sharing, cross-household, and browser-write checks have passed on the test
+database, according to the user. Add repeatable database tests and verify the
+same rules in staging before production rollout.
 
 ## 4. Implement OAuth and credential lifecycle
 
@@ -152,7 +158,9 @@ Create separate Edge Function entry points for authenticated management, the Goo
 
 The callback cannot require a Supabase bearer token from Google's browser redirect; its authorization boundary is the validated one-time state. Management and synchronization actions require a validated user session and connection ownership. Configure each endpoint accordingly. See [Google web-server OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [token-storage practices](https://developers.google.com/identity/protocols/oauth2/resources/best-practices), and [Supabase function authentication](https://supabase.com/docs/guides/functions/auth).
 
-Completion: a member can connect, refresh credentials, and reconnect without exposing credentials to the browser.
+Completion: a member can connect, refresh credentials, and reconnect without
+exposing credentials to the browser. The test-environment flow has been
+manually checked, according to the user.
 
 ## 5. Implement calendar selection and privacy controls
 
@@ -163,7 +171,9 @@ Completion: a member can connect, refresh credentials, and reconnect without exp
 5. Do not add event-level privacy actions; other household members get read-only details for events from calendars shared with the household.
 6. Deselecting a calendar invalidates its active run and purges its imported data. Switching it to Private immediately removes household access to all of its events in the database.
 
-Completion: selected private events are visible only to the owner, and sharing is deliberate and enforceable outside the UI.
+Completion: selected private events are visible only to the owner, and sharing
+is deliberate and enforceable outside the UI. Manual test-database checks have
+been reported complete.
 
 ## 6. Build the synchronization engine
 
@@ -176,11 +186,14 @@ Implement one reusable per-calendar worker for user-requested runs:
 5. Persist the new sync token only after all pages and row changes succeed. Retried pages must be harmless.
 6. On later runs, use that calendar's saved token and supported request settings; do not send `timeMin`, `timeMax`, or `orderBy` with the token. Do not add a local date filter to token results.
 7. On `410 Gone`, invalidate only that calendar's sync state and rebuild the current/future set using the initial future-only request. Preserve already-imported events that have ended; reconcile only the current/future set against the rebuilt snapshot, so recovery does not erase retained history.
-8. Commit only while the lease and generation remain valid. Disconnect, deselection, and newer runs must prevent stale workers from restoring rows.
+8. Commit only while the lease and generation remain valid. Deselecting a calendar or starting a newer run must prevent stale workers from restoring rows. Add disconnect invalidation when the post-MVP disconnect flow is implemented.
 
 Checkpoint work in the selected calendar's progress fields across bounded Edge Function invocations rather than relying on one request to finish a large calendar. The frontend can request successive batches within the same user-started run; each request must validate ownership and run identity. If the session closes or the run fails, the next Refresh/Synchronize click resumes or safely restarts it. A failed run must not advance the sync token. Google's [sync guide](https://developers.google.com/workspace/calendar/api/guides/sync) and [events.list contract](https://developers.google.com/workspace/calendar/api/v3/reference/events/list) define pagination, incremental parameters, and token invalidation.
 
-Completion: the initial import avoids historical backfill; incremental changes converge without date filtering while retaining imported history, including through per-calendar token resets.
+Completion: the initial import avoids historical backfill; incremental changes
+converge without date filtering while retaining imported history, including
+through per-calendar token resets. A manual test-database pass has been
+reported complete.
 
 ## 7. Add the Refresh/Synchronize action and recovery
 
@@ -191,7 +204,9 @@ Completion: the initial import avoids historical backfill; incremental changes c
 - Show last successful sync, sync in progress, reconnect required, and concise actionable errors. Other household viewers also need a safe stale-source indication.
 - Track duration, counts, retry state, and failures without logging personal event data.
 
-Completion: clicking Refresh/Synchronize imports Google changes and updates the displayed copy; failures do not block other calendars or native features.
+Completion: clicking Refresh/Synchronize imports Google changes and updates the
+displayed copy; failures do not block other calendars or native features. A
+manual test-database pass has been reported complete.
 
 ## 8. Integrate Calendar and Today
 
@@ -203,13 +218,17 @@ Add `frontend/src/googleCalendar/` with types, a small Supabase/Edge Function ad
 - Merge imports using the existing overlap and ordering conventions in Calendar and Today. Label source and read-only status; offer a safe Google link for editing there.
 - Provide independent loading/error/empty states so Google failures do not hide native events or tasks.
 - Paginate Supabase reads when a range exceeds the API row limit.
-- Invalidate both views after a user-requested sync, calendar sharing changes, deselection, and disconnect. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization.
+- Invalidate both views after a user-requested sync, calendar sharing changes, and deselection. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization. Add disconnect cache cleanup when the post-MVP disconnect flow is implemented.
 - On permission reduction, drop stale private/shared data from the current client immediately. RLS prevents subsequent unauthorized reads; information already delivered to another session cannot be retroactively erased.
 - Keep integration responses and event data out of the static service-worker cache.
 
 Completion: the owner's private imports and household-visible imports appear consistently in both existing views.
 
-## 9. Implement complete disconnect and cleanup
+## 9. Deferred after MVP: complete disconnect and cleanup
+
+There is currently no in-app disconnect action. The user has chosen to defer
+this feature. It is not a blocker for the current MVP; keep the following
+requirements for a later implementation:
 
 1. Verify connection ownership and atomically mark it disabled, invalidate active per-calendar runs, and make its mirrored rows unreadable.
 2. Purge imported rows and selected-calendar records, including their sync state.
@@ -223,37 +242,47 @@ Completion: disconnected data cannot reappear through an in-flight job or remain
 
 ## 10. Verify the integration
 
-Add meaningful automated tests for:
+Manual verification on the test database and on phone and desktop has been
+reported complete by the user. Add focused automated regression tests for:
 
 - OAuth state expiry/replay/replacement on the connection, wrong owner, denied consent, token refresh, and reconnect.
 - Multi-page imports, repeated pages, partial failures, cancellations, token advancement, isolated `410` recovery, and overlapping workers.
 - Timed/all-day/multi-day one-off events, timezone and DST boundaries, initial historical cutoff, no local date filtering on token results, retaining past rows on incremental sync and `410` recovery, and cancellations.
 - Anonymous access denial, owner-only credentials/management, Private versus Household calendar visibility for the owner's and other household members' views, visibility changes applying to existing rows, and cross-household isolation.
 - Direct REST writes to imported content denied; the transport issues no Google event mutation requests.
-- Privacy changes during sync, revoked access, disconnect races, and account switching without cached-data leakage.
+- Privacy changes during sync, revoked access, and account switching without cached-data leakage.
 - Shared events readable by a household member with no Google connection.
 - Initial and incremental imports start only after Refresh/Synchronize is clicked; connecting, selecting calendars, page loads, focus changes, and date navigation do not trigger a Google event sync.
 
-Run frontend clean-install tests/build, Edge Function unit tests, and repeatable local database integration tests. Complete a real Google test-account pass in two browser sessions and on mobile/desktop; fake API fixtures cannot validate consent or refresh-token behavior.
+The current automated frontend coverage includes `frontend/tests/tasks.test.mjs`;
+there are no dedicated calendar, Google sync, Edge Function, or repeatable RLS
+tests yet. Add focused tests for date/event normalization, annual occurrences,
+sync paging/token recovery, and RLS. These complement the completed manual
+pass; run the clean-install suite/build and repeat the smoke test for each
+staging/production environment.
 
 ## 11. Deploy in dependency order
 
 1. Apply integration migrations and verify grants/RLS in staging.
 2. Configure secrets and deploy callback, management, and synchronization functions with their distinct authentication rules.
 3. Deploy the frontend integration controls and update README setup/troubleshooting instructions.
-4. Validate a real connection, button-triggered private import, explicit sharing, button-triggered incremental changes, and disconnect.
+4. Repeat the connection, button-triggered private import, explicit sharing,
+   and incremental-sync checks in that environment. Disconnect remains
+   deferred until after the MVP.
 5. Complete applicable Google production requirements and repeat the smoke test in production.
 6. Document rollback: disable new connections and synchronization requests, hide integration UI, and preserve native Calendar/Today operation; never revert by exposing private tables.
 
 Suggested reviewable implementation batches:
 
 1. [x] Contract/schema/RLS — migration applied and manual access checks passed.
-2. [~] OAuth and calendar selection — code added; migration, secrets, and real consent check pending.
-3. [~] User-triggered one-off event sync — worker and migration added; migration deployment and real Google validation pending.
-4. [~] Calendar/Today import display — read-only queries and user controls added; disconnect and shared-viewer stale-source status remain.
-5. [ ] Automated and end-to-end verification, then rollout.
+2. [x] OAuth and calendar selection — code and migration exercised manually in the test environment.
+3. [x] User-triggered one-off event sync — worker and migration exercised manually in the test environment.
+4. [~] Calendar/Today import display — manual test pass reported complete; household viewers still lack a stale-source status.
+5. [~] Automated regression coverage and staging/production rollout remain.
 
-The integration is done when a member can connect and privately import selected calendars,
-set each calendar to Private or Household, share it with a member who has no Google connection,
-import Google changes and deletions by clicking Refresh/Synchronize, and disconnect completely—while
-native calendar features remain usable and credentials never reach the browser.
+The MVP Google integration is done when a member can connect and privately
+import selected calendars, set each calendar to Private or Household, share it
+with a member who has no Google connection, and import Google changes and
+deletions by clicking Refresh/Synchronize—while native calendar features remain
+usable and credentials never reach the browser. Complete in-app disconnect is
+a post-MVP follow-up.

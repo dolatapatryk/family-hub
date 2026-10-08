@@ -135,8 +135,16 @@ current user to keep private cached items separate after an account switch.
 
 The schema is defined in
 `supabase/migrations/20260928000000_create_calendar_schema.sql`. This migration
-must be applied to your Supabase project before using these features. It has
-not been applied or tested as part of this implementation.
+has been applied and manually verified on the test database. Apply it and
+verify it separately in each staging or production Supabase project before
+using these features there.
+
+Manual checks of the household, calendar, and Google Calendar flows on the
+test database, plus the phone and desktop layouts, have been reported complete.
+The current automated frontend test suite covers task behavior only. Add
+focused regression tests for annual-date/calendar logic, Google sync behavior,
+and database RLS as those areas change; manual end-to-end checks remain useful
+for OAuth and cross-device behavior.
 
 ## PWA and deployment
 
@@ -191,6 +199,11 @@ local Supabase API to be reachable from the tailnet.
     npm test
     npm run build
 
+The existing automated test file is `frontend/tests/tasks.test.mjs`. The
+calendar, Google sync, Edge Function, and RLS flows do not yet have dedicated
+automated regression tests. The user reports that those flows were checked
+manually on the test database and that the app was checked on phone and desktop.
+
 Reset the local Supabase database when testing migration changes:
 
     npx supabase db reset
@@ -203,6 +216,9 @@ Reset the local Supabase database when testing migration changes:
 Today shows today's tasks and visible calendar events, including annual
 occurrences and imported Google events. Google Calendar's OAuth,
 calendar-selection, user-triggered synchronization, and imported-event display
-code is in place, but external credentials, migration deployment, and a real
-Google import pass are still pending. The detailed roadmap is in
-[GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
+code and migrations have been manually exercised on the test database,
+according to the user. Production OAuth credentials, function secrets,
+migrations, deployment, and a production smoke test remain environment-specific
+rollout work. Family Hub does not yet provide an in-app Google disconnect; that
+cleanup and token-revocation flow is deferred until after the MVP. The detailed
+roadmap is in [GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
