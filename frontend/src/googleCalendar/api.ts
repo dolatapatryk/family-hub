@@ -2,6 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase'
 import type { GoogleCalendarSettingsState, GoogleCalendarChoiceDraft } from './types'
 
+export interface GoogleCalendarDisconnectResult extends GoogleCalendarSettingsState {
+  disconnected: boolean
+  revocation: 'revoked' | 'failed' | 'not_available'
+}
+
 function requireClient(): SupabaseClient {
   if (!supabase) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
   return supabase
@@ -32,6 +37,10 @@ export function createGoogleCalendarApi() {
 
     connect(): Promise<{ consentUrl: string }> {
       return invoke({ action: 'connect' })
+    },
+
+    disconnect(): Promise<GoogleCalendarDisconnectResult> {
+      return invoke({ action: 'disconnect' })
     },
 
     refreshCalendars(): Promise<GoogleCalendarSettingsState & { calendarCount: number }> {

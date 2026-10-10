@@ -6,8 +6,9 @@ phone and desktop. Staging/production configuration and rollout are not
 confirmed. Automated coverage now includes Google request/page contracts,
 normalized event cases, retry behavior, database privacy rules, sync leases,
 and `410 Gone` rebuild recovery. OAuth flow and full Edge Function scenarios
-still have useful automated coverage gaps.
-In-app disconnect is deferred until after the MVP.
+still have useful automated coverage gaps. Google disconnect code and its
+migration are implemented but have not yet been manually verified on the test
+database.
 
 ## Progress snapshot
 
@@ -66,8 +67,7 @@ server-side secrets, deploy the functions, and repeat the smoke test. Add
 focused automated regression tests for OAuth state/refresh behavior and full
 Edge Function flows. The private schema bridge uses narrowly scoped,
 service-role-only RPCs. Connecting, selecting calendars, opening a page, and
-navigating dates do not start event synchronization. In-app disconnect remains
-deferred until after the MVP.
+navigating dates do not start event synchronization.
 
 This expands milestone 3 of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 Google remains authoritative. Family Hub imports a read-only copy into Supabase;
@@ -192,7 +192,7 @@ Implement one reusable per-calendar worker for user-requested runs:
 5. Persist the new sync token only after all pages and row changes succeed. Retried pages must be harmless.
 6. On later runs, use that calendar's saved token and supported request settings; do not send `timeMin`, `timeMax`, or `orderBy` with the token. Do not add a local date filter to token results.
 7. On `410 Gone`, invalidate only that calendar's sync state and rebuild the current/future set using the initial future-only request. Preserve already-imported events that have ended; reconcile only the current/future set against the rebuilt snapshot, so recovery does not erase retained history.
-8. Commit only while the lease and generation remain valid. Deselecting a calendar or starting a newer run must prevent stale workers from restoring rows. Add disconnect invalidation when the post-MVP disconnect flow is implemented.
+8. Commit only while the lease and generation remain valid. Deselecting a calendar or starting a newer run must prevent stale workers from restoring rows. Disconnect deletes the connection and cascades its calendars and events, invalidating later commits.
 
 Checkpoint work in the selected calendar's progress fields across bounded Edge Function invocations rather than relying on one request to finish a large calendar. The frontend can request successive batches within the same user-started run; each request must validate ownership and run identity. If the session closes or the run fails, the next Refresh/Synchronize click resumes or safely restarts it. A failed run must not advance the sync token. Google's [sync guide](https://developers.google.com/workspace/calendar/api/guides/sync) and [events.list contract](https://developers.google.com/workspace/calendar/api/v3/reference/events/list) define pagination, incremental parameters, and token invalidation.
 
@@ -224,25 +224,29 @@ Add `frontend/src/googleCalendar/` with types, a small Supabase/Edge Function ad
 - Merge imports using the existing overlap and ordering conventions in Calendar and Today. Label source and read-only status; offer a safe Google link for editing there.
 - Provide independent loading/error/empty states so Google failures do not hide native events or tasks.
 - Paginate Supabase reads when a range exceeds the API row limit.
-- Invalidate both views after a user-requested sync, calendar sharing changes, and deselection. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization. Add disconnect cache cleanup when the post-MVP disconnect flow is implemented.
+- Invalidate both views after a user-requested sync, calendar sharing changes, and deselection. Cancel and clear relevant caches on account changes. Loading the saved Supabase mirror must never invoke Google synchronization. Disconnect clears the imported-event cache and resets the settings cache.
 - On permission reduction, drop stale private/shared data from the current client immediately. RLS prevents subsequent unauthorized reads; information already delivered to another session cannot be retroactively erased.
 - Keep integration responses and event data out of the static service-worker cache.
 
 Completion: the owner's private imports and household-visible imports appear consistently in both existing views.
 
-## 9. Deferred after MVP: complete disconnect and cleanup
+## 9. Disconnect and cleanup
 
-There is currently no in-app disconnect action. The user has chosen to defer
-this feature. It is not a blocker for the current MVP; keep the following
-requirements for a later implementation:
+Calendar settings provide an owner-only disconnect action. Its service-role RPC
+deletes the owner's connection row in one transaction, which cascades to the
+selected-calendar records, active sync state, and imported event mirror. This
+prevents a later sync commit from restoring disconnected data. The Edge Function
+receives only the encrypted refresh token from the RPC, finishes local cleanup,
+then attempts Google revocation. A decryption, network, or Google failure does
+not restore the local connection; the settings page reports that remote
+revocation was not confirmed. Repeated disconnect requests are harmless.
 
-1. Verify connection ownership and atomically mark it disabled, invalidate active per-calendar runs, and make its mirrored rows unreadable.
-2. Purge imported rows and selected-calendar records, including their sync state.
-3. Attempt Google token revocation, then delete stored credentials and OAuth state. If revocation fails, finish local disconnect and report that remote revocation was not confirmed; do not keep an active credential indefinitely.
-4. Clear current-client caches and make repeated disconnect requests harmless.
-5. Apply equivalent local cleanup on owner/household deletion; test disconnect during a running sync.
-
-Original Google events are untouched. Account for Google's project-level token-revocation behavior if other Google integrations are added later; see [revocation documentation](https://developers.google.com/identity/protocols/oauth2/web-server).
+The browser clears the connection settings and all imported-event query caches
+after success. Existing foreign-key cascades also remove local integration data
+when its owner or household is deleted. Original Google events are untouched.
+Account for Google's project-level token-revocation behavior if other Google
+integrations are added later; see
+[revocation documentation](https://developers.google.com/identity/protocols/oauth2/web-server).
 
 Completion: disconnected data cannot reappear through an in-flight job or remain readable by another member.
 
@@ -275,8 +279,7 @@ staging/production environment.
 2. Configure secrets and deploy callback, management, and synchronization functions with their distinct authentication rules.
 3. Deploy the frontend integration controls and update README setup/troubleshooting instructions.
 4. Repeat the connection, button-triggered private import, explicit sharing,
-   and incremental-sync checks in that environment. Disconnect remains
-   deferred until after the MVP.
+   incremental-sync, and disconnect checks in that environment.
 5. Complete applicable Google production requirements and repeat the smoke test in production.
 6. Document rollback: disable new connections and synchronization requests, hide integration UI, and preserve native Calendar/Today operation; never revert by exposing private tables.
 
@@ -292,5 +295,6 @@ The MVP Google integration is done when a member can connect and privately
 import selected calendars, set each calendar to Private or Household, share it
 with a member who has no Google connection, and import Google changes and
 deletions by clicking Refresh/Synchronize—while native calendar features remain
-usable and credentials never reach the browser. Complete in-app disconnect is
-a post-MVP follow-up.
+usable and credentials never reach the browser. In-app disconnect removes local
+connection data and imported events and attempts Google token revocation; the
+new disconnect flow still needs manual verification on the test database.

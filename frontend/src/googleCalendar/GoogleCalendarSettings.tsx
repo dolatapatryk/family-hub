@@ -57,6 +57,7 @@ export function GoogleCalendarSettings() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [notice, setNotice] = useState('')
   const [drafts, setDrafts] = useState<Record<string, GoogleCalendarChoiceDraft>>({})
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const api = useMemo(() => createGoogleCalendarApi(), [])
   const queryKey = useMemo(
     () => googleCalendarSettingsKey(profile.household_id, profile.id),
@@ -87,6 +88,22 @@ export function GoogleCalendarSettings() {
   const connect = useMutation({
     mutationFn: () => api.connect(),
     onSuccess: result => window.location.assign(result.consentUrl),
+  })
+  const disconnect = useMutation({
+    mutationFn: () => api.disconnect(),
+    onSuccess: async result => {
+      setConfirmDisconnect(false)
+      setDrafts({})
+      client.setQueryData(queryKey, { connection: null, calendars: [] })
+      await invalidateImportedEvents(client, profile.household_id, true)
+      setNotice(!result.disconnected
+        ? 'Połączenie Google było już usunięte.'
+        : result.revocation === 'revoked'
+          ? 'Konto Google zostało odłączone. Połączenie i zaimportowane wydarzenia usunięto, a dostęp Family Hub został odwołany w Google.'
+          : result.revocation === 'failed'
+            ? 'Konto Google zostało odłączone i zaimportowane wydarzenia usunięto. Nie udało się potwierdzić odwołania dostępu w Google; możesz sprawdzić dostęp aplikacji na koncie Google.'
+            : 'Konto Google zostało odłączone i zaimportowane wydarzenia usunięto. Nie było tokenu do odwołania w Google.')
+    },
   })
   const refresh = useMutation({
     mutationFn: () => api.refreshCalendars(),
@@ -151,7 +168,8 @@ export function GoogleCalendarSettings() {
     const draft = drafts[calendar.calendarId] ?? draftFor(calendar)
     return draft.selected !== calendar.selected || draft.sharingMode !== calendar.sharingMode
   })
-  const busy = connect.isPending || refresh.isPending || save.isPending || sync.isPending
+  const busy = connect.isPending || disconnect.isPending || refresh.isPending || save.isPending || sync.isPending
+  const disconnectBusy = connect.isPending || disconnect.isPending || refresh.isPending || save.isPending
   const selectedCalendars = calendars.filter(calendar => calendar.selected && calendar.accessStatus === 'available')
 
   function updateChoice(calendar: GoogleCalendarChoice, update: Partial<GoogleCalendarChoiceDraft>) {
@@ -166,7 +184,7 @@ export function GoogleCalendarSettings() {
       <div className="panel-head">
         <div>
           <h2 className="panel-title" id="google-calendar-heading">Google Calendar</h2>
-          <p className="panel-kicker">Połącz konto i zdecyduj, które kalendarze będą dostępne w domu.</p>
+          <p className="panel-kicker">Zarządzaj połączeniem Google i zdecyduj, które kalendarze będą dostępne w domu.</p>
         </div>
         {settings.data?.connection?.status === 'connected' && <span className="google-calendar-status">Połączono</span>}
       </div>
@@ -185,8 +203,22 @@ export function GoogleCalendarSettings() {
           <p>{settings.data.connection.status === 'reconnect_required'
             ? 'Google wymaga ponownego połączenia konta, zanim będzie można zarządzać jego kalendarzami.'
             : 'Połączenie nie zostało ukończone. Możesz rozpocząć je ponownie.'}</p>
-          <button className="primary-button" type="button" disabled={busy} onClick={() => connect.mutate()}>{connect.isPending ? 'Przekierowuję do Google…' : 'Połącz ponownie konto'}</button>
+          <div className="google-calendar-toolbar-actions">
+            <button className="primary-button" type="button" disabled={busy} onClick={() => connect.mutate()}>{connect.isPending ? 'Przekierowuję do Google…' : 'Połącz ponownie konto'}</button>
+            <button className="button-quiet google-calendar-disconnect-button" type="button" disabled={disconnectBusy} onClick={() => setConfirmDisconnect(true)}>Odłącz konto Google</button>
+          </div>
         </div>}
+
+        {settings.data?.connection && confirmDisconnect && <section className="google-calendar-disconnect-confirmation" aria-labelledby="google-calendar-disconnect-heading">
+          <div>
+            <h3 id="google-calendar-disconnect-heading">Odłączyć konto Google?</h3>
+            <p>Family Hub usunie dane połączenia i wszystkie wydarzenia zaimportowane z tego konta. Nie usunie oryginalnych wydarzeń w Google. Spróbuje też odwołać dostęp Family Hub w Google.</p>
+          </div>
+          <div className="google-calendar-toolbar-actions">
+            <button className="button-quiet google-calendar-disconnect-confirm-button" type="button" disabled={disconnectBusy} onClick={() => disconnect.mutate()}>{disconnect.isPending ? 'Odłączam…' : 'Odłącz i usuń dane'}</button>
+            <button className="text-button" type="button" disabled={disconnectBusy} onClick={() => setConfirmDisconnect(false)}>Anuluj</button>
+          </div>
+        </section>}
 
         {settings.data?.connection?.status === 'connected' && <>
           <div className="google-calendar-toolbar">
@@ -196,6 +228,7 @@ export function GoogleCalendarSettings() {
               {selectedCalendars.length > 0 && <button className="primary-button" type="button" disabled={busy || hasChanges} onClick={() => sync.mutate()}>
                 {sync.isPending ? 'Importuję wydarzenia…' : selectedCalendars.some(calendar => calendar.syncStatus === 'running') ? 'Kontynuuj import' : selectedCalendars.some(calendar => calendar.lastSuccessfulSyncAt) ? 'Synchronizuj teraz' : 'Importuj wydarzenia'}
               </button>}
+              <button className="button-quiet google-calendar-disconnect-button" type="button" disabled={disconnectBusy} onClick={() => setConfirmDisconnect(true)}>Odłącz konto Google</button>
             </div>
           </div>
           {refresh.isError && <p className="error-message" role="alert">{refresh.error.message}</p>}
@@ -219,6 +252,7 @@ export function GoogleCalendarSettings() {
           </div>}
           <p className="google-calendar-sync-note">Import obejmuje wydarzenia trwające i przyszłe. Serie cykliczne są pomijane. Zmiany i usunięcia z Google można pobrać przyciskiem importu; samo otwarcie kalendarza nie uruchamia synchronizacji.</p>
         </>}
+        {disconnect.isError && <p className="error-message" role="alert">{disconnect.error.message}</p>}
         {connect.isError && <p className="error-message" role="alert">{connect.error.message}</p>}
       </div>
     </section>

@@ -92,10 +92,10 @@ state must stay in server-controlled storage.
   calendar's sync state and rebuild its current/future set using a new initial
   cutoff. Preserve imported past rows. Do not reset sync state for other
   calendars connected to the same account.
-- **Post-MVP:** add an in-app disconnect flow that stops future syncs,
-  deletes/revokes stored credentials, and removes that connection's imported
-  mirror rows. Do not delete the original Google events. The current MVP has
-  no in-app disconnect action.
+- The connection owner can disconnect in Calendar settings. This removes the
+  stored connection, calendar sync state, and imported mirror rows, clears the
+  client cache, and attempts Google refresh-token revocation. It never deletes
+  the original Google events.
 
 Google documents the read-only event scopes and incremental sync flow in its
 [Calendar API authorization guide](https://developers.google.com/workspace/calendar/api/auth)
@@ -140,8 +140,9 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
   test status have not been confirmed. The test-database pass does not verify
   production configuration.
 - Google stale-source status for household viewers remains to be implemented.
-- In-app Google disconnect and credential revocation are explicitly deferred
-  until after the MVP.
+- Google disconnect is implemented, including local data cleanup and a
+  best-effort credential-revocation attempt; manual verification of this new
+  flow remains outstanding.
 
 ## MVP scope
 
@@ -167,7 +168,6 @@ remain useful when no household member connects Google.
 Do not add yet:
 
 - projects, tags, subtasks, priorities, comments, or audit-history screens;
-- in-app Google disconnect and credential revocation (deferred until after MVP);
 - recurring tasks;
 - push notifications;
 - offline mutation queues or conflict resolution;
@@ -295,9 +295,9 @@ imported view.
 
 The Google mirror is read-only in Family Hub. The original Google event
 remains authoritative: edits and deletions in Google update or remove the
-corresponding Supabase mirror row during sync. **Post-MVP:** on disconnect,
-purge the mirrored rows from that connection so previously shared events are
-no longer visible to the household.
+corresponding Supabase mirror row during sync. On disconnect, Family Hub purges
+the mirrored rows from that connection so previously shared events are no
+longer visible to the household.
 
 ## Security rules
 
@@ -418,7 +418,7 @@ staging/production. The following bullets describe delivered behavior.
 ### 3. Optional read-only Google Calendar import — implemented and manually verified
 
 - Let a household member connect Google through OAuth and select calendars to
-  import. **Post-MVP:** let the connecting user disconnect from Family Hub.
+  import. Let the connecting user disconnect from Family Hub settings.
 - Let the owner set each selected calendar to Private or Household, defaulting
   to Private. Explain that sharing applies to all imported event details and
   retained history from that calendar; do not add per-event privacy controls.
@@ -441,8 +441,10 @@ staging/production. The following bullets describe delivered behavior.
 - Return normalized rows only. Do not write, edit, or delete events in Google.
 - Other household members must be able to see explicitly shared imported
   events without connecting Google themselves.
-- **Post-MVP:** on disconnect, stop sync, revoke/delete credentials, and purge
-  the imported event mirror for that connection.
+- On disconnect, remove the connection row and its sync metadata and purge the
+  imported event mirror. Attempt remote token revocation after local cleanup;
+  report when Google does not confirm it. A database cascade also removes
+  local integration data when its owner or household is deleted.
 
 ### 4. Today view — implemented and manually verified
 

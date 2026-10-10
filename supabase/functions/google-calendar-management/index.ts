@@ -2,11 +2,18 @@ import { authorizationUrl, validateOAuthRedirectConfiguration } from '../_shared
 import { base64Url, corsHeaders, errorResponse, handleOptions, HttpError, jsonResponse, requiredEnv, utf8Hex } from '../_shared/google-calendar/http.ts'
 import { refreshGoogleCalendarList } from '../_shared/google-calendar/google-api.ts'
 import { authenticatedUser, rpc, serviceClient } from '../_shared/google-calendar/supabase.ts'
-import { assertTokenEncryptionConfigured } from '../_shared/google-calendar/token-crypto.ts'
+import { assertTokenEncryptionConfigured, decryptRefreshToken } from '../_shared/google-calendar/token-crypto.ts'
 
 interface ConnectionStatus {
   connection: null | { id: string; status: string; connectedAt: string | null; grantedScopes: string[] }
   calendars: unknown[]
+}
+
+interface DisconnectedCredential {
+  disconnected: boolean
+  connectionId?: string
+  encryptedRefreshTokenHex?: string | null
+  tokenKeyVersion?: string | null
 }
 
 async function connectionStatus(ownerUserId: string): Promise<ConnectionStatus> {
@@ -25,6 +32,20 @@ async function beginAuthorization(ownerUserId: string): Promise<string> {
     p_state_expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
   })
   return authorizationUrl(state)
+}
+
+async function revokeGoogleRefreshToken(refreshToken: string): Promise<boolean> {
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/revoke', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: refreshToken }),
+      signal: AbortSignal.timeout(8_000),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
 }
 
 async function handleManagement(request: Request): Promise<Response> {
@@ -54,6 +75,29 @@ async function handleManagement(request: Request): Promise<Response> {
       await assertTokenEncryptionConfigured()
       const consentUrl = await beginAuthorization(user.id)
       return jsonResponse(request, { consentUrl })
+    }
+    case 'disconnect': {
+      const credential = await rpc<DisconnectedCredential>(client, 'google_calendar_disconnect', {
+        p_owner_user_id: user.id,
+      })
+      let revocation: 'revoked' | 'failed' | 'not_available' = 'not_available'
+      if (credential.disconnected && credential.connectionId
+          && credential.encryptedRefreshTokenHex && credential.tokenKeyVersion) {
+        try {
+          const refreshToken = await decryptRefreshToken(
+            credential.encryptedRefreshTokenHex,
+            credential.tokenKeyVersion,
+            credential.connectionId,
+          )
+          revocation = await revokeGoogleRefreshToken(refreshToken) ? 'revoked' : 'failed'
+        } catch {
+          // Local cleanup has completed; a missing historical encryption key must
+          // not leave the Google connection or its imported events in Family Hub.
+          revocation = 'failed'
+        }
+      }
+      const state: ConnectionStatus = { connection: null, calendars: [] }
+      return jsonResponse(request, { ...state, disconnected: credential.disconnected, revocation })
     }
     case 'refresh-calendars': {
       const status = await connectionStatus(user.id)

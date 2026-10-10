@@ -110,6 +110,13 @@ initial import does not backfill completed history; later syncs retain imported
 events after they pass. Each calendar's sharing setting applies to all its
 imported details.
 
+From Calendar settings, the connection owner can disconnect Google. Family Hub
+deletes the stored connection and all imported events, clears the local event
+cache, and attempts to revoke the refresh token with Google. If Google does not
+confirm revocation, local data is still removed and the settings page reports
+that remote revocation was not confirmed. Disconnecting does not change
+original events in Google.
+
 ## Calendar and annual dates
 
 **Kalendarz** displays a 14-day agenda with one-off events, annual occurrences,
@@ -218,8 +225,8 @@ Today shows today's tasks and visible calendar events, including annual
 occurrences and imported Google events. Google Calendar's OAuth,
 calendar-selection, user-triggered synchronization, and imported-event display
 code and migrations have been manually exercised on the test database,
-according to the user. Production OAuth credentials, function secrets,
-migrations, deployment, and a production smoke test remain environment-specific
-rollout work. Family Hub does not yet provide an in-app Google disconnect; that
-cleanup and token-revocation flow is deferred until after the MVP. The detailed
-roadmap is in [GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
+according to the user. Disconnect code and its migration are implemented but
+have not yet been manually verified there. Production OAuth credentials,
+function secrets, migrations, deployment, and a production smoke test remain
+environment-specific rollout work. The detailed roadmap is in
+[GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).

@@ -7,7 +7,7 @@ export function GoogleCalendarSettingsPage() {
     <PageHeader
       eyebrow="Kalendarz"
       title="Ustawienia kalendarza"
-      description="Połącz Google Calendar, wybierz importowane kalendarze i ustaw ich dostępność dla domowników."
+      description="Zarządzaj połączeniem Google Calendar, wybierz importowane kalendarze i ustaw ich dostępność dla domowników."
       action={<Link className="button-quiet calendar-settings-back" to="/calendar">Wróć do kalendarza</Link>}
     />
     <GoogleCalendarSettings />

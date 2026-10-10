@@ -170,6 +170,39 @@
   gap: 10px;
 }
 
+.google-calendar-disconnect-confirmation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e2c2bb;
+  border-radius: 10px;
+  background: #fbf5f3;
+}
+
+.google-calendar-disconnect-confirmation h3 {
+  margin: 0 0 5px;
+  color: var(--color-ink);
+  font-size: 14px;
+}
+
+.google-calendar-disconnect-confirmation p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.google-calendar-disconnect-confirm-button {
+  border-color: #d8aaa1;
+  color: #8a3c34;
+}
+
+.google-calendar-disconnect-confirm-button:hover:not(:disabled) {
+  background: #f4e5e1;
+  color: #762e27;
+}
+
 @media (max-width: 620px) {
   .google-calendar-content {
     padding-inline: 15px;

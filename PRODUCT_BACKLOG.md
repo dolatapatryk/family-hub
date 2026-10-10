@@ -14,7 +14,7 @@ Effort is relative: **S** = small, **M** = medium, **L** = large.
 | Feature | Scope | User value | Effort |
 | --- | --- | --- | --- |
 | Edit and remove tasks and shopping items — **Completed** | Edit task title, due date, and assignee; edit a shopping item's name, quantity, or store; remove an individual item. | Lets household members correct mistakes without recreating entries. Tasks can currently be completed and archived, while shopping items can be checked off or cleared in bulk. | S–M |
-| Disconnect Google Calendar | Stop future syncs, remove stored connection data and imported events, clear client caches, and attempt Google token revocation. | Gives users control over the connection and its data. This feature is already documented as deferred until after the MVP. | M |
+| Disconnect Google Calendar — **Completed** | Stop future syncs, remove stored connection data and imported events, clear client caches, and attempt Google token revocation. | Gives users control over the connection and its data. | M |
 | Show Google import freshness to household members | Display the last successful sync and a clear stale or reconnect-required status to viewers of shared imported events. | Helps household members understand whether imported events are up to date, even when they do not manage the integration. The implementation plan identifies this as a product gap. | S–M |
 
 ## P1 — Increase repeat use
@@ -36,9 +36,9 @@ Effort is relative: **S** = small, **M** = medium, **L** = large.
 
 ## Recommended sequence
 
-Start with **editing and removing entries**, **Google Calendar disconnect**, and
-**Google import freshness**. These improve everyday use and complete the control
-surface for the existing integration. Next, validate whether users need
+Editing and removing entries and **Google Calendar disconnect** are complete.
+Next, implement **Google import freshness** to show household members when
+shared imported events were last updated. Then validate whether users need
 **reminders** or **recurring tasks** more urgently.
 
 ## Separate release readiness work
