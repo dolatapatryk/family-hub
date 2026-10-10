@@ -221,6 +221,10 @@ Reset the local Supabase database when testing migration changes:
 - frontend/: React application, authentication, feature pages, and Supabase adapters.
 - supabase/: local Supabase configuration and migrations.
 
+The proposed Finance feature, normalized database schema, shared/private savings
+account rules, and Home Budget data migration sequence are documented in
+[BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md](BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md).
+
 Today shows today's tasks and visible calendar events, including annual
 occurrences and imported Google events. Google Calendar's OAuth,
 calendar-selection, user-triggered synchronization, and imported-event display
