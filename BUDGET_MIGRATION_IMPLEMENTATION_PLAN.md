@@ -1,7 +1,8 @@
 # Home Budget → Family Hub: schema and implementation plan
 
-Prepared: 2026-10-10. Status: proposal based on the checked-in source code.
-No application code, database migrations, or live data have been changed.
+Prepared: 2026-10-10. Status: phase-one frontend contract groundwork is in place.
+No database migrations or finance data have been changed. Database, import, and
+UI phases remain ahead.
 
 ## Recommended outcome
 
