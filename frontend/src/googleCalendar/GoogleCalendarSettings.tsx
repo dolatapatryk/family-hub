@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
 import { createGoogleCalendarApi } from './api'
+import { GoogleCalendarFreshness } from './GoogleCalendarFreshness'
 import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarFreshnessState, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
 
 const resultMessages: Record<string, string> = {
@@ -76,6 +77,17 @@ export function GoogleCalendarSettings() {
     queryFn: () => api.status(),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
+  })
+  const importedFreshness = useQuery({
+    queryKey: ['sharedGoogleCalendarFreshness', profile.household_id, profile.id],
+    queryFn: ({ signal }) => api.sharedFreshness(signal),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: query => {
+      const sources = query.state.data?.sources ?? []
+      if (sources.some(source => source.syncStatus === 'running')) return 5_000
+      return sources.length ? 30_000 : false
+    },
   })
 
   useEffect(() => {
@@ -199,6 +211,7 @@ export function GoogleCalendarSettings() {
 
       <div className="google-calendar-content">
         {notice && <p className="task-notice" role="status">{notice}</p>}
+        <GoogleCalendarFreshness sources={importedFreshness.data?.sources} pending={importedFreshness.isPending} error={importedFreshness.error} onRetry={() => void importedFreshness.refetch()} />
         {settings.isPending && <p className="panel-message" role="status">Sprawdzam połączenie Google…</p>}
         {settings.isError && <div className="google-calendar-error"><p className="error-message" role="alert">{settings.error.message}</p><button className="button-quiet" type="button" disabled={settings.isFetching} onClick={() => void settings.refetch()}>{settings.isFetching ? 'Ładuję…' : 'Spróbuj ponownie'}</button></div>}
 

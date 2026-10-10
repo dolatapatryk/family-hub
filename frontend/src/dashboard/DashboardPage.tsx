@@ -5,7 +5,6 @@ import { CalendarAgenda, CalendarQueryState } from '../calendar/AgendaComponents
 import { buildAgenda } from '../calendar/agenda'
 import { addDays, localDate } from '../calendar/dates'
 import { useCalendarSources } from '../calendar/queries'
-import { GoogleCalendarFreshness } from '../googleCalendar/GoogleCalendarFreshness'
 import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../auth/AuthGate'
 import { createHouseholdMembersApi } from '../household/api'
@@ -56,7 +55,7 @@ export function DashboardPage() {
   const bills = useQuery({ queryKey: ['bills', profile.household_id], queryFn: ({ signal }) => billsApi.list(signal) })
   const today = localDate()
   const todayRange = { start: today, end: addDays(today, 1) }
-  const { events, importedEvents, importedFreshness, annualDates, tasks } = useCalendarSources(todayRange)
+  const { events, importedEvents, annualDates, tasks } = useCalendarSources(todayRange)
   const todayAgenda = buildAgenda(events.data ?? [], importedEvents.data ?? [], annualDates.data ?? [], [], todayRange)
   const [formOpen, setFormOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -141,7 +140,6 @@ export function DashboardPage() {
           </div>
           <CalendarQueryState label="wydarzenia" pending={events.isPending} error={events.error} onRetry={() => void events.refetch()} />
           <CalendarQueryState label="wydarzenia Google" pending={importedEvents.isPending} error={importedEvents.error} onRetry={() => void importedEvents.refetch()} />
-          <GoogleCalendarFreshness sources={importedFreshness.data?.sources} pending={importedFreshness.isPending} error={importedFreshness.error} onRetry={() => void importedFreshness.refetch()} />
           <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
           {(todayAgenda.length > 0 || (events.isSuccess && importedEvents.isSuccess && annualDates.isSuccess)) && <CalendarAgenda entries={todayAgenda} empty="Na dziś nie ma wydarzeń." />}
           <div className="panel-foot"><span>Dzisiejsze plany</span><Link className="link-button" to="/calendar">Otwórz kalendarz <span className="arrow" aria-hidden="true">›</span></Link></div>
