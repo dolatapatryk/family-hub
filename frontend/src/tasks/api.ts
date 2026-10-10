@@ -9,7 +9,7 @@ interface TaskRow {
   completed: boolean
   assigned_to: string | null
   recurring_rule_id: string | null
-  recurring_task_rules?: { active: boolean } | null
+  recurring_task_rules?: { active: boolean } | { active: boolean }[] | null
   created_at: string
 }
 
@@ -86,6 +86,7 @@ async function resolve<T>(
 }
 
 function toTask(row: TaskRow): Task {
+  const recurringRule = Array.isArray(row.recurring_task_rules) ? row.recurring_task_rules[0] : row.recurring_task_rules
   return {
     id: row.id,
     title: row.title,
@@ -93,7 +94,7 @@ function toTask(row: TaskRow): Task {
     completed: row.completed,
     assignedTo: row.assigned_to,
     recurringRuleId: row.recurring_rule_id,
-    recurringActive: row.recurring_task_rules?.active ?? false,
+    recurringActive: recurringRule?.active ?? false,
     createdAt: row.created_at,
   }
 }

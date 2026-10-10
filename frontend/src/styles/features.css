@@ -773,27 +773,6 @@
   min-height: 42px;
 }
 
-.shopping-form-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 19px 0;
-}
-
-.shopping-form-foot .task-meta,
-.shopping-form-foot .error-message {
-  margin: 0;
-}
-
-.shopping-notice {
-  min-height: 1.5em;
-  margin: 12px 0 17px;
-  color: var(--color-blue);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
 .shopping-store-groups {
   display: grid;
   gap: 14px;
@@ -1059,9 +1038,4 @@
     padding-inline: 15px;
   }
 
-  .shopping-form-foot {
-    align-items: flex-start;
-    flex-direction: column;
-    margin-inline: 15px;
-  }
 }

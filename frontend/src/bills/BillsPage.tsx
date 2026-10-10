@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { createBillsApi } from './api'
 import { amountInputToMinorUnits, formatBillAmount, formatBillDate, formatBillTimestamp, localDate, minorUnitsToAmountInput, type Bill } from './bills'
 import type { SaveBillInput } from './api'
@@ -15,21 +16,22 @@ const emptyForm = (): BillFormValues => ({ title: '', nextDueOn: localDate(), in
 
 export function BillsPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const api = createBillsApi(profile.household_id)
   const billKey = ['bills', profile.household_id]
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [values, setValues] = useState<BillFormValues>(emptyForm)
-  const [notice, setNotice] = useState('')
   const bills = useQuery({ queryKey: billKey, queryFn: ({ signal }) => api.list(signal) })
   const save = useMutation({
     mutationFn: ({ id, input }: { id: string | null; input: SaveBillInput }) => id ? api.update(id, input) : api.create(input),
     onSuccess: async (_saved, variables) => {
-      setNotice(variables.id ? 'Rachunek został zaktualizowany.' : 'Rachunek został dodany.')
+      showToast({ kind: 'success', title: variables.id ? 'Zapisano rachunek' : 'Dodano rachunek' })
       resetForm()
       await client.invalidateQueries({ queryKey: billKey })
     },
+    onError: (error, variables) => showToast({ kind: 'error', title: 'Nie udało się zapisać rachunku', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => save.mutate(variables) } }),
   })
 
   function resetForm() {
@@ -40,7 +42,6 @@ export function BillsPage() {
 
   function openCreateForm() {
     save.reset()
-    setNotice('')
     setEditingId(null)
     setValues(emptyForm())
     setFormOpen(open => !open)
@@ -48,7 +49,6 @@ export function BillsPage() {
 
   function editBill(bill: Bill) {
     save.reset()
-    setNotice('')
     setEditingId(bill.id)
     setValues({
       title: bill.title,
@@ -88,7 +88,6 @@ export function BillsPage() {
       action={<button className="primary-button" type="button" aria-expanded={formOpen} aria-controls="bill-form" onClick={openCreateForm}><PlusIcon /><span>{formOpen ? 'Zamknij formularz' : 'Dodaj rachunek'}</span></button>}
     />
 
-    {notice && <p role="status" className="task-notice">{notice}</p>}
     <form id="bill-form" className="panel bill-form" hidden={!formOpen} onSubmit={submit}>
       <div className="panel-head"><div><h2 className="panel-title">{editingId ? 'Edytuj rachunek' : 'Dodaj rachunek'}</h2><p className="panel-kicker">Wybierz cykl miesięczny lub dwumiesięczny. Następny termin możesz zmienić, gdy otrzymasz fakturę.</p></div></div>
       <fieldset disabled={save.isPending}>
@@ -100,7 +99,6 @@ export function BillsPage() {
           <label>Waluta<input required maxLength={3} minLength={3} pattern="[A-Za-z]{3}" value={values.currency} onChange={event => setValues(current => ({ ...current, currency: event.target.value }))} aria-describedby="bill-currency-help" /></label>
         </div>
         <p className="bill-form-help" id="bill-currency-help">Podaj trzyznakowy kod waluty, np. PLN lub EUR. Szacunek może się zmieniać; faktyczna kwota jest zapisywana osobno przy każdej płatności.</p>
-        {save.isError && <p className="error-message" role="alert">Nie udało się zapisać rachunku: {save.error.message}</p>}
         <div className="form-actions"><button className="primary-button" type="submit" disabled={!values.title.trim() || !values.nextDueOn || !/^[a-zA-Z]{3}$/.test(values.currency.trim()) || (values.expectedAmount !== '' && amountInputToMinorUnits(values.expectedAmount) === null)}>{save.isPending ? 'Zapisuję…' : editingId ? 'Zapisz zmiany' : 'Dodaj rachunek'}</button><button className="button-quiet" type="button" disabled={save.isPending} onClick={resetForm}>Anuluj</button></div>
       </fieldset>
     </form>
@@ -128,6 +126,7 @@ function BillItem({ bill, api, householdId, billKey, onEdit }: {
   onEdit: (bill: Bill) => void
 }) {
   const client = useQueryClient()
+  const showToast = useToast()
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [skipConfirmationOpen, setSkipConfirmationOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -148,23 +147,29 @@ function BillItem({ bill, api, householdId, billKey, onEdit }: {
     onSuccess: async () => {
       setPaymentOpen(false)
       setPaidOn(localDate())
+      showToast({ kind: 'success', title: 'Zapisano płatność', description: bill.title })
       await client.invalidateQueries({ queryKey: billKey })
       await client.invalidateQueries({ queryKey: historyKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się zapisać płatności', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => payment.mutate() } }),
   })
   const skip = useMutation({
     mutationFn: () => api.skipCycle(bill.id, bill.nextDueOn),
     onSuccess: async () => {
       setSkipConfirmationOpen(false)
+      showToast({ kind: 'success', title: 'Pominięto cykl', description: bill.title })
       await client.invalidateQueries({ queryKey: billKey })
       await client.invalidateQueries({ queryKey: historyKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się pominąć cyklu', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => skip.mutate() } }),
   })
   const activeChange = useMutation({
     mutationFn: () => api.setActive(bill.id, !bill.active),
     onSuccess: async () => {
+      showToast({ kind: 'success', title: bill.active ? 'Wstrzymano rachunek' : 'Wznowiono rachunek', description: bill.title })
       await client.invalidateQueries({ queryKey: billKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się zmienić statusu rachunku', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => activeChange.mutate() } }),
   })
   const today = localDate()
   const isOverdue = bill.nextDueOn < today
@@ -216,19 +221,16 @@ function BillItem({ bill, api, householdId, billKey, onEdit }: {
         <label>Data zapłaty<input type="date" required value={paidOn} disabled={payment.isPending} onChange={event => setPaidOn(event.target.value)} /></label>
         <label>Faktycznie zapłacona kwota ({bill.currency})<input type="number" required min="0.01" max="90071992547409.91" step="0.01" value={amount} disabled={payment.isPending} onChange={event => setAmount(event.target.value)} /></label>
       </div>
-      {payment.isError && <p className="error-message" role="alert">Nie udało się zapisać płatności: {payment.error.message}</p>}
       <div className="form-actions"><button className="primary-button" type="submit" disabled={!paidOn || amountInputToMinorUnits(amount) === null || payment.isPending}>{payment.isPending ? 'Zapisuję…' : 'Zapisz płatność'}</button><button className="button-quiet" type="button" disabled={payment.isPending} onClick={() => setPaymentOpen(false)}>Anuluj</button></div>
     </form>}
 
     {skipConfirmationOpen && <div id={`bill-skip-confirm-${bill.id}`} className="bill-skip-confirm" role="group" aria-label="Potwierdzenie pominięcia cyklu">
       <p>Pominąć cykl z terminem {formatBillDate(bill.nextDueOn)}? Nie zostanie oznaczony jako opłacony. Następny termin to {formatBillDate(nextBillDate(bill))}.</p>
-      {skip.isError && <p className="error-message" role="alert">Nie udało się pominąć cyklu: {skip.error.message}</p>}
       <div className="form-actions"><button className="primary-button" type="button" disabled={skip.isPending} onClick={() => skip.mutate()}>{skip.isPending ? 'Pomijam…' : 'Potwierdź pominięcie'}</button><button className="button-quiet" type="button" disabled={skip.isPending} onClick={() => setSkipConfirmationOpen(false)}>Anuluj</button></div>
     </div>}
 
     <div className="bill-history-toggle">
       <button className="link-button" type="button" aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}>{historyOpen ? 'Ukryj historię cykli' : 'Pokaż historię cykli'} <span className="arrow" aria-hidden="true">{historyOpen ? '⌃' : '⌄'}</span></button>
-      {activeChange.isError && <p className="error-message" role="alert">Nie udało się zmienić statusu rachunku: {activeChange.error.message}</p>}
     </div>
     {historyOpen && <div className="bill-history">
       {history.isPending && <p className="panel-message" role="status">Ładuję historię…</p>}

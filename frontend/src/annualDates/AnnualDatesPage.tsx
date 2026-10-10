@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { CalendarQueryState } from '../calendar/AgendaComponents'
 import { refreshAnnualDateCaches } from '../calendar/cache'
 import { formatDate, localDate } from '../calendar/dates'
@@ -13,27 +14,29 @@ import { createAnnualDatesApi } from './api'
 
 export function AnnualDatesPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const api = createAnnualDatesApi(profile.household_id, profile.id)
   const items = useQuery({ queryKey: annualDatesKey(profile.household_id, profile.id), queryFn: ({ signal }) => api.list(signal) })
   const [form, setForm] = useState<{ item: AnnualDate | null } | null>(null)
   const [deleting, setDeleting] = useState<AnnualDate | null>(null)
-  const [notice, setNotice] = useState('')
   const save = useMutation({
     mutationFn: (input: AnnualDateInput) => form?.item ? api.update(form.item.id, input) : api.create(input),
     onSuccess: async saved => {
       setForm(null)
-      setNotice('Ważna data zapisana.')
+      showToast({ kind: 'success', title: form?.item ? 'Zapisano ważną datę' : 'Dodano ważną datę', description: saved.title })
       await refreshAnnualDateCaches(client, profile.household_id, profile.id, saved)
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się zapisać ważnej daty', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => save.mutate(input) } }),
   })
   const remove = useMutation({
     mutationFn: (id: string) => api.remove(id),
     onSuccess: async id => {
       setDeleting(null)
-      setNotice('Ważna data i jej coroczne wystąpienia zostały usunięte.')
+      showToast({ kind: 'success', title: 'Usunięto ważną datę i jej wystąpienia' })
       await refreshAnnualDateCaches(client, profile.household_id, profile.id, id)
     },
+    onError: (error, id) => showToast({ kind: 'error', title: 'Nie udało się usunąć ważnej daty', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => remove.mutate(id) } }),
   })
   const busy = save.isPending || remove.isPending
   const today = localDate()
@@ -50,7 +53,6 @@ export function AnnualDatesPage() {
   function openForm(item: AnnualDate | null) {
     save.reset()
     remove.reset()
-    setNotice('')
     setDeleting(null)
     setForm({ item })
   }
@@ -58,12 +60,10 @@ export function AnnualDatesPage() {
   return <>
     <PageHeader eyebrow="Co roku razem" title="Ważne daty" description="Urodziny, rocznice, imieniny i inne coroczne daty."
       action={<AddItemButton label="Dodaj ważną datę" expanded={!!form} disabled={busy} onClick={() => openForm(null)} />} />
-    {notice && <p className="task-notice" role="status">{notice}</p>}
-    {form && <AnnualDateForm key={form.item?.id ?? 'new'} item={form.item} userId={profile.id} pending={save.isPending} error={save.error?.message} onSave={input => save.mutate(input)} onCancel={() => setForm(null)} />}
+    {form && <AnnualDateForm key={form.item?.id ?? 'new'} item={form.item} userId={profile.id} pending={save.isPending} onSave={input => save.mutate(input)} onCancel={() => setForm(null)} />}
     {deleting && <section className="panel empty-panel calendar-delete" aria-label="Potwierdź usunięcie ważnej daty">
       <p>Usunąć „{deleting.title}” i wszystkie jej coroczne wystąpienia?</p>
       <div className="form-actions"><button className="button-quiet" type="button" disabled={busy} onClick={() => remove.mutate(deleting.id)}>{remove.isPending ? 'Usuwam…' : 'Usuń ważną datę'}</button><button className="text-button" type="button" disabled={busy} onClick={() => setDeleting(null)}>Anuluj</button></div>
-      {remove.isError && <p className="error-message" role="alert">{remove.error.message}</p>}
     </section>}
     <section className="panel" aria-labelledby="annual-dates-title">
       <div className="panel-head"><div><h2 className="panel-title" id="annual-dates-title">Coroczne daty</h2><p className="panel-kicker">Najbliższe wystąpienia. Prywatne daty widzisz tylko Ty.</p></div></div>
@@ -75,7 +75,7 @@ export function AnnualDatesPage() {
             {next && <p className="task-meta">Najbliższe: {formatDate(next.date)}{next.count !== null ? ` · ${next.count}. ${item.kind === 'birthday' ? 'urodziny' : 'rocznica'}` : ''}</p>}
             {item.description && <p className="event-description">{item.description}</p>}
           </div>
-          <div className="agenda-actions"><button className="text-button" type="button" disabled={busy} onClick={() => openForm(item)} aria-label={`Edytuj: ${item.title}`}>Edytuj</button><button className="text-button" type="button" disabled={busy} onClick={() => { setForm(null); remove.reset(); setNotice(''); setDeleting(item) }} aria-label={`Usuń: ${item.title}`}>Usuń</button></div>
+          <div className="agenda-actions"><button className="text-button" type="button" disabled={busy} onClick={() => openForm(item)} aria-label={`Edytuj: ${item.title}`}>Edytuj</button><button className="text-button" type="button" disabled={busy} onClick={() => { setForm(null); remove.reset(); setDeleting(item) }} aria-label={`Usuń: ${item.title}`}>Usuń</button></div>
         </li>)}
       </ul> : <p className="panel-message">Brak ważnych dat. Dodaj urodziny, rocznicę lub inną coroczną datę.</p>)}
     </section>

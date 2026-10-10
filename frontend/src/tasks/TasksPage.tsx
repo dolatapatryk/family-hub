@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { createHouseholdMembersApi, type HouseholdMember } from '../household/api'
 import { createTasksApi, type CreateRecurringTaskInput, type CreateTaskInput } from './api'
 import { TaskItem } from './TaskItem'
@@ -36,6 +37,7 @@ function emptySectionMessage(heading: string) {
 
 export function TasksPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const api = createTasksApi(profile.household_id, profile.id)
   const queryKey = ['tasks', profile.household_id]
@@ -44,7 +46,6 @@ export function TasksPage() {
   const [dueDate, setDueDate] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
   const [cadence, setCadence] = useState<RecurrenceCadence | ''>('')
-  const [notice, setNotice] = useState('')
   const addButton = useRef<HTMLButtonElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
   const householdMembersApi = createHouseholdMembersApi(profile.household_id)
@@ -55,7 +56,7 @@ export function TasksPage() {
   const tasks = useQuery({ queryKey, queryFn: ({ signal }) => api.list(signal) })
   const recurringQueryKey = ['recurringTasks', profile.household_id]
   const recurringTasks = useQuery({ queryKey: recurringQueryKey, queryFn: ({ signal }) => api.listRecurring(signal) })
-  const create = useMutation({
+  const create = useMutation<Task | string, Error, AddTaskInput>({
     mutationFn: (input: AddTaskInput) => input.cadence
       ? api.createRecurring({
         title: input.title,
@@ -65,9 +66,11 @@ export function TasksPage() {
       } satisfies CreateRecurringTaskInput)
       : api.create(input),
     onSuccess: async (_saved, input) => {
-      setNotice(input.cadence
-        ? 'Stałe zadanie dodane. Następny termin pojawi się po ukończeniu lub pominięciu bieżącego.'
-        : 'Zadanie dodane.')
+      showToast({
+        kind: 'success',
+        title: input.cadence ? 'Dodano stałe zadanie' : 'Dodano zadanie',
+        description: input.cadence ? 'Następny termin pojawi się po ukończeniu lub pominięciu bieżącego.' : input.title,
+      })
       setTitle('')
       setDueDate('')
       setAssignedTo('')
@@ -77,6 +80,7 @@ export function TasksPage() {
       await client.invalidateQueries({ queryKey })
       await client.invalidateQueries({ queryKey: recurringQueryKey })
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się dodać zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => create.mutate(input) } }),
   })
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -104,7 +108,7 @@ export function TasksPage() {
         eyebrow="Wspólny plan"
         title="Zadania"
         description="Zbierz drobne sprawy w jednym, wspólnym planie."
-        action={<button className="primary-button" type="button" ref={addButton} aria-label={formOpen ? 'Anuluj dodawanie zadania' : 'Dodaj zadanie'} aria-expanded={formOpen} aria-controls="add-task-form" onClick={() => { if (!formOpen) { create.reset(); setNotice('') } setFormOpen(open => !open) }}>
+        action={<button className="primary-button" type="button" ref={addButton} aria-label={formOpen ? 'Anuluj dodawanie zadania' : 'Dodaj zadanie'} aria-expanded={formOpen} aria-controls="add-task-form" onClick={() => { if (!formOpen) create.reset(); setFormOpen(open => !open) }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{formOpen ? <path d="m18 6-12 12M6 6l12 12" /> : <path d="M12 5v14M5 12h14" />}</svg>
           <span>{formOpen ? 'Anuluj' : 'Dodaj zadanie'}</span>
         </button>}
@@ -112,7 +116,6 @@ export function TasksPage() {
       {tasks.data && <div className="tasks-toolbar">
         <span className="small-muted">{openCount} otwartych · {tasks.data.length - openCount} ukończonych</span>
       </div>}
-      {notice && <p role="status" className="task-notice">{notice}</p>}
       <form id="add-task-form" className="panel task-form" hidden={!formOpen} onSubmit={submit}>
         <div className="panel-head"><div><h2 className="panel-title">Dodaj zadanie</h2><p className="panel-kicker">Dodaj termin lub przypisz je do domownika.</p></div></div>
         <fieldset disabled={create.isPending}>
@@ -126,7 +129,6 @@ export function TasksPage() {
           {cadence && <p className="task-repeat-note">Następny termin utworzy się po ukończeniu lub pominięciu tego wystąpienia. Rytm liczy się od poprzedniego terminu; dla końca miesiąca data dopasuje się do ostatniego dnia.</p>}
           {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
           {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}
-          {create.isError && <p className="error-message" role="alert">{create.error.message}</p>}
           <div className="form-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate)}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" onClick={() => { setFormOpen(false); addButton.current?.focus() }}>Anuluj</button></div>
         </fieldset>
       </form>
@@ -154,14 +156,17 @@ function RecurringTaskRuleItem({ rule, api, taskQueryKey, rulesQueryKey, members
   members: HouseholdMember[] | undefined
 }) {
   const client = useQueryClient()
+  const showToast = useToast()
   const [confirming, setConfirming] = useState(false)
   const stop = useMutation({
     mutationFn: () => api.stopRecurring(rule.id),
     onSuccess: async () => {
       setConfirming(false)
+      showToast({ kind: 'success', title: 'Zatrzymano stałe zadanie', description: rule.title })
       await client.invalidateQueries({ queryKey: taskQueryKey })
       await client.invalidateQueries({ queryKey: rulesQueryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się zatrzymać stałego zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => stop.mutate() } }),
   })
 
   return <li className="recurring-item">
@@ -176,7 +181,6 @@ function RecurringTaskRuleItem({ rule, api, taskQueryKey, rulesQueryKey, members
         <button className="button-quiet" type="button" disabled={stop.isPending} onClick={() => stop.mutate()}>{stop.isPending ? 'Zatrzymuję…' : 'Zatrzymaj serię'}</button>
         <button className="text-button" type="button" disabled={stop.isPending} onClick={() => setConfirming(false)}>Anuluj</button>
       </div>}
-    {stop.isError && <p className="error-message" role="alert">Nie udało się zatrzymać zadania cyklicznego: {stop.error.message}</p>}
   </li>
 }
 

@@ -9,6 +9,7 @@ import { HouseholdPage } from './household/HouseholdPage'
 import { AppShell } from './layout/AppShell'
 import { ShoppingPage } from './shopping/ShoppingPage'
 import { TasksPage } from './tasks/TasksPage'
+import { ToastProvider } from './components/ToastProvider'
 
 function CalendarRoute() {
   const location = useLocation()
@@ -42,5 +43,5 @@ function AuthenticatedApp() {
 }
 
 export function App() {
-  return <AuthGate><AuthenticatedApp /></AuthGate>
+  return <AuthGate><ToastProvider><AuthenticatedApp /></ToastProvider></AuthGate>
 }

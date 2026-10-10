@@ -6,6 +6,7 @@ import { buildAgenda } from '../calendar/agenda'
 import { addDays, localDate } from '../calendar/dates'
 import { useCalendarSources } from '../calendar/queries'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { useAuth } from '../auth/AuthGate'
 import { createHouseholdMembersApi } from '../household/api'
 import { createShoppingApi } from '../shopping/api'
@@ -40,6 +41,7 @@ function PlusIcon() {
 
 export function DashboardPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const tasksApi = createTasksApi(profile.household_id, profile.id)
   const shoppingApi = createShoppingApi(profile.household_id, profile.id)
@@ -62,11 +64,13 @@ export function DashboardPage() {
   const input = useRef<HTMLInputElement>(null)
   const addTask = useMutation({
     mutationFn: (taskTitle: string) => tasksApi.create({ title: taskTitle, dueDate: null }),
-    onSuccess: async () => {
+    onSuccess: async (_saved, taskTitle) => {
       setTitle('')
       setFormOpen(false)
+      showToast({ kind: 'success', title: 'Dodano zadanie', description: taskTitle })
       await client.invalidateQueries({ queryKey: taskKey })
     },
+    onError: (error, taskTitle) => showToast({ kind: 'error', title: 'Nie udało się dodać zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => addTask.mutate(taskTitle) } }),
   })
 
   useEffect(() => {
@@ -108,7 +112,6 @@ export function DashboardPage() {
         <input ref={input} type="text" maxLength={90} required value={title} onChange={event => setTitle(event.target.value)} placeholder="Co trzeba zrobić?" aria-label="Treść nowego zadania" disabled={addTask.isPending} />
         <button className="primary-button" type="submit" disabled={!title.trim() || addTask.isPending}>{addTask.isPending ? 'Dodaję…' : 'Dodaj'}</button>
         <button className="text-button" type="button" onClick={() => { setFormOpen(false); setTitle('') }}>Anuluj</button>
-        {addTask.isError && <p className="error-message form-error" role="alert">{addTask.error.message}</p>}
       </form>
 
       <section className="metrics" aria-label="Podsumowanie">

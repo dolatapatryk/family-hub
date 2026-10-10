@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { CalendarAgenda, CalendarQueryState } from './AgendaComponents'
 import { buildAgenda } from './agenda'
 import { createCalendarEventsApi } from './api'
@@ -15,6 +16,7 @@ import type { CalendarEvent, EventInput } from './types'
 
 export function CalendarPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const api = createCalendarEventsApi(profile.household_id, profile.id)
   const [start, setStart] = useState(() => localDate())
@@ -22,22 +24,23 @@ export function CalendarPage() {
   const { events, importedEvents, annualDates, tasks } = useCalendarSources(range)
   const [form, setForm] = useState<{ item: CalendarEvent | null } | null>(null)
   const [deleting, setDeleting] = useState<CalendarEvent | null>(null)
-  const [notice, setNotice] = useState('')
   const save = useMutation({
     mutationFn: (input: EventInput) => form?.item ? api.update(form.item.id, input) : api.create(input),
     onSuccess: async saved => {
       setForm(null)
-      setNotice('Wydarzenie zapisane.')
+      showToast({ kind: 'success', title: form?.item ? 'Zapisano wydarzenie' : 'Dodano wydarzenie', description: saved.title })
       await refreshEventCaches(client, profile.household_id, profile.id, saved)
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się zapisać wydarzenia', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => save.mutate(input) } }),
   })
   const remove = useMutation({
     mutationFn: (id: string) => api.remove(id),
     onSuccess: async id => {
       setDeleting(null)
-      setNotice('Wydarzenie usunięte.')
+      showToast({ kind: 'success', title: 'Usunięto wydarzenie' })
       await refreshEventCaches(client, profile.household_id, profile.id, id)
     },
+    onError: (error, id) => showToast({ kind: 'error', title: 'Nie udało się usunąć wydarzenia', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => remove.mutate(id) } }),
   })
   const busy = save.isPending || remove.isPending
   const entries = buildAgenda(events.data ?? [], importedEvents.data ?? [], annualDates.data ?? [], tasks.data ?? [], range)
@@ -46,7 +49,6 @@ export function CalendarPage() {
   function openForm(item: CalendarEvent | null) {
     save.reset()
     remove.reset()
-    setNotice('')
     setDeleting(null)
     setForm({ item })
   }
@@ -62,13 +64,11 @@ export function CalendarPage() {
           </svg>
         </Link>
       </div>} />
-    {notice && <p className="task-notice" role="status">{notice}</p>}
     {form && <EventForm key={form.item?.id ?? 'new'} item={form.item} defaultDate={start} userId={profile.id} pending={save.isPending}
-      error={save.error?.message} onSave={input => save.mutate(input)} onCancel={() => setForm(null)} />}
+      onSave={input => save.mutate(input)} onCancel={() => setForm(null)} />}
     {deleting && <section className="panel empty-panel calendar-delete" aria-label="Potwierdź usunięcie wydarzenia">
       <p>Usunąć wydarzenie „{deleting.title}”?</p>
       <div className="form-actions"><button className="button-quiet" type="button" disabled={busy} onClick={() => remove.mutate(deleting.id)}>{remove.isPending ? 'Usuwam…' : 'Usuń wydarzenie'}</button><button className="text-button" type="button" disabled={busy} onClick={() => setDeleting(null)}>Anuluj</button></div>
-      {remove.isError && <p className="error-message" role="alert">{remove.error.message}</p>}
     </section>}
     <section className="panel page-panel" aria-labelledby="calendar-panel-title">
       <div className="panel-head calendar-range-head">
@@ -84,7 +84,7 @@ export function CalendarPage() {
       <CalendarQueryState label="wydarzenia Google" pending={importedEvents.isPending} error={importedEvents.error} onRetry={() => void importedEvents.refetch()} />
       <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
       <CalendarQueryState label="zadania" pending={tasks.isPending} error={tasks.error} onRetry={() => void tasks.refetch()} />
-      {showAgenda && <CalendarAgenda entries={entries} busy={busy} onEdit={openForm} onDelete={item => { setForm(null); remove.reset(); setNotice(''); setDeleting(item) }} />}
+      {showAgenda && <CalendarAgenda entries={entries} busy={busy} onEdit={openForm} onDelete={item => { setForm(null); remove.reset(); setDeleting(item) }} />}
       <div className="panel-foot"><span>Daty coroczne wyświetlane są tylko do odczytu.</span><Link to="/annual-dates">Ważne daty</Link></div>
     </section>
   </>

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useToast } from '../components/ToastProvider'
 import type { HouseholdMember } from '../household/api'
 import { formatDueDate, type Task } from './tasks'
 import type { CreateTasksApi, UpdateTaskInput } from './types'
@@ -13,6 +14,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
   members?: HouseholdMember[]
 }) {
   const client = useQueryClient()
+  const showToast = useToast()
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [title, setTitle] = useState(task.title)
@@ -23,29 +25,49 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
       ? api.archive(task.id)
       : api.setCompleted(task.id, action === 'complete'),
     onSuccess: async (saved, action) => {
+      const title = action === 'complete'
+        ? 'Zadanie ukończone'
+        : action === 'reopen'
+          ? 'Przywrócono zadanie'
+          : task.recurringActive ? 'Pominięto termin' : 'Zadanie zarchiwizowane'
+      showToast({ kind: 'success', title, description: saved.title })
       await client.cancelQueries({ queryKey })
       client.setQueryData<Task[]>(queryKey, current => action === 'archive'
         ? current?.filter(item => item.id !== saved.id)
         : current?.map(item => item.id === saved.id ? saved : item))
       await client.invalidateQueries({ queryKey })
     },
+    onError: (error, action) => showToast({
+      kind: 'error',
+      title: action === 'complete'
+        ? 'Nie udało się ukończyć zadania'
+        : action === 'reopen'
+          ? 'Nie udało się przywrócić zadania'
+          : task.recurringActive ? 'Nie udało się pominąć terminu' : 'Nie udało się zarchiwizować zadania',
+      description: error.message,
+      action: { label: 'Spróbuj ponownie', onClick: () => mutation.mutate(action) },
+    }),
   })
   const update = useMutation({
     mutationFn: (input: UpdateTaskInput) => api.update(task.id, input),
     onSuccess: async saved => {
       setEditing(false)
+      showToast({ kind: 'success', title: 'Zapisano zadanie', description: saved.title })
       await client.cancelQueries({ queryKey })
       client.setQueryData<Task[]>(queryKey, current => current?.map(item => item.id === saved.id ? saved : item))
       await client.invalidateQueries({ queryKey })
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się zapisać zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => update.mutate(input) } }),
   })
   const remove = useMutation({
     mutationFn: () => api.remove(task.id),
     onSuccess: async removedId => {
+      showToast({ kind: 'success', title: 'Usunięto zadanie', description: task.title })
       await client.cancelQueries({ queryKey })
       client.setQueryData<Task[]>(queryKey, current => current?.filter(item => item.id !== removedId))
       await client.invalidateQueries({ queryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się usunąć zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => remove.mutate() } }),
   })
   const busy = mutation.isPending || update.isPending || remove.isPending
 
@@ -96,7 +118,6 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
             {members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
           </select></label>
         </div>
-        {update.isError && <p className="error-message" role="alert">Nie udało się zapisać zadania: {update.error.message}</p>}
         <div className="form-actions">
           <button className="primary-button" type="submit" disabled={!title.trim() || update.isPending}>{update.isPending ? 'Zapisuję…' : 'Zapisz'}</button>
           <button className="text-button" type="button" disabled={update.isPending} onClick={() => setEditing(false)}>Anuluj</button>
@@ -108,10 +129,8 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
           <button className="button-quiet" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? 'Usuwam…' : 'Usuń zadanie'}</button>
           <button className="text-button" type="button" disabled={remove.isPending} onClick={() => setConfirmingDelete(false)}>Anuluj</button>
         </div>
-        {remove.isError && <p className="error-message" role="alert">Nie udało się usunąć zadania: {remove.error.message}</p>}
       </div>}
       {mutation.isPending && <p className="task-feedback" role="status">Zapisuję…</p>}
-      {mutation.isError && <p className="error-message" role="alert">{mutation.error.message}</p>}
     </li>
   )
 }

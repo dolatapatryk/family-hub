@@ -4,8 +4,8 @@ import { ItemFields } from '../calendar/ItemFields'
 import type { Visibility } from '../calendar/types'
 import { kindLabels, type AnnualDate, type AnnualDateInput } from './annualDates'
 
-export function AnnualDateForm({ item, userId, pending, error, onSave, onCancel }: {
-  item: AnnualDate | null; userId: string; pending: boolean; error: string | undefined
+export function AnnualDateForm({ item, userId, pending, onSave, onCancel }: {
+  item: AnnualDate | null; userId: string; pending: boolean
   onSave: (input: AnnualDateInput) => void; onCancel: () => void
 }) {
   const [title, setTitle] = useState(item?.title ?? '')
@@ -38,7 +38,7 @@ export function AnnualDateForm({ item, userId, pending, error, onSave, onCancel 
         <label>Dzień<select value={day} onChange={event => setDay(Number(event.target.value))}>{Array.from({ length: daysInMonth(month) }, (_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}</select></label>
       </div> : <label>{kind === 'birthday' ? 'Data urodzenia' : 'Data początkowa rocznicy'}<input type="date" required min="0001-01-01" max="9999-12-31" value={initialDate} onChange={event => setInitialDate(event.target.value)} /></label>}
       <p className="task-meta">{kind === 'other' ? 'Bez roku i bez numeru rocznicy.' : 'Pierwsza rocznica pojawi się rok po dacie początkowej.'} 29 lutego przypada na 28 lutego w latach nieprzestępnych.</p>
-      {(validation || error) && <p className="error-message" role="alert">{validation || error}</p>}
+      {validation && <p className="error-message" role="alert">{validation}</p>}
       <div className="form-actions"><button className="primary-button" type="submit">{pending ? 'Zapisuję…' : 'Zapisz datę'}</button><button className="text-button" type="button" onClick={onCancel}>Anuluj</button></div>
     </fieldset>
   </form>
