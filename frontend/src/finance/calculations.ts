@@ -3,8 +3,11 @@ import type {
   FinanceBudgetType,
   FinanceMoney,
   FinanceMonthSummary,
+  FinancePlannedSavingsTransaction,
+  FinanceSavingsAccount,
+  FinanceSavingsDraftPreviewItem,
 } from './types'
-import { addMoney, formatMoneyDecimal, moneyRatio, parseMoney, subtractMoney, sumMoney } from './money'
+import { addMoney, formatMoneyDecimal, moneyRatio, parseMoney, subtractMoney, sumMoney } from './money.ts'
 
 export function calculateMonthSummary(items: FinanceBudgetLine[]): FinanceMonthSummary {
   const total = (type: FinanceBudgetType, predicate: (item: FinanceBudgetLine) => boolean = () => true) =>
@@ -99,6 +102,29 @@ export function isSavingsAccountArchived(
 
 export function getActiveSavingsAccounts<T extends SavingsAccountBalanceInput>(accounts: T[]): T[] {
   return accounts.filter(account => !isSavingsAccountArchived(account, accounts))
+}
+
+/** Classify the caller-visible drafts before asking the database to accept them. */
+export function previewSavingsDraftAcceptance(
+  drafts: FinancePlannedSavingsTransaction[],
+  accounts: FinanceSavingsAccount[],
+): FinanceSavingsDraftPreviewItem[] {
+  const accountsById = new Map(accounts.map(account => [account.id, account]))
+
+  return drafts.map(draft => {
+    const account = accountsById.get(draft.account_id)
+    const reasons: FinanceSavingsDraftPreviewItem['reasons'] = []
+
+    if (!account) reasons.push('account_inaccessible')
+    if (BigInt(draft.amount) === 0n) reasons.push('zero_amount')
+    if (account && isSavingsAccountArchived(account, accounts)) reasons.push('archived_account')
+
+    return {
+      draft,
+      state: reasons.length === 0 ? 'ready' : 'skipped',
+      reasons,
+    }
+  })
 }
 
 /**

@@ -21,6 +21,7 @@ import type {
   FinanceDeleteSavingsTransactionInput,
   FinanceSaveSavingsDraftInput,
   FinanceDeleteSavingsDraftInput,
+  FinanceSavingsDraftAcceptanceResult,
   FinanceScenario,
   FinanceScenarioItemChanges,
   FinanceScenarioItem,
@@ -589,6 +590,21 @@ export function createFinanceApi(
     }
   }
 
+  async function acceptSavingsDrafts(input: {
+    request_id: FinanceId
+    month_id: FinanceId
+  }): Promise<FinanceSavingsDraftAcceptanceResult> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<FinanceSavingsDraftAcceptanceResult>(() => supabaseClient.rpc('finance_accept_savings_plan', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_month_id: input.month_id,
+    }) as unknown as PromiseLike<{
+      data: FinanceSavingsDraftAcceptanceResult | null
+      error: { message: string } | null
+    }>)
+  }
+
   async function createScenario(input: { name: string; description: string | null; sort_order: number }): Promise<FinanceScenario> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceScenario>(() => supabaseClient.from('finance_scenarios')
@@ -759,6 +775,7 @@ export function createFinanceApi(
     deleteSavingsTransaction,
     saveSavingsDraft,
     deleteSavingsDraft,
+    acceptSavingsDrafts,
     createScenario,
     createBudgetItem,
     createScenarioItem,

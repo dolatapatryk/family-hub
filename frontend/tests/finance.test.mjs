@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createFinanceApi, FinanceVersionConflictError } from '../src/finance/api.ts'
+import { previewSavingsDraftAcceptance } from '../src/finance/calculations.ts'
 import { canTransferBetweenSavingsAccounts } from '../src/finance/privacy.ts'
 
 const owner = 'member-owner'
@@ -204,6 +205,69 @@ test('savings draft reads are month-scoped and cast bigint values to exact minor
   }])
   assert.ok(client.calls[0].operations.some(([name, column, value]) => name === 'eq' && column === 'month_id' && value === 'month-1'))
   assert.match(client.calls[0].operations.find(([name]) => name === 'select')[1], /amount::text/)
+})
+
+test('savings draft acceptance preview excludes zero, archived, and unavailable accounts', () => {
+  const draft = (id, amount, accountId) => ({
+    id,
+    household_id: household,
+    created_by: owner,
+    created_at: '2026-10-09T12:00:00Z',
+    updated_at: '2026-10-09T12:00:00Z',
+    version: 1,
+    month_id: 'month-1',
+    account_id: accountId,
+    amount,
+    description: null,
+    source_savings_plan_id: null,
+  })
+  const accounts = [
+    { id: 'active', parent_id: null, is_archived: false },
+    { id: 'archived-parent', parent_id: null, is_archived: true },
+    { id: 'archived-child', parent_id: 'archived-parent', is_archived: false },
+  ]
+
+  assert.deepEqual(previewSavingsDraftAcceptance([
+    draft('ready', '12500', 'active'),
+    draft('zero', '0', 'active'),
+    draft('archived', '400', 'archived-child'),
+    draft('unavailable', '500', 'private-account'),
+  ], accounts).map(item => ({ id: item.draft.id, state: item.state, reasons: item.reasons })), [
+    { id: 'ready', state: 'ready', reasons: [] },
+    { id: 'zero', state: 'skipped', reasons: ['zero_amount'] },
+    { id: 'archived', state: 'skipped', reasons: ['archived_account'] },
+    { id: 'unavailable', state: 'skipped', reasons: ['account_inaccessible'] },
+  ])
+})
+
+test('savings draft acceptance sends the selected month and returns provenance result', async () => {
+  const result = {
+    month_id: 'month-1',
+    month_start: '2026-10-01',
+    posted: [{
+      draft_id: 'draft-1', transaction_id: 'transaction-1', account_id: 'account-1',
+      amount_minor: '12505', description: 'Planned deposit', source_savings_plan_id: 'plan-1',
+    }],
+    skipped: [{
+      draft_id: 'draft-zero', account_id: 'account-1', amount_minor: '0', description: null,
+      source_savings_plan_id: null, reasons: ['zero_amount'],
+    }],
+    posted_count: 1,
+    skipped_count: 1,
+    inaccessible_draft_policy: 'remain_pending',
+  }
+  const client = fakeClient({ rpcResult: { data: result, error: null } })
+  assert.deepEqual(await createFinanceApi(household, owner, client).acceptSavingsDrafts({
+    request_id: 'accept-request', month_id: 'month-1',
+  }), result)
+  assert.deepEqual(client.rpcCalls[0], {
+    name: 'finance_accept_savings_plan',
+    args: {
+      p_household_id: household,
+      p_request_id: 'accept-request',
+      p_month_id: 'month-1',
+    },
+  })
 })
 
 test('account save RPC sends exact opening and target minor units', async () => {

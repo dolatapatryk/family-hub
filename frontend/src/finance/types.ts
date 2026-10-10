@@ -161,6 +161,43 @@ export interface FinanceDeleteSavingsDraftInput {
   expected_version: number
 }
 
+export type FinanceSavingsDraftSkipReason =
+  | 'zero_amount'
+  | 'archived_account'
+  | 'already_posted'
+
+export interface FinanceSavingsDraftAcceptanceEntry {
+  draft_id: FinanceId
+  account_id: FinanceId
+  amount_minor: FinanceMinorUnits
+  description: string | null
+  source_savings_plan_id: FinanceId | null
+}
+
+export interface FinanceSavingsDraftAcceptancePosted extends FinanceSavingsDraftAcceptanceEntry {
+  transaction_id: FinanceId
+}
+
+export interface FinanceSavingsDraftAcceptanceSkipped extends FinanceSavingsDraftAcceptanceEntry {
+  reasons: FinanceSavingsDraftSkipReason[]
+}
+
+export interface FinanceSavingsDraftAcceptanceResult {
+  month_id: FinanceId
+  month_start: string
+  posted: FinanceSavingsDraftAcceptancePosted[]
+  skipped: FinanceSavingsDraftAcceptanceSkipped[]
+  posted_count: number
+  skipped_count: number
+  inaccessible_draft_policy: 'remain_pending'
+}
+
+export interface FinanceSavingsDraftPreviewItem {
+  draft: FinancePlannedSavingsTransaction
+  state: 'ready' | 'skipped'
+  reasons: Array<FinanceSavingsDraftSkipReason | 'account_inaccessible'>
+}
+
 export interface FinanceSavingsPlan extends FinanceRow {
   name: string
   plan_type: FinanceSavingsPlanType

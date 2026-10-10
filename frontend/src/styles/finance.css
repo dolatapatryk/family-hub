@@ -153,6 +153,83 @@
   margin-top: 24px;
 }
 
+.finance-savings-acceptance {
+  margin: 6px 19px 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.finance-savings-acceptance-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.finance-savings-acceptance-head .finance-subheading {
+  margin: 0 0 5px;
+}
+
+.finance-savings-acceptance-head .panel-message {
+  max-width: 760px;
+  margin: 0;
+}
+
+.finance-savings-acceptance-body {
+  margin-top: 14px;
+}
+
+.finance-savings-acceptance-summary {
+  margin: 0 0 10px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.finance-savings-acceptance-list {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.finance-savings-acceptance-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, auto);
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--color-line);
+  padding: 11px 2px;
+}
+
+.finance-savings-skip-reason {
+  color: var(--color-warn, #9a5b00) !important;
+}
+
+.finance-savings-acceptance-status {
+  color: var(--color-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.finance-savings-acceptance-status.ready {
+  color: var(--color-green, #277448);
+}
+
+.finance-savings-acceptance-status.skipped {
+  color: var(--color-warn, #9a5b00);
+}
+
+.finance-savings-acceptance-result {
+  margin-top: 18px;
+}
+
+.finance-savings-acceptance-result h4 {
+  margin: 0 0 5px;
+  font-size: 14px;
+}
+
+.finance-savings-accept-button {
+  margin-top: 14px;
+}
+
 .finance-checkbox-label {
   display: flex !important;
   align-items: center;
@@ -485,6 +562,24 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     padding-inline: 14px;
+  }
+
+  .finance-savings-acceptance {
+    margin-inline: 12px;
+  }
+
+  .finance-savings-acceptance-head {
+    flex-direction: column;
+  }
+
+  .finance-savings-acceptance-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline: 2px;
+  }
+
+  .finance-savings-acceptance-status {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 
   .finance-savings-transaction-actions {
