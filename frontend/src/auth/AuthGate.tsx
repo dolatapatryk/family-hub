@@ -36,7 +36,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const nextUserId = session?.user.id ?? null
     if (previousUserId.current !== null && previousUserId.current !== nextUserId) {
       for (const queryKey of [
-        ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'],
+        ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'], ['gym'],
       ]) {
         void queryClient.cancelQueries({ queryKey }).then(() => queryClient.removeQueries({ queryKey }))
       }
@@ -107,7 +107,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return <AuthLayout><ConfigurationMessage /></AuthLayout>
   }
 
-  // Do not render the previous user's private calendar cache while the new
+  // Do not render the previous user's private feature cache while the new
   // session's profile is being loaded after an account change.
   if (authLoading || profileLoading || (session && profile && profile.id !== session.user.id)) {
     return <AuthLayout><p role="status">Sprawdzam sesję Family Hub…</p></AuthLayout>
