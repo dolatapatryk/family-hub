@@ -134,6 +134,58 @@
   color: #9c3f37;
 }
 
+.google-calendar-freshness {
+  display: grid;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: #f7faf8;
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.google-calendar-freshness strong {
+  font-size: 13px;
+}
+
+.google-calendar-freshness p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.google-calendar-freshness-date {
+  font-weight: 600;
+}
+
+.google-calendar-freshness-warning {
+  border-color: #e5c7bf;
+  background: #fbf5f3;
+}
+
+.google-calendar-freshness-warning strong {
+  color: #8a3c34;
+}
+
+.google-calendar-freshness-progress {
+  border-color: #cad8e5;
+  background: #f3f7fb;
+}
+
+.google-calendar-freshness-progress strong {
+  color: #315d85;
+}
+
+.google-calendar-freshness-current {
+  border-color: #d0e2d5;
+  background: #f3f8f4;
+}
+
+.google-calendar-freshness-current strong {
+  color: #286244;
+}
+
 .google-calendar-sharing select {
   min-height: 38px;
   padding: 6px 9px;

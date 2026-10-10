@@ -101,8 +101,11 @@ list, select calendars, and set each selected calendar to Private or Household.
 calendars; **Synchronizuj teraz** fetches later changes and deletions. The first
 import includes ongoing and future one-off events. Recurring events are skipped.
 Imported events appear read-only in Calendar and Today, with a link back to
-Google when one is available. Opening either page only reads the Supabase
-mirror and never starts Google synchronization.
+Google when one is available. Opening either page reads the saved event mirror
+and sync status without starting Google synchronization.
+Household members also see when shared imports last completed and whether an
+import is running, may be out of date, has lost Google access, or needs the
+owner to reconnect the account.
 
 The sync worker checkpoints each Google page and its imported rows together, so
 a later click can resume a run after a temporary failure or closed page. An

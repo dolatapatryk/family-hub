@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
 import { createGoogleCalendarApi } from './api'
-import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
+import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarFreshnessState, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
 
 const resultMessages: Record<string, string> = {
   connected: 'Konto Google połączone. Wybierz teraz kalendarze dostępne w Family Hub.',
@@ -24,11 +24,19 @@ export function googleCalendarSettingsKey(householdId: string, userId: string) {
 
 async function invalidateImportedEvents(client: ReturnType<typeof useQueryClient>, householdId: string, clearCachedData = false) {
   const queryKey = ['importedGoogleCalendarEvents', householdId]
+  const freshnessQueryKey = ['sharedGoogleCalendarFreshness', householdId]
   if (clearCachedData) {
-    await client.cancelQueries({ queryKey })
+    await Promise.all([
+      client.cancelQueries({ queryKey }),
+      client.cancelQueries({ queryKey: freshnessQueryKey }),
+    ])
     client.setQueriesData<ImportedGoogleCalendarEvent[]>({ queryKey }, [])
+    client.setQueriesData<GoogleCalendarFreshnessState>({ queryKey: freshnessQueryKey }, { sources: [] })
   }
-  await client.invalidateQueries({ queryKey })
+  await Promise.all([
+    client.invalidateQueries({ queryKey }),
+    client.invalidateQueries({ queryKey: freshnessQueryKey }),
+  ])
 }
 
 function syncStateLabel(calendar: GoogleCalendarChoice): string {

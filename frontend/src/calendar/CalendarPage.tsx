@@ -11,6 +11,7 @@ import { addDays, browserTimeZone, formatDate, localDate, validDate } from './da
 import { EventForm } from './EventForm'
 import { AddItemButton } from './ItemFields'
 import { useCalendarSources } from './queries'
+import { GoogleCalendarFreshness } from '../googleCalendar/GoogleCalendarFreshness'
 import type { CalendarEvent, EventInput } from './types'
 
 export function CalendarPage() {
@@ -19,7 +20,7 @@ export function CalendarPage() {
   const api = createCalendarEventsApi(profile.household_id, profile.id)
   const [start, setStart] = useState(() => localDate())
   const range = { start, end: addDays(start, 14) }
-  const { events, importedEvents, annualDates, tasks } = useCalendarSources(range)
+  const { events, importedEvents, importedFreshness, annualDates, tasks } = useCalendarSources(range)
   const [form, setForm] = useState<{ item: CalendarEvent | null } | null>(null)
   const [deleting, setDeleting] = useState<CalendarEvent | null>(null)
   const [notice, setNotice] = useState('')
@@ -82,6 +83,7 @@ export function CalendarPage() {
       </div>
       <CalendarQueryState label="wydarzenia" pending={events.isPending} error={events.error} onRetry={() => void events.refetch()} />
       <CalendarQueryState label="wydarzenia Google" pending={importedEvents.isPending} error={importedEvents.error} onRetry={() => void importedEvents.refetch()} />
+      <GoogleCalendarFreshness sources={importedFreshness.data?.sources} pending={importedFreshness.isPending} error={importedFreshness.error} onRetry={() => void importedFreshness.refetch()} />
       <CalendarQueryState label="ważne daty" pending={annualDates.isPending} error={annualDates.error} onRetry={() => void annualDates.refetch()} />
       <CalendarQueryState label="zadania" pending={tasks.isPending} error={tasks.error} onRetry={() => void tasks.refetch()} />
       {showAgenda && <CalendarAgenda entries={entries} busy={busy} onEdit={openForm} onDelete={item => { setForm(null); remove.reset(); setNotice(''); setDeleting(item) }} />}

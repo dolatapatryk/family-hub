@@ -129,7 +129,7 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
   app have been manually exercised by the user with two household members and
   on phone and desktop.
 
-### Current product gap
+### Current product and rollout status
 
 - Automated tests cover task behavior, calendar/annual-date logic, Google
   request contracts, event normalization and retries, database RLS, sync
@@ -139,7 +139,9 @@ and [synchronization guide](https://developers.google.com/workspace/calendar/api
 - Staging/production migration, secrets, OAuth consent, deployment, and smoke
   test status have not been confirmed. The test-database pass does not verify
   production configuration.
-- Google stale-source status for household viewers remains to be implemented.
+- Household viewers see the last successful Google import and receive a clear
+  stale, in-progress, lost-access, or reconnect-required status for shared
+  calendar imports.
 - Google disconnect is implemented, including local data cleanup and a
   best-effort credential-revocation attempt; manual verification of this new
   flow remains outstanding.

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase'
-import type { GoogleCalendarSettingsState, GoogleCalendarChoiceDraft } from './types'
+import type { GoogleCalendarSettingsState, GoogleCalendarChoiceDraft, GoogleCalendarFreshnessState } from './types'
 
 export interface GoogleCalendarDisconnectResult extends GoogleCalendarSettingsState {
   disconnected: boolean
@@ -12,8 +12,8 @@ function requireClient(): SupabaseClient {
   return supabase
 }
 
-async function invoke<T>(body: Record<string, unknown>, functionName = 'google-calendar-management'): Promise<T> {
-  const { data, error } = await requireClient().functions.invoke(functionName, { body })
+async function invoke<T>(body: Record<string, unknown>, functionName = 'google-calendar-management', signal?: AbortSignal): Promise<T> {
+  const { data, error } = await requireClient().functions.invoke(functionName, { body, signal })
   if (error) {
     const response = 'context' in error ? error.context : undefined
     if (response instanceof Response) {
@@ -33,6 +33,10 @@ export function createGoogleCalendarApi() {
   return {
     status(): Promise<GoogleCalendarSettingsState> {
       return invoke({ action: 'status' })
+    },
+
+    sharedFreshness(signal?: AbortSignal): Promise<GoogleCalendarFreshnessState> {
+      return invoke({ action: 'shared-freshness' }, 'google-calendar-management', signal)
     },
 
     connect(): Promise<{ consentUrl: string }> {

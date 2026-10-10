@@ -288,7 +288,7 @@ Suggested reviewable implementation batches:
 1. [x] Contract/schema/RLS — migration applied and manual access checks passed.
 2. [x] OAuth and calendar selection — code and migration exercised manually in the test environment.
 3. [x] User-triggered one-off event sync — worker and migration exercised manually in the test environment.
-4. [~] Calendar/Today import display — manual test pass reported complete; household viewers still lack a stale-source status.
+4. [x] Calendar/Today import display and household-safe import freshness — the frontend and service-only status path are implemented; apply the new migration and deploy the management function with the frontend.
 5. [~] Core automated regression suites pass locally; OAuth end-to-end coverage and staging/production rollout remain.
 
 The MVP Google integration is done when a member can connect and privately
