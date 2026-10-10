@@ -61,6 +61,41 @@
   gap: 8px;
 }
 
+.calendar-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.calendar-settings-button {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-card);
+  color: #526965;
+  text-decoration: none;
+  transition: background-color .16s ease, color .16s ease, transform .16s ease;
+}
+
+.calendar-settings-button:hover {
+  transform: translateY(-1px);
+  background: #f1f5f3;
+  color: var(--color-ink);
+}
+
+.calendar-settings-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.calendar-settings-back {
+  white-space: nowrap;
+}
+
 .calendar-range-input {
   color: var(--color-muted);
   font-size: 12px;
