@@ -17,6 +17,12 @@ export interface CreateTaskInput {
   assignedTo?: string | null
 }
 
+export interface UpdateTaskInput {
+  title: string
+  dueDate: string | null
+  assignedTo: string | null
+}
+
 const taskColumns = 'id, title, due_date, completed, assigned_to, created_at'
 const connectionErrorMessage = 'Could not reach Family Hub. Check your connection and try again.'
 
@@ -78,7 +84,7 @@ export function createTasksApi(
 ) {
   async function updateTask(
     id: string,
-    values: { completed?: boolean; assigned_to?: string | null; archived_at?: string },
+    values: { title?: string; due_date?: string | null; completed?: boolean; assigned_to?: string | null; archived_at?: string },
   ): Promise<Task> {
     const supabaseClient = requireSupabase(client)
     const data = await resolve<TaskRow>(() => supabaseClient
@@ -129,14 +135,37 @@ export function createTasksApi(
     return updateTask(id, { completed })
   }
 
+  async function update(id: string, input: UpdateTaskInput): Promise<Task> {
+    return updateTask(id, {
+      title: input.title.trim(),
+      due_date: input.dueDate,
+      assigned_to: input.assignedTo,
+    })
+  }
+
   async function archive(id: string): Promise<Task> {
     return updateTask(id, { archived_at: new Date().toISOString() })
+  }
+
+  async function remove(id: string): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    await resolve<{ id: string }>(() => supabaseClient
+      .from('tasks')
+      .delete()
+      .eq('id', id)
+      .eq('household_id', householdId)
+      .is('archived_at', null)
+      .select('id')
+      .single())
+    return id
   }
 
   return {
     list,
     create,
+    update,
     setCompleted,
     archive,
+    remove,
   }
 }

@@ -13,7 +13,7 @@ Effort is relative: **S** = small, **M** = medium, **L** = large.
 
 | Feature | Scope | User value | Effort |
 | --- | --- | --- | --- |
-| Edit and remove tasks and shopping items | Edit task title, due date, and assignee; edit a shopping item's name, quantity, or store; remove an individual item. | Lets household members correct mistakes without recreating entries. Tasks can currently be completed and archived, while shopping items can be checked off or cleared in bulk. | S–M |
+| Edit and remove tasks and shopping items — **Completed** | Edit task title, due date, and assignee; edit a shopping item's name, quantity, or store; remove an individual item. | Lets household members correct mistakes without recreating entries. Tasks can currently be completed and archived, while shopping items can be checked off or cleared in bulk. | S–M |
 | Disconnect Google Calendar | Stop future syncs, remove stored connection data and imported events, clear client caches, and attempt Google token revocation. | Gives users control over the connection and its data. This feature is already documented as deferred until after the MVP. | M |
 | Show Google import freshness to household members | Display the last successful sync and a clear stale or reconnect-required status to viewers of shared imported events. | Helps household members understand whether imported events are up to date, even when they do not manage the integration. The implementation plan identifies this as a product gap. | S–M |
 

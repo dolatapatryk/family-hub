@@ -7,6 +7,7 @@ import { addDays, localDate } from '../calendar/dates'
 import { useCalendarSources } from '../calendar/queries'
 import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../auth/AuthGate'
+import { createHouseholdMembersApi } from '../household/api'
 import { createShoppingApi } from '../shopping/api'
 import { ShoppingItemRow } from '../shopping/ShoppingItemRow'
 import { createTasksApi } from '../tasks/api'
@@ -39,8 +40,13 @@ export function DashboardPage() {
   const client = useQueryClient()
   const tasksApi = createTasksApi(profile.household_id, profile.id)
   const shoppingApi = createShoppingApi(profile.household_id, profile.id)
+  const householdMembersApi = createHouseholdMembersApi(profile.household_id)
   const taskKey = ['tasks', profile.household_id]
   const shoppingKey = ['shoppingItems', profile.household_id]
+  const householdMembers = useQuery({
+    queryKey: ['members', profile.household_id],
+    queryFn: ({ signal }) => householdMembersApi.list(signal),
+  })
   const shopping = useQuery({ queryKey: shoppingKey, queryFn: ({ signal }) => shoppingApi.list(signal) })
   const today = localDate()
   const todayRange = { start: today, end: addDays(today, 1) }
@@ -114,7 +120,7 @@ export function DashboardPage() {
           {tasks.isPending && <p className="panel-message" role="status">Ładuję zadania…</p>}
           {tasks.isError && <div className="panel-message error-message" role="alert">Nie udało się pobrać zadań. <button className="link-button" type="button" onClick={() => void tasks.refetch()}>Spróbuj ponownie</button></div>}
           {tasks.data && <ul className="task-list dashboard-list">
-            {visibleTasks.length ? visibleTasks.map(task => <TaskItem key={task.id} task={task} api={tasksApi} queryKey={taskKey} showArchive={false} />) : <li className="empty-state">Nie ma zadań z terminem na dziś.</li>}
+            {visibleTasks.length ? visibleTasks.map(task => <TaskItem key={task.id} task={task} api={tasksApi} queryKey={taskKey} members={householdMembers.data} assignedLabel={task.assignedTo ? householdMembers.data?.find(member => member.id === task.assignedTo)?.name ?? 'Domownik' : undefined} showArchive={false} />) : <li className="empty-state">Nie ma zadań z terminem na dziś.</li>}
           </ul>}
           {tasks.data && <div className="panel-foot">
             <span>Ukończone {doneCount} z {allTasks.length}</span>

@@ -13,6 +13,12 @@ interface ShoppingItemRow {
 
 const shoppingItemColumns = 'id, name, quantity, store, completed, created_at'
 
+export interface UpdateShoppingItemInput {
+  name: string
+  quantity: string | null
+  store: string | null
+}
+
 function toShoppingItem(row: ShoppingItemRow): ShoppingItem {
   return {
     id: row.id,
@@ -77,6 +83,32 @@ export function createShoppingApi(householdId: string, userId: string) {
         .single()
       throwIfError(error)
       return toShoppingItem(data as ShoppingItemRow)
+    },
+
+    async update(id: string, input: UpdateShoppingItemInput): Promise<ShoppingItem> {
+      const { data, error } = await client
+        .from('shopping_items')
+        .update({
+          name: input.name.trim(),
+          quantity: input.quantity?.trim() || null,
+          store: input.store?.trim() || null,
+        })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .select(shoppingItemColumns)
+        .single()
+      throwIfError(error)
+      return toShoppingItem(data as ShoppingItemRow)
+    },
+
+    async remove(id: string): Promise<string> {
+      const { error } = await client
+        .from('shopping_items')
+        .delete()
+        .eq('id', id)
+        .eq('household_id', householdId)
+      throwIfError(error)
+      return id
     },
 
     async clearCompleted(): Promise<number> {

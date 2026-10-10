@@ -216,6 +216,83 @@
   font-size: 12px;
 }
 
+.item-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.item-actions .text-button {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.item-remove-button {
+  color: #9a463b;
+}
+
+.item-remove-button:hover:not(:disabled) {
+  background: #fff0eb;
+  color: #7f3026;
+}
+
+.item-edit-form {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 16px 32px;
+}
+
+.item-edit-form label {
+  display: block;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.item-edit-form input,
+.item-edit-form select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: #fbfdfc;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.item-edit-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.item-edit-form .error-message,
+.item-delete-confirmation .error-message {
+  margin: 0;
+  font-size: 12px;
+}
+
+.item-delete-confirmation {
+  padding: 12px 0 16px 32px;
+}
+
+.item-delete-confirmation > p:first-child {
+  margin: 0 0 8px;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.item-delete-confirmation .form-actions {
+  align-items: center;
+}
+
 .shopping-form {
   margin-bottom: 15px;
   padding: 0 0 15px;
@@ -274,6 +351,13 @@
 
 .shopping-item {
   min-height: 58px;
+}
+
+.shopping-item-row {
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  gap: 8px;
 }
 
 .shopping-check {
@@ -439,6 +523,23 @@
 
   .task-row {
     gap: 8px;
+  }
+
+  .item-actions {
+    gap: 0;
+  }
+
+  .item-actions .text-button {
+    padding-inline: 6px;
+  }
+
+  .item-edit-form,
+  .item-delete-confirmation {
+    padding-left: 0;
+  }
+
+  .item-edit-fields {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .task-check {

@@ -125,7 +125,7 @@ function TaskSection({ heading, items, api, queryKey, members }: {
   return (
     <section className="task-section" aria-label={sectionLabels[heading] ?? heading}>
       <h2>{sectionLabels[heading] ?? heading}<span className="task-count">{items.length}</span></h2>
-      {items.length ? <ul className="task-list">{items.map(task => <TaskItem key={task.id} task={task} api={api} queryKey={queryKey} assignedLabel={memberName(members, task.assignedTo)} />)}</ul> : <p className="section-empty">{emptySectionMessage(heading)}</p>}
+      {items.length ? <ul className="task-list">{items.map(task => <TaskItem key={task.id} task={task} api={api} queryKey={queryKey} members={members} assignedLabel={memberName(members, task.assignedTo)} />)}</ul> : <p className="section-empty">{emptySectionMessage(heading)}</p>}
     </section>
   )
 }
