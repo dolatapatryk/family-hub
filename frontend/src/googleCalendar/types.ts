@@ -30,6 +30,18 @@ export interface GoogleCalendarSettingsState {
   calendars: GoogleCalendarChoice[]
 }
 
+export interface GoogleCalendarFreshnessSource {
+  connectionStatus: 'pending' | 'connected' | 'reconnect_required' | 'disabled'
+  accessStatus: 'available' | 'lost'
+  syncStatus: 'idle' | 'running' | 'failed'
+  lastSuccessfulSyncAt: string | null
+  syncErrorCode: 'network_error' | 'rate_limited' | 'google_error' | 'invalid_response' | 'reconnect_required' | 'sync_error' | null
+}
+
+export interface GoogleCalendarFreshnessState {
+  sources: GoogleCalendarFreshnessSource[]
+}
+
 export type ImportedGoogleCalendarEvent = {
   id: string
   title: string

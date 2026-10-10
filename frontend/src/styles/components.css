@@ -315,11 +315,6 @@ h1 {
   flex: 1;
 }
 
-.form-error {
-  flex-basis: 100%;
-  margin: 0;
-}
-
 .metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

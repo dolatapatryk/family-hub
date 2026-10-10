@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useToast } from '../components/ToastProvider'
 import type { createShoppingApi, UpdateShoppingItemInput } from './api'
 import { refreshShoppingItems } from './cache'
 import type { ShoppingItem } from './shopping'
@@ -8,6 +9,7 @@ type ShoppingApi = ReturnType<typeof createShoppingApi>
 
 export function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; api: ShoppingApi; queryKey: readonly unknown[] }) {
   const client = useQueryClient()
+  const showToast = useToast()
   const [editing, setEditing] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [name, setName] = useState(item.name)
@@ -17,20 +19,28 @@ export function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; a
     mutationFn: (input: UpdateShoppingItemInput) => api.update(item.id, input),
     onSuccess: async saved => {
       setEditing(false)
+      showToast({ kind: 'success', title: 'Zapisano produkt', description: saved.name })
       await refreshShoppingItems(client, queryKey, saved)
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się zapisać produktu', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => update.mutate(input) } }),
   })
   const toggle = useMutation({
     mutationFn: (completed: boolean) => api.setCompleted(item.id, completed),
-    onSuccess: saved => refreshShoppingItems(client, queryKey, saved),
+    onSuccess: saved => {
+      showToast({ kind: 'success', title: saved.completed ? 'Odhaczono jako kupione' : 'Przywrócono na listę', description: saved.name })
+      return refreshShoppingItems(client, queryKey, saved)
+    },
+    onError: (error, completed) => showToast({ kind: 'error', title: 'Nie udało się zmienić produktu', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => toggle.mutate(completed) } }),
   })
   const remove = useMutation({
     mutationFn: () => api.remove(item.id),
     onSuccess: async removedId => {
+      showToast({ kind: 'success', title: 'Usunięto produkt', description: item.name })
       await client.cancelQueries({ queryKey })
       client.setQueryData<ShoppingItem[]>(queryKey, current => current?.filter(value => value.id !== removedId))
       await client.invalidateQueries({ queryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się usunąć produktu', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => remove.mutate() } }),
   })
   const busy = update.isPending || toggle.isPending || remove.isPending
   const details = [item.quantity, item.store].filter(Boolean).join(' · ')
@@ -71,7 +81,6 @@ export function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; a
           <label>Ilość <span className="optional">(opcjonalnie)</span><input value={quantity} disabled={update.isPending} onChange={event => setQuantity(event.target.value)} /></label>
           <label>Sklep <span className="optional">(opcjonalnie)</span><input value={store} disabled={update.isPending} onChange={event => setStore(event.target.value)} /></label>
         </div>
-        {update.isError && <p className="error-message" role="alert">Nie udało się zapisać produktu: {update.error.message}</p>}
         <div className="form-actions">
           <button className="primary-button" type="submit" disabled={!name.trim() || update.isPending}>{update.isPending ? 'Zapisuję…' : 'Zapisz'}</button>
           <button className="text-button" type="button" disabled={update.isPending} onClick={() => setEditing(false)}>Anuluj</button>
@@ -83,10 +92,8 @@ export function ShoppingItemRow({ item, api, queryKey }: { item: ShoppingItem; a
           <button className="button-quiet" type="button" disabled={remove.isPending} onClick={() => remove.mutate()}>{remove.isPending ? 'Usuwam…' : 'Usuń produkt'}</button>
           <button className="text-button" type="button" disabled={remove.isPending} onClick={() => setConfirmingDelete(false)}>Anuluj</button>
         </div>
-        {remove.isError && <p className="error-message" role="alert">Nie udało się usunąć produktu: {remove.error.message}</p>}
       </div>}
       {toggle.isPending && <p className="task-feedback" role="status">Zapisuję…</p>}
-      {toggle.isError && <p className="error-message" role="alert">{toggle.error.message} Spróbuj ponownie oznaczyć produkt.</p>}
     </li>
   )
 }

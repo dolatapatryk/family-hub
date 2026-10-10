@@ -4,6 +4,19 @@ export interface Task {
   dueDate: string | null
   completed: boolean
   assignedTo: string | null
+  recurringRuleId: string | null
+  recurringActive: boolean
+  createdAt: string
+}
+
+export type RecurrenceCadence = 'weekly' | 'monthly'
+
+export interface RecurringTaskRule {
+  id: string
+  title: string
+  cadence: RecurrenceCadence
+  startDate: string
+  assignedTo: string | null
   createdAt: string
 }
 

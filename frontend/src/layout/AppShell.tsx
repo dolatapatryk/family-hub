@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { createShoppingApi } from '../shopping/api'
 import { createTasksApi } from '../tasks/api'
+import { createBillsApi } from '../bills/api'
+import { isBillDueThisMonthOrOverdue, localDate } from '../bills/bills'
 
 interface AppShellProps {
   householdId: string
@@ -16,21 +18,25 @@ const navigation = [
   { to: '/', label: 'Dziś', icon: 'today', end: true },
   { to: '/finance', label: 'Finanse', icon: 'finance', end: false },
   { to: '/tasks', label: 'Zadania', icon: 'tasks', end: false },
+  { to: '/bills', label: 'Rachunki', icon: 'bills', end: false },
   { to: '/shopping', label: 'Zakupy', icon: 'shopping', end: false },
   { to: '/household', label: 'Domownicy', icon: 'members', end: false },
   { to: '/calendar', label: 'Kalendarz', icon: 'calendar', end: false },
   { to: '/annual-dates', label: 'Ważne daty', icon: 'annual', end: false },
+  { to: '/gym', label: 'Siłownia', icon: 'gym', end: false },
 ] as const
 
 function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] }) {
   const paths = {
     today: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2m-8 4h2" /></>,
     tasks: <><path d="m5 6 2 2 4-4M5 13l2 2 4-4M5 20l2 2 4-4" /><path d="M15 7h5m-5 7h5m-5 7h5" /></>,
+    bills: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h.01M16 15h2" /></>,
     shopping: <><path d="M3 4h2l2.1 11.1a2 2 0 0 0 2 1.6h8.7a2 2 0 0 0 2-1.6L21 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="18" cy="20" r="1" /></>,
     members: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></>,
     calendar: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></>,
     annual: <><rect x="3" y="8" width="18" height="13" rx="2" /><path d="M3 12h18M12 8v13" /><path d="M12 8H8.5a2.5 2.5 0 1 1 2.4-3.2L12 8Zm0 0h3.5a2.5 2.5 0 1 0-2.4-3.2L12 8Z" /></>,
     finance: <><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h3" /><circle cx="16.5" cy="15" r="1.5" /></>,
+    gym: <><path d="M6 8v8m12-8v8M3 10v4m18-4v4M6 12h12" /><path d="M9 9v6m6-6v6" /></>,
   }
 
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
@@ -43,6 +49,7 @@ function SignOutIcon() {
 export function AppShell({ householdId, userId, profileName, onSignOut, children }: AppShellProps) {
   const tasksApi = createTasksApi(householdId, userId)
   const shoppingApi = createShoppingApi(householdId, userId)
+  const billsApi = createBillsApi(householdId)
   const tasks = useQuery({
     queryKey: ['tasks', householdId],
     queryFn: ({ signal }) => tasksApi.list(signal),
@@ -51,9 +58,14 @@ export function AppShell({ householdId, userId, profileName, onSignOut, children
     queryKey: ['shoppingItems', householdId],
     queryFn: ({ signal }) => shoppingApi.list(signal),
   })
+  const bills = useQuery({
+    queryKey: ['bills', householdId],
+    queryFn: ({ signal }) => billsApi.list(signal),
+  })
 
   const openTaskCount = tasks.data?.filter(task => !task.completed).length
   const openShoppingCount = shopping.data?.filter(item => !item.completed).length
+  const dueBillsCount = bills.data?.filter(bill => bill.active && isBillDueThisMonthOrOverdue(bill.nextDueOn, localDate())).length
   const initials = profileName.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toLocaleUpperCase()).join('')
 
   return (
@@ -74,7 +86,7 @@ export function AppShell({ householdId, userId, profileName, onSignOut, children
         <p className="nav-label">Przestrzeń domowa</p>
         <nav className="navigation" aria-label="Główna nawigacja">
           {navigation.map(item => {
-            const count = item.icon === 'tasks' ? openTaskCount : item.icon === 'shopping' ? openShoppingCount : undefined
+            const count = item.icon === 'tasks' ? openTaskCount : item.icon === 'shopping' ? openShoppingCount : item.icon === 'bills' ? dueBillsCount : undefined
             return (
               <NavLink className="nav-link" key={item.to} to={item.to} end={item.end}>
                 <NavigationIcon name={item.icon} />
@@ -88,7 +100,7 @@ export function AppShell({ householdId, userId, profileName, onSignOut, children
         <div className="sidebar-bottom">
           <div className="sidebar-note">
             <span className="status-dot" aria-hidden="true" />
-            <div><strong>Wspólny dom</strong><p>Zadania i zakupy są dostępne dla wszystkich domowników.</p></div>
+            <div><strong>Wspólny dom</strong><p>Zadania, rachunki i zakupy są dostępne dla wszystkich domowników.</p></div>
           </div>
           <div className="sidebar-account">
             <span className="account-avatar" aria-hidden="true">{initials || 'FH'}</span>

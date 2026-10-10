@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { createShoppingApi } from './api'
 import { refreshShoppingItems } from './cache'
 import { ShoppingItemRow } from './ShoppingItemRow'
@@ -45,13 +46,13 @@ function ShoppingGroupList({ items, api, queryKey, emptyTitle, emptyMessage }: {
 
 export function ShoppingPage() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const api = createShoppingApi(profile.household_id, profile.id)
   const queryKey = ['shoppingItems', profile.household_id]
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('')
   const [store, setStore] = useState('')
-  const [notice, setNotice] = useState('')
   const nameInput = useRef<HTMLInputElement>(null)
   const items = useQuery({ queryKey, queryFn: ({ signal }) => api.list(signal) })
   const create = useMutation({
@@ -60,25 +61,28 @@ export function ShoppingPage() {
       setName('')
       setQuantity('')
       setStore('')
-      setNotice(`${saved.name} dodano do listy.`)
+      showToast({ kind: 'success', title: `Dodano „${saved.name}” do listy zakupów` })
       nameInput.current?.focus()
       await refreshShoppingItems(client, queryKey, saved)
     },
+    onError: (error, input) => showToast({ kind: 'error', title: 'Nie udało się dodać produktu', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => create.mutate(input) } }),
   })
   const clearCompleted = useMutation({
     mutationFn: () => api.clearCompleted(),
     onSuccess: async deletedCount => {
-      setNotice(deletedCount > 0 ? `Wyczyszczono kupione produkty z listy (${deletedCount}).` : 'Brak kupionych produktów do usunięcia.')
+      showToast(deletedCount > 0
+        ? { kind: 'success', title: 'Usunięto kupione produkty', description: `Liczba produktów: ${deletedCount}.` }
+        : { kind: 'info', title: 'Brak kupionych produktów do usunięcia' })
       await client.cancelQueries({ queryKey })
       client.setQueryData<ShoppingItem[]>(queryKey, current => current?.filter(item => !item.completed))
       await client.invalidateQueries({ queryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się wyczyścić kupionych produktów', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => clearCompleted.mutate() } }),
   })
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!name.trim() || create.isPending) return
-    setNotice('')
     create.mutate({ name: name.trim(), quantity: quantity.trim() || null, store: store.trim() || null })
   }
 
@@ -103,9 +107,7 @@ export function ShoppingPage() {
           </label>
           <button className="primary-button shopping-add" type="submit" disabled={!name.trim() || create.isPending}>{create.isPending ? 'Dodaję…' : '+ Dodaj'}</button>
         </div>
-        {create.isError && <div className="shopping-form-foot"><p className="error-message" role="alert">{create.error.message}</p></div>}
       </form>
-      <p className="shopping-notice" role="status">{notice}</p>
       {items.isPending && <p className="panel-message" role="status">Ładuję listę zakupów…</p>}
       {items.isError && <div className="error-message" role="alert">
         <p>{items.error.message}</p>
@@ -120,11 +122,10 @@ export function ShoppingPage() {
         {purchased.length > 0 && <section className="task-section" aria-labelledby="shopping-purchased-heading">
           <div className="shopping-purchased-header">
             <h2 id="shopping-purchased-heading">Kupione<span className="task-count">{purchased.length}</span></h2>
-            <button className="button-quiet" type="button" disabled={clearCompleted.isPending} onClick={() => { setNotice(''); clearCompleted.mutate() }} aria-label="Wyczyść kupione produkty">
+            <button className="button-quiet" type="button" disabled={clearCompleted.isPending} onClick={() => clearCompleted.mutate()} aria-label="Wyczyść kupione produkty">
               {clearCompleted.isPending ? 'Czyszczę…' : 'Wyczyść'}
             </button>
           </div>
-          {clearCompleted.isError && <p className="error-message" role="alert">Nie udało się usunąć kupionych produktów: {clearCompleted.error.message}</p>}
           <ShoppingGroupList items={purchased} api={api} queryKey={queryKey} emptyTitle="Brak kupionych produktów." emptyMessage="Odhaczone produkty pojawią się tutaj." />
         </section>}
       </div>}

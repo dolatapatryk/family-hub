@@ -6,9 +6,405 @@
 
 .lower-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 17px;
   margin-top: 17px;
+}
+
+.bill-form {
+  margin-bottom: 23px;
+  padding-bottom: 18px;
+}
+
+.bill-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0 19px;
+  border: 0;
+}
+
+.bill-form-fields,
+.bill-payment-fields {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.3fr) minmax(145px, 1fr) minmax(135px, .9fr) minmax(145px, 1fr) 90px;
+  align-items: end;
+  gap: 13px;
+}
+
+.bill-form-fields label,
+.bill-payment-fields label {
+  display: block;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.bill-form-fields input,
+.bill-form-fields select,
+.bill-payment-fields input {
+  display: block;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: #fbfdfc;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.bill-form-fields select {
+  cursor: pointer;
+}
+
+.bill-form-help {
+  margin: 9px 0 13px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bill-section {
+  margin-top: 23px;
+}
+
+.bill-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 11px;
+}
+
+.bill-section-heading h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -.025em;
+}
+
+.bill-section-heading p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.bill-list {
+  display: grid;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bill-card {
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+}
+
+.bill-card-paused {
+  background: #fbfcfb;
+}
+
+.bill-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 16px 18px;
+}
+
+.bill-card-copy {
+  min-width: 0;
+}
+
+.bill-card-copy h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.bill-due-label,
+.bill-expected-amount {
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.bill-overdue,
+.bill-summary-copy .is-overdue {
+  color: #a13b2d;
+  font-weight: 680;
+}
+
+.bill-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.bill-card-actions .text-button {
+  min-height: 36px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.bill-pay-button {
+  min-height: 37px;
+  padding: 8px 11px;
+  font-size: 12px;
+}
+
+.bill-payment-form {
+  display: grid;
+  gap: 11px;
+  padding: 13px 18px 16px;
+  border-top: 1px solid #e8efeb;
+  background: #f8fbf8;
+}
+
+.bill-skip-confirm {
+  display: grid;
+  gap: 10px;
+  padding: 13px 18px 16px;
+  border-top: 1px solid #e8efeb;
+  background: #fffaf0;
+}
+
+.bill-skip-confirm p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bill-skip-confirm .error-message {
+  color: #a13b2d;
+}
+
+.bill-payment-intro {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.bill-payment-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 560px;
+}
+
+.bill-payment-form .error-message {
+  margin: 0;
+}
+
+.bill-history-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 18px;
+  border-top: 1px solid #eef2f0;
+}
+
+.bill-history-toggle .link-button {
+  font-size: 12px;
+}
+
+.bill-history-toggle .error-message {
+  margin: 5px 0;
+  padding: 6px 9px;
+  font-size: 11px;
+}
+
+.bill-history {
+  border-top: 1px solid #eef2f0;
+  background: #fbfcfb;
+}
+
+.bill-history-empty {
+  margin: 0;
+  padding: 12px 18px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.bill-history-list {
+  margin: 0;
+  padding: 0 18px;
+  list-style: none;
+}
+
+.bill-history-list li {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-top: 1px solid #eef2f0;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.bill-history-list li:first-child {
+  border-top: 0;
+}
+
+.bill-history-list li > span {
+  display: grid;
+  gap: 3px;
+}
+
+.bill-history-list small {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.bill-history-list li > strong {
+  flex: 0 0 auto;
+  font-size: 13px;
+}
+
+.bill-summary-list {
+  margin: 0;
+  padding: 0 19px 5px;
+  list-style: none;
+}
+
+.bill-summary-row {
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #eef2f0;
+}
+
+.bill-summary-row:first-child {
+  border-top: 0;
+}
+
+.bill-summary-mark {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: #e8f1e3;
+  color: #4b713a;
+  font-size: 16px;
+}
+
+.bill-summary-mark.is-overdue {
+  background: #fff0eb;
+  color: #a13b2d;
+  font-weight: 750;
+}
+
+.bill-summary-mark.is-today {
+  background: #fff4dc;
+  color: #8d6516;
+}
+
+.bill-summary-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.bill-summary-copy strong {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bill-summary-copy small {
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.bill-summary-amount {
+  flex: 0 0 auto;
+  color: #526965;
+  font-size: 11px;
+}
+
+.paused-bills {
+  margin-top: 30px;
+}
+
+@media (max-width: 1050px) {
+  .lower-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .lower-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bill-form-fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .bill-form-fields label:first-child {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 620px) {
+  .bill-form fieldset {
+    padding-inline: 15px;
+  }
+
+  .bill-form-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bill-form-fields label:first-child,
+  .bill-form-fields label:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .bill-card-top {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 15px;
+  }
+
+  .bill-card-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .bill-payment-form {
+    padding-inline: 15px;
+  }
+
+  .bill-skip-confirm {
+    padding-inline: 15px;
+  }
+
+  .bill-payment-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .bill-history-toggle,
+  .bill-history-list {
+    padding-inline: 15px;
+  }
+
+  .bill-summary-list {
+    padding-inline: 15px;
+  }
 }
 
 .week-note {
@@ -102,6 +498,73 @@
   grid-template-columns: 1fr 1fr;
   gap: 18px;
   margin: 17px 0;
+}
+
+.task-repeat-field {
+  display: block;
+  max-width: 320px;
+}
+
+.task-repeat-field select {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+}
+
+.task-repeat-note {
+  margin: 9px 0 14px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.recurring-panel {
+  margin-bottom: 24px;
+}
+
+.recurring-list {
+  margin: 0;
+  padding: 0 19px 5px;
+  list-style: none;
+}
+
+.recurring-item {
+  display: flex;
+  min-height: 59px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #eef2f0;
+}
+
+.recurring-item-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.recurring-item-copy strong {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recurring-item-copy span,
+.recurring-confirm span {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.recurring-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .form-actions {
@@ -310,27 +773,6 @@
   min-height: 42px;
 }
 
-.shopping-form-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 19px 0;
-}
-
-.shopping-form-foot .task-meta,
-.shopping-form-foot .error-message {
-  margin: 0;
-}
-
-.shopping-notice {
-  min-height: 1.5em;
-  margin: 12px 0 17px;
-  color: var(--color-blue);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
 .shopping-store-groups {
   display: grid;
   gap: 14px;
@@ -516,6 +958,25 @@
     padding-inline: 15px;
   }
 
+  .recurring-list {
+    padding-inline: 15px;
+  }
+
+  .recurring-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 0;
+  }
+
+  .recurring-item-copy strong {
+    white-space: normal;
+  }
+
+  .recurring-confirm {
+    justify-content: flex-start;
+  }
+
   .task-form-options {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
@@ -577,9 +1038,4 @@
     padding-inline: 15px;
   }
 
-  .shopping-form-foot {
-    align-items: flex-start;
-    flex-direction: column;
-    margin-inline: 15px;
-  }
 }

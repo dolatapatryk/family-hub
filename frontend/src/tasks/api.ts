@@ -1,12 +1,23 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase.ts'
-import type { Task } from './tasks'
+import type { RecurrenceCadence, RecurringTaskRule, Task } from './tasks'
 
 interface TaskRow {
   id: string
   title: string
   due_date: string | null
   completed: boolean
+  assigned_to: string | null
+  recurring_rule_id: string | null
+  recurring_task_rules?: { active: boolean } | { active: boolean }[] | null
+  created_at: string
+}
+
+interface RecurringTaskRuleRow {
+  id: string
+  title: string
+  cadence: RecurrenceCadence
+  start_on: string
   assigned_to: string | null
   created_at: string
 }
@@ -23,7 +34,15 @@ export interface UpdateTaskInput {
   assignedTo: string | null
 }
 
-const taskColumns = 'id, title, due_date, completed, assigned_to, created_at'
+export interface CreateRecurringTaskInput {
+  title: string
+  startDate: string
+  cadence: RecurrenceCadence
+  assignedTo?: string | null
+}
+
+const taskColumns = 'id, title, due_date, completed, assigned_to, recurring_rule_id, recurring_task_rules!tasks_recurring_rule_id_fkey(active), created_at'
+const recurringTaskRuleColumns = 'id, title, cadence, start_on, assigned_to, created_at'
 const connectionErrorMessage = 'Could not reach Family Hub. Check your connection and try again.'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
@@ -67,11 +86,25 @@ async function resolve<T>(
 }
 
 function toTask(row: TaskRow): Task {
+  const recurringRule = Array.isArray(row.recurring_task_rules) ? row.recurring_task_rules[0] : row.recurring_task_rules
   return {
     id: row.id,
     title: row.title,
     dueDate: row.due_date,
     completed: row.completed,
+    assignedTo: row.assigned_to,
+    recurringRuleId: row.recurring_rule_id,
+    recurringActive: recurringRule?.active ?? false,
+    createdAt: row.created_at,
+  }
+}
+
+function toRecurringTaskRule(row: RecurringTaskRuleRow): RecurringTaskRule {
+  return {
+    id: row.id,
+    title: row.title,
+    cadence: row.cadence,
+    startDate: row.start_on,
     assignedTo: row.assigned_to,
     createdAt: row.created_at,
   }
@@ -131,6 +164,44 @@ export function createTasksApi(
     return toTask(data)
   }
 
+  async function createRecurring(input: CreateRecurringTaskInput): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<string>(() => supabaseClient.rpc('create_recurring_task', {
+      p_household_id: householdId,
+      p_title: input.title,
+      p_start_on: input.startDate,
+      p_cadence: input.cadence,
+      p_assigned_to: input.assignedTo ?? null,
+    }))
+  }
+
+  async function listRecurring(signal?: AbortSignal): Promise<RecurringTaskRule[]> {
+    const supabaseClient = requireSupabase(client)
+    let query = supabaseClient
+      .from('recurring_task_rules')
+      .select(recurringTaskRuleColumns)
+      .eq('household_id', householdId)
+      .eq('active', true)
+      .order('start_on', { ascending: true })
+      .order('created_at', { ascending: true })
+    if (signal) query = query.abortSignal(signal)
+    const data = await resolve<RecurringTaskRuleRow[]>(query)
+    return data.map(toRecurringTaskRule)
+  }
+
+  async function stopRecurring(id: string): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    const data = await resolve<{ id: string }>(() => supabaseClient
+      .from('recurring_task_rules')
+      .update({ active: false })
+      .eq('id', id)
+      .eq('household_id', householdId)
+      .eq('active', true)
+      .select('id')
+      .single())
+    return data.id
+  }
+
   async function setCompleted(id: string, completed: boolean): Promise<Task> {
     return updateTask(id, { completed })
   }
@@ -163,6 +234,9 @@ export function createTasksApi(
   return {
     list,
     create,
+    createRecurring,
+    listRecurring,
+    stopRecurring,
     update,
     setCompleted,
     archive,

@@ -2,9 +2,9 @@
 
 ## Current product
 
-Family Hub currently brings together shared household tasks and shopping, a
-14-day calendar, annual dates, a Today dashboard, and read-only Google Calendar
-imports.
+Family Hub currently brings together shared household tasks, bills with
+payment histories, shopping, a 14-day calendar, annual dates, a Today
+dashboard, and read-only Google Calendar imports.
 
 The backlog below is prioritized by expected user value and estimated effort.
 Effort is relative: **S** = small, **M** = medium, **L** = large.
@@ -15,14 +15,15 @@ Effort is relative: **S** = small, **M** = medium, **L** = large.
 | --- | --- | --- | --- |
 | Edit and remove tasks and shopping items — **Completed** | Edit task title, due date, and assignee; edit a shopping item's name, quantity, or store; remove an individual item. | Lets household members correct mistakes without recreating entries. Tasks can currently be completed and archived, while shopping items can be checked off or cleared in bulk. | S–M |
 | Disconnect Google Calendar — **Completed** | Stop future syncs, remove stored connection data and imported events, clear client caches, and attempt Google token revocation. | Gives users control over the connection and its data. | M |
-| Show Google import freshness to household members | Display the last successful sync and a clear stale or reconnect-required status to viewers of shared imported events. | Helps household members understand whether imported events are up to date, even when they do not manage the integration. The implementation plan identifies this as a product gap. | S–M |
+| Show Google import freshness to household members — **Completed** | Display the last successful sync and a clear stale or reconnect-required status to viewers of shared imported events. | Helps household members understand whether imported events are up to date, even when they do not manage the integration. | S–M |
 
 ## P1 — Increase repeat use
 
 | Feature | Scope | User value | Effort |
 | --- | --- | --- | --- |
 | Reminders | Optional, per-user notifications for task due dates and upcoming events, with notification preferences. | Helps people remember plans without having to open the app regularly. | M–L |
-| Recurring tasks and household routines | Create repeating chores or obligations, such as weekly cleaning or monthly bills; define how each next occurrence is created and prevent duplicates. | Reduces the need to re-enter recurring responsibilities. | L |
+| Recurring tasks and household routines — **Completed** | Create weekly or monthly chores and routines. Create the first dated task immediately; create the next occurrence when the current one is completed or skipped, with a database constraint preventing duplicate dates. Stop an active series from the Tasks page. Bills are tracked separately because each cycle has payment history. | Reduces the need to re-enter recurring household responsibilities. | L |
+| Bills with payment history — **Completed** | Store each bill's next due date, a monthly or two-month interval, optional expected amount and currency, and one dated payment with its actual amount per cycle. Let people adjust a next due date when an invoice arrives, or skip a cycle without marking it paid. Store amounts as integer hundredths while formatting decimal currency values in the UI. Show overdue and current-month bills on Today, and retain paid and skipped history when paused. | Helps the household remember variable-date bills and see what was paid or skipped. | M |
 | Recurring calendar events | Support schedules such as a weekly class, including the ability to change or skip one occurrence. | Makes it easier to plan regular activities. Requires careful handling of time zones and exceptions. | L |
 
 ## P2 — Expand household collaboration
@@ -36,10 +37,10 @@ Effort is relative: **S** = small, **M** = medium, **L** = large.
 
 ## Recommended sequence
 
-Editing and removing entries and **Google Calendar disconnect** are complete.
-Next, implement **Google import freshness** to show household members when
-shared imported events were last updated. Then validate whether users need
-**reminders** or **recurring tasks** more urgently.
+Editing and removing entries, **Google Calendar disconnect**, **Google
+import freshness**, **recurring tasks and household routines**, and
+**bills with payment history** are complete. Next, implement
+**reminders** for optional per-user notifications.
 
 ## Separate release readiness work
 

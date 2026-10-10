@@ -3,8 +3,8 @@ import { addDays, browserTimeZone, canonicalTimeZone, validDate, zonedInput, zon
 import { ItemFields } from './ItemFields'
 import type { CalendarEvent, EventInput, Visibility } from './types'
 
-export function EventForm({ item, defaultDate, userId, pending, error, onSave, onCancel }: {
-  item: CalendarEvent | null; defaultDate: string; userId: string; pending: boolean; error: string | undefined
+export function EventForm({ item, defaultDate, userId, pending, onSave, onCancel }: {
+  item: CalendarEvent | null; defaultDate: string; userId: string; pending: boolean
   onSave: (input: EventInput) => void; onCancel: () => void
 }) {
   const zone = item && !item.allDay ? item.timeZone : browserTimeZone()
@@ -75,7 +75,7 @@ export function EventForm({ item, defaultDate, userId, pending, error, onSave, o
         <label>Strefa czasowa<input required value={timeZone} onChange={event => setTimeZone(event.target.value)} placeholder="Europe/Warsaw" /></label>
         <p className="task-meta">Obie godziny dotyczą wybranej strefy czasowej.</p>
       </>}
-      {(validation || error) && <p className="error-message" role="alert">{validation || error}</p>}
+      {validation && <p className="error-message" role="alert">{validation}</p>}
       <div className="form-actions"><button className="primary-button" type="submit">{pending ? 'Zapisuję…' : 'Zapisz wydarzenie'}</button><button className="text-button" type="button" onClick={onCancel}>Anuluj</button></div>
     </fieldset>
   </form>

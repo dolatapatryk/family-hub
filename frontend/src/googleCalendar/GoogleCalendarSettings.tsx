@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
+import { useToast } from '../components/ToastProvider'
 import { createGoogleCalendarApi } from './api'
-import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
+import { GoogleCalendarFreshness } from './GoogleCalendarFreshness'
+import type { GoogleCalendarChoice, GoogleCalendarChoiceDraft, GoogleCalendarFreshnessState, GoogleCalendarSharingMode, ImportedGoogleCalendarEvent } from './types'
 
 const resultMessages: Record<string, string> = {
   connected: 'Konto Google połączone. Wybierz teraz kalendarze dostępne w Family Hub.',
@@ -24,11 +26,19 @@ export function googleCalendarSettingsKey(householdId: string, userId: string) {
 
 async function invalidateImportedEvents(client: ReturnType<typeof useQueryClient>, householdId: string, clearCachedData = false) {
   const queryKey = ['importedGoogleCalendarEvents', householdId]
+  const freshnessQueryKey = ['sharedGoogleCalendarFreshness', householdId]
   if (clearCachedData) {
-    await client.cancelQueries({ queryKey })
+    await Promise.all([
+      client.cancelQueries({ queryKey }),
+      client.cancelQueries({ queryKey: freshnessQueryKey }),
+    ])
     client.setQueriesData<ImportedGoogleCalendarEvent[]>({ queryKey }, [])
+    client.setQueriesData<GoogleCalendarFreshnessState>({ queryKey: freshnessQueryKey }, { sources: [] })
   }
-  await client.invalidateQueries({ queryKey })
+  await Promise.all([
+    client.invalidateQueries({ queryKey }),
+    client.invalidateQueries({ queryKey: freshnessQueryKey }),
+  ])
 }
 
 function syncStateLabel(calendar: GoogleCalendarChoice): string {
@@ -53,9 +63,9 @@ function syncStateLabel(calendar: GoogleCalendarChoice): string {
 
 export function GoogleCalendarSettings() {
   const { profile } = useAuth()
+  const showToast = useToast()
   const client = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [notice, setNotice] = useState('')
   const [drafts, setDrafts] = useState<Record<string, GoogleCalendarChoiceDraft>>({})
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
   const api = useMemo(() => createGoogleCalendarApi(), [])
@@ -69,16 +79,30 @@ export function GoogleCalendarSettings() {
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   })
+  const importedFreshness = useQuery({
+    queryKey: ['sharedGoogleCalendarFreshness', profile.household_id, profile.id],
+    queryFn: ({ signal }) => api.sharedFreshness(signal),
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: query => {
+      const sources = query.state.data?.sources ?? []
+      if (sources.some(source => source.syncStatus === 'running')) return 5_000
+      return sources.length ? 30_000 : false
+    },
+  })
 
   useEffect(() => {
     const result = searchParams.get('googleCalendar')
     if (!result) return
-    setNotice(resultMessages[result] ?? resultMessages.error)
+    showToast({
+      kind: result === 'connected' ? 'success' : result === 'denied' ? 'info' : 'error',
+      title: resultMessages[result] ?? resultMessages.error,
+    })
     const next = new URLSearchParams(searchParams)
     next.delete('googleCalendar')
     setSearchParams(next, { replace: true })
     void client.invalidateQueries({ queryKey })
-  }, [client, queryKey, searchParams, setSearchParams])
+  }, [client, queryKey, searchParams, setSearchParams, showToast])
 
   useEffect(() => {
     if (!settings.data) return
@@ -88,6 +112,7 @@ export function GoogleCalendarSettings() {
   const connect = useMutation({
     mutationFn: () => api.connect(),
     onSuccess: result => window.location.assign(result.consentUrl),
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się rozpocząć połączenia z Google', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => connect.mutate() } }),
   })
   const disconnect = useMutation({
     mutationFn: () => api.disconnect(),
@@ -96,23 +121,25 @@ export function GoogleCalendarSettings() {
       setDrafts({})
       client.setQueryData(queryKey, { connection: null, calendars: [] })
       await invalidateImportedEvents(client, profile.household_id, true)
-      setNotice(!result.disconnected
-        ? 'Połączenie Google było już usunięte.'
-        : result.revocation === 'revoked'
-          ? 'Konto Google zostało odłączone. Połączenie i zaimportowane wydarzenia usunięto, a dostęp Family Hub został odwołany w Google.'
-          : result.revocation === 'failed'
-            ? 'Konto Google zostało odłączone i zaimportowane wydarzenia usunięto. Nie udało się potwierdzić odwołania dostępu w Google; możesz sprawdzić dostęp aplikacji na koncie Google.'
-            : 'Konto Google zostało odłączone i zaimportowane wydarzenia usunięto. Nie było tokenu do odwołania w Google.')
+      showToast(!result.disconnected
+        ? { kind: 'info', title: 'Połączenie Google było już usunięte' }
+        : result.revocation === 'failed'
+          ? { kind: 'error', title: 'Konto Google odłączono, ale nie potwierdzono cofnięcia dostępu', description: 'Możesz sprawdzić dostęp Family Hub na koncie Google.' }
+          : result.revocation === 'not_available'
+            ? { kind: 'info', title: 'Odłączono konto Google', description: 'Nie było aktywnego tokenu do cofnięcia w Google.' }
+            : { kind: 'success', title: 'Odłączono konto Google i usunięto zaimportowane wydarzenia' })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się odłączyć konta Google', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => disconnect.mutate() } }),
   })
   const refresh = useMutation({
     mutationFn: () => api.refreshCalendars(),
     onSuccess: async () => {
-      setNotice('Lista kalendarzy Google została odświeżona. Nie zaimportowano wydarzeń.')
+      showToast({ kind: 'success', title: 'Odświeżono listę kalendarzy Google', description: 'Wydarzenia nie zostały zaimportowane.' })
       await invalidateImportedEvents(client, profile.household_id, true)
       await client.invalidateQueries({ queryKey })
     },
-    onError: async () => {
+    onError: async error => {
+      showToast({ kind: 'error', title: 'Nie udało się odświeżyć listy kalendarzy', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => refresh.mutate() } })
       const state = await api.status().catch(() => null)
       if (state?.connection?.status === 'reconnect_required') {
         await invalidateImportedEvents(client, profile.household_id, true)
@@ -126,10 +153,11 @@ export function GoogleCalendarSettings() {
       ...(drafts[calendar.calendarId] ?? draftFor(calendar)),
     }))),
     onSuccess: async () => {
-      setNotice('Zapisano wybór i ustawienia prywatności kalendarzy.')
+      showToast({ kind: 'success', title: 'Zapisano wybór i prywatność kalendarzy' })
       await invalidateImportedEvents(client, profile.household_id, true)
       await client.invalidateQueries({ queryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się zapisać ustawień kalendarzy', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => save.mutate() } }),
   })
 
   const sync = useMutation({
@@ -152,14 +180,15 @@ export function GoogleCalendarSettings() {
     onSuccess: async state => {
       client.setQueryData(queryKey, state)
       const failures = state.calendars.filter(calendar => calendar.selected && calendar.syncStatus === 'failed').length
-      setNotice(state.connection?.status === 'reconnect_required'
-        ? 'Google wymaga ponownego połączenia. Zapisane wydarzenia nie są teraz widoczne.'
+      showToast(state.connection?.status === 'reconnect_required'
+        ? { kind: 'error', title: 'Google wymaga ponownego połączenia', description: 'Zapisane wydarzenia nie są teraz widoczne.' }
         : failures
-        ? `Import zakończony z błędem w ${failures} ${failures === 1 ? 'kalendarzu' : 'kalendarzach'}. Szczegóły są przy wybranych kalendarzach.`
-        : 'Import wydarzeń Google został zakończony.')
+          ? { kind: 'error', title: `Import nie powiódł się w ${failures} ${failures === 1 ? 'kalendarzu' : 'kalendarzach'}`, description: 'Szczegóły są przy wybranych kalendarzach.', action: { label: 'Ponów import', onClick: () => sync.mutate() } }
+          : { kind: 'success', title: 'Zakończono import wydarzeń Google' })
       await invalidateImportedEvents(client, profile.household_id, state.connection?.status !== 'connected')
       await client.invalidateQueries({ queryKey })
     },
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się zaimportować wydarzeń Google', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => sync.mutate() } }),
   })
 
   const calendars = settings.data?.calendars ?? []
@@ -190,7 +219,7 @@ export function GoogleCalendarSettings() {
       </div>
 
       <div className="google-calendar-content">
-        {notice && <p className="task-notice" role="status">{notice}</p>}
+        <GoogleCalendarFreshness sources={importedFreshness.data?.sources} pending={importedFreshness.isPending} error={importedFreshness.error} onRetry={() => void importedFreshness.refetch()} />
         {settings.isPending && <p className="panel-message" role="status">Sprawdzam połączenie Google…</p>}
         {settings.isError && <div className="google-calendar-error"><p className="error-message" role="alert">{settings.error.message}</p><button className="button-quiet" type="button" disabled={settings.isFetching} onClick={() => void settings.refetch()}>{settings.isFetching ? 'Ładuję…' : 'Spróbuj ponownie'}</button></div>}
 
@@ -231,9 +260,6 @@ export function GoogleCalendarSettings() {
               <button className="button-quiet google-calendar-disconnect-button" type="button" disabled={disconnectBusy} onClick={() => setConfirmDisconnect(true)}>Odłącz konto Google</button>
             </div>
           </div>
-          {refresh.isError && <p className="error-message" role="alert">{refresh.error.message}</p>}
-          {save.isError && <p className="error-message" role="alert">{save.error.message}</p>}
-          {sync.isError && <p className="error-message" role="alert">{sync.error.message}</p>}
           {calendars.length === 0
             ? <p className="panel-message">Pobierz listę, aby wybrać kalendarze.</p>
             : <ul className="google-calendar-list">
@@ -252,8 +278,6 @@ export function GoogleCalendarSettings() {
           </div>}
           <p className="google-calendar-sync-note">Import obejmuje wydarzenia trwające i przyszłe. Serie cykliczne są pomijane. Zmiany i usunięcia z Google można pobrać przyciskiem importu; samo otwarcie kalendarza nie uruchamia synchronizacji.</p>
         </>}
-        {disconnect.isError && <p className="error-message" role="alert">{disconnect.error.message}</p>}
-        {connect.isError && <p className="error-message" role="alert">{connect.error.message}</p>}
       </div>
     </section>
   )

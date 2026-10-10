@@ -66,6 +66,10 @@ async function handleManagement(request: Request): Promise<Response> {
   switch (body.action) {
     case 'status':
       return jsonResponse(request, await connectionStatus(user.id))
+    case 'shared-freshness':
+      return jsonResponse(request, await rpc(client, 'google_calendar_shared_freshness', {
+        p_viewer_user_id: user.id,
+      }))
     case 'connect': {
       requiredEnv('GOOGLE_CALENDAR_CLIENT_ID')
       requiredEnv('GOOGLE_CALENDAR_CLIENT_SECRET')

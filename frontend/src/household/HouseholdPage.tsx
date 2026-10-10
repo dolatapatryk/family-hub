@@ -1,7 +1,7 @@
-import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
+import { useToast } from '../components/ToastProvider'
 import { createHouseholdInvitesApi, createHouseholdMembersApi } from './api'
 
 const inviteLifetime = new Intl.DateTimeFormat('pl-PL', {
@@ -11,7 +11,7 @@ const inviteLifetime = new Intl.DateTimeFormat('pl-PL', {
 
 export function HouseholdPage() {
   const { profile } = useAuth()
-  const [copyMessage, setCopyMessage] = useState('')
+  const showToast = useToast()
   const membersApi = createHouseholdMembersApi(profile.household_id)
   const invitesApi = createHouseholdInvitesApi()
   const members = useQuery({
@@ -20,16 +20,17 @@ export function HouseholdPage() {
   })
   const invite = useMutation({
     mutationFn: () => invitesApi.create(),
-    onSuccess: () => setCopyMessage(''),
+    onSuccess: () => showToast({ kind: 'success', title: 'Utworzono kod zaproszenia' }),
+    onError: error => showToast({ kind: 'error', title: 'Nie udało się utworzyć kodu zaproszenia', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => invite.mutate() } }),
   })
 
   async function copyCode() {
     if (!invite.data) return
     try {
       await navigator.clipboard.writeText(invite.data.token)
-      setCopyMessage('Kod skopiowany.')
+      showToast({ kind: 'success', title: 'Skopiowano kod zaproszenia' })
     } catch {
-      setCopyMessage('Nie udało się skopiować. Zaznacz i skopiuj kod ręcznie.')
+      showToast({ kind: 'error', title: 'Nie udało się skopiować kodu', description: 'Zaznacz i skopiuj kod ręcznie.', action: { label: 'Spróbuj ponownie', onClick: () => void copyCode() } })
     }
   }
 
@@ -43,12 +44,11 @@ export function HouseholdPage() {
             <h2 className="panel-title" id="invite-heading">Zaproś domownika</h2>
             <p className="panel-kicker">Jednorazowy kod jest ważny przez 24 godziny.</p>
           </div>
-          <button className="primary-button" type="button" onClick={() => { setCopyMessage(''); invite.mutate() }} disabled={invite.isPending}>
+          <button className="primary-button" type="button" onClick={() => invite.mutate()} disabled={invite.isPending}>
             {invite.isPending ? 'Tworzę kod…' : invite.data ? 'Utwórz nowy kod' : 'Utwórz kod'}
           </button>
         </div>
 
-        {invite.isError && <div className="household-invite-body"><p className="error-message" role="alert">{invite.error.message}</p></div>}
         {invite.data && <div className="household-invite-body">
           <p className="small-muted">Wyślij ten kod osobie, którą zapraszasz. Po zalogowaniu wpisze go podczas dołączania do domu.</p>
           <div className="invite-code-row">
@@ -56,7 +56,6 @@ export function HouseholdPage() {
             <button className="button-quiet" type="button" onClick={() => void copyCode()}>Kopiuj kod</button>
           </div>
           <p className="task-meta">Kod wygasa: <strong>{inviteLifetime.format(new Date(invite.data.expiresAt))}</strong></p>
-          {copyMessage && <p className="task-notice invite-copy-notice" role="status">{copyMessage}</p>}
         </div>}
       </section>
 
