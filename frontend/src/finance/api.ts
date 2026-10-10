@@ -1,23 +1,44 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { supabase } from '../auth/supabase'
-import { moneyToFinanceMinorUnits } from './money'
+import { supabase } from '../auth/supabase.ts'
+import { moneyToFinanceMinorUnits } from './money.ts'
 import type {
   FinanceAllocationRole,
   FinanceBudgetItem,
   FinanceBudgetType,
   FinanceCategory,
   FinanceCreateMonthInput,
+  FinanceDeleteTransferInput,
   FinanceId,
   FinanceMonth,
   FinanceMoney,
   FinanceMutationConflict,
+  FinanceSavingsAccount,
+  FinanceSavingsTransferRecord,
   FinanceScenario,
   FinanceScenarioItemChanges,
   FinanceScenarioItem,
+  FinanceTransferInput,
+  FinanceTransferResult,
 } from './types'
 
 type FinanceBudgetItemRow = Omit<FinanceBudgetItem, 'amount'> & { amount_minor: string }
 type FinanceScenarioItemRow = Omit<FinanceScenarioItem, 'amount'> & { amount_minor: string }
+type FinanceSavingsAccountRow = Omit<FinanceSavingsAccount, 'opening_balance' | 'target_amount'> & {
+  opening_balance_minor: string
+  target_amount_minor: string | null
+}
+type FinanceTransferMovementRow = {
+  id: FinanceId
+  transfer_id: FinanceId
+  account_id: FinanceId
+  transaction_date: string
+  amount_minor: string
+  description: string | null
+}
+
+const savingsAccountColumns = 'id, household_id, created_by, created_at, updated_at, version, name, account_type, parent_id, opening_balance_minor:opening_balance::text, target_amount_minor:target_amount::text, color, is_archived, visibility, owner_user_id, sort_order'
+const savingsTransferColumns = 'id, household_id, created_by, created_at, updated_at, version'
+const financePageSize = 500
 
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
 const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, parent_id, color, sort_order'
@@ -58,16 +79,31 @@ async function resolve<T>(
   }
 }
 
+async function readAllPages<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const allRows: T[] = []
+  for (let from = 0; ; from += financePageSize) {
+    const page = await resolve<T[]>(() => fetchPage(from, from + financePageSize - 1))
+    allRows.push(...page)
+    if (page.length < financePageSize) return allRows
+  }
+}
+
 export class FinanceVersionConflictError extends Error implements FinanceMutationConflict {
   readonly code = 'version_conflict' as const
+  readonly expected_version: number
+  readonly current_version: number | null
 
   constructor(
-    readonly expected_version: number,
-    readonly current_version: number | null,
+    expectedVersion: number,
+    currentVersion: number | null,
   ) {
-    super(current_version === null
+    super(currentVersion === null
       ? 'This finance item was removed or is no longer available.'
       : 'This finance item changed after it was loaded. The latest version has been refreshed.')
+    this.expected_version = expectedVersion
+    this.current_version = currentVersion
     this.name = 'FinanceVersionConflictError'
   }
 }
@@ -112,6 +148,15 @@ function toBudgetItem(row: FinanceBudgetItemRow): FinanceBudgetItem {
 function toScenarioItem(row: FinanceScenarioItemRow): FinanceScenarioItem {
   const { amount_minor, ...item } = row
   return { ...item, amount: amount_minor }
+}
+
+function toSavingsAccount(row: FinanceSavingsAccountRow): FinanceSavingsAccount {
+  const { opening_balance_minor, target_amount_minor, ...account } = row
+  return {
+    ...account,
+    opening_balance: opening_balance_minor,
+    target_amount: target_amount_minor,
+  }
 }
 
 function assertRoleMatchesCategory(role: FinanceAllocationRole, categoryType: FinanceBudgetType) {
@@ -190,6 +235,73 @@ export function createFinanceApi(
     return rows.map(toBudgetItem)
   }
 
+  async function listSavingsAccounts(signal?: AbortSignal): Promise<FinanceSavingsAccount[]> {
+    const supabaseClient = requireSupabase(client)
+    const rows = await readAllPages<FinanceSavingsAccountRow>((from, to) => {
+      let query = supabaseClient.from('finance_savings_accounts')
+        .select(savingsAccountColumns)
+        .eq('household_id', householdId)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: FinanceSavingsAccountRow[] | null; error: { message: string } | null }>
+    })
+    return rows.map(toSavingsAccount)
+  }
+
+  async function listSavingsTransfers(signal?: AbortSignal): Promise<FinanceSavingsTransferRecord[]> {
+    const supabaseClient = requireSupabase(client)
+    const [transfers, movements] = await Promise.all([
+      readAllPages<Pick<FinanceSavingsTransferRecord, 'id' | 'household_id' | 'created_by' | 'created_at' | 'updated_at' | 'version'>>((from, to) => {
+        let query = supabaseClient.from('finance_savings_transfers')
+          .select(savingsTransferColumns)
+          .eq('household_id', householdId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, to)
+        if (signal) query = query.abortSignal(signal)
+        return query as unknown as PromiseLike<{ data: Array<Pick<FinanceSavingsTransferRecord, 'id' | 'household_id' | 'created_by' | 'created_at' | 'updated_at' | 'version'>> | null; error: { message: string } | null }>
+      }),
+      readAllPages<FinanceTransferMovementRow>((from, to) => {
+        let query = supabaseClient.from('finance_savings_transactions')
+          .select('id, transfer_id, account_id, transaction_date, amount_minor:amount::text, description')
+          .eq('household_id', householdId)
+          .not('transfer_id', 'is', null)
+          .order('transaction_date', { ascending: false })
+          .range(from, to)
+        if (signal) query = query.abortSignal(signal)
+        return query as unknown as PromiseLike<{ data: FinanceTransferMovementRow[] | null; error: { message: string } | null }>
+      }),
+    ])
+
+    const movementsByTransfer = new Map<FinanceId, FinanceTransferMovementRow[]>()
+    for (const movement of movements) {
+      const legs = movementsByTransfer.get(movement.transfer_id) ?? []
+      legs.push(movement)
+      movementsByTransfer.set(movement.transfer_id, legs)
+    }
+
+    return transfers.flatMap(transfer => {
+      const legs = movementsByTransfer.get(transfer.id) ?? []
+      if (legs.length !== 2) return []
+      const fromLeg = legs.find(leg => BigInt(leg.amount_minor) < 0n)
+      const toLeg = legs.find(leg => BigInt(leg.amount_minor) > 0n)
+      if (!fromLeg || !toLeg || fromLeg.transaction_date !== toLeg.transaction_date
+        || BigInt(fromLeg.amount_minor) + BigInt(toLeg.amount_minor) !== 0n) return []
+      return [{
+        ...transfer,
+        from_account_id: fromLeg.account_id,
+        to_account_id: toLeg.account_id,
+        amount: toLeg.amount_minor,
+        transaction_date: fromLeg.transaction_date,
+        description: fromLeg.description,
+        transaction_ids: [fromLeg.id, toLeg.id],
+      }]
+    })
+  }
+
   async function listScenarios(signal?: AbortSignal): Promise<FinanceScenario[]> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceScenario[]>(() => {
@@ -229,6 +341,53 @@ export function createFinanceApi(
       p_source_month_id: input.source.kind === 'recurring' ? input.source.source_month_id : null,
       p_scenario_id: input.source.kind === 'scenario' ? input.source.scenario_id : null,
     }))
+  }
+
+  async function createSavingsTransfer(input: FinanceTransferInput): Promise<FinanceTransferResult> {
+    const supabaseClient = requireSupabase(client)
+    const amountMinor = moneyToFinanceMinorUnits(input.amount)
+    if (BigInt(amountMinor) <= 0n) throw new Error('Transfer amount must be greater than zero.')
+
+    const result = await resolve<FinanceTransferResult | {
+      conflict: true
+      account_id: FinanceId
+      current_version: number
+    }>(() => supabaseClient.rpc('finance_transfer_savings', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_from_account_id: input.from_account_id,
+      p_from_expected_version: input.from_expected_version,
+      p_to_account_id: input.to_account_id,
+      p_to_expected_version: input.to_expected_version,
+      p_amount_minor: amountMinor,
+      p_transaction_date: input.transaction_date,
+      p_description: input.description?.trim() || null,
+    }) as unknown as PromiseLike<{ data: FinanceTransferResult | { conflict: true; account_id: FinanceId; current_version: number } | null; error: { message: string } | null }>)
+
+    if ('conflict' in result) {
+      const expectedVersion = result.account_id === input.from_account_id
+        ? input.from_expected_version
+        : input.to_expected_version
+      throw new FinanceVersionConflictError(expectedVersion, Number(result.current_version))
+    }
+    return result
+  }
+
+  async function deleteSavingsTransfer(input: FinanceDeleteTransferInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const result = await resolve<{ deleted: true; transfer_id: FinanceId } | {
+      conflict: true
+      current_version: number
+    }>(() => supabaseClient.rpc('finance_delete_transfer', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_transfer_id: input.transfer_id,
+      p_expected_version: input.expected_version,
+    }) as unknown as PromiseLike<{ data: { deleted: true; transfer_id: FinanceId } | { conflict: true; current_version: number } | null; error: { message: string } | null }>)
+
+    if ('conflict' in result) {
+      throw new FinanceVersionConflictError(input.expected_version, Number(result.current_version))
+    }
   }
 
   async function createScenario(input: { name: string; description: string | null; sort_order: number }): Promise<FinanceScenario> {
@@ -387,9 +546,13 @@ export function createFinanceApi(
     listMonths,
     listCategories,
     listBudgetItems,
+    listSavingsAccounts,
+    listSavingsTransfers,
     listScenarios,
     listScenarioItems,
     createMonth,
+    createSavingsTransfer,
+    deleteSavingsTransfer,
     createScenario,
     createBudgetItem,
     createScenarioItem,

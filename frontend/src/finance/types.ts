@@ -237,7 +237,9 @@ export type FinanceBudgetApi = {
 export interface FinanceTransferInput {
   request_id: FinanceId
   from_account_id: FinanceId
+  from_expected_version: number
   to_account_id: FinanceId
+  to_expected_version: number
   amount: FinanceMoney
   transaction_date: string
   description: string | null
@@ -246,6 +248,27 @@ export interface FinanceTransferInput {
 export interface FinanceTransferResult {
   transfer_id: FinanceId
   transaction_ids: [FinanceId, FinanceId]
+}
+
+export interface FinanceSavingsTransferRecord extends FinanceRow {
+  from_account_id: FinanceId
+  to_account_id: FinanceId
+  amount: FinanceMinorUnits
+  transaction_date: string
+  description: string | null
+  transaction_ids: [FinanceId, FinanceId]
+}
+
+export interface FinanceDeleteTransferInput {
+  request_id: FinanceId
+  transfer_id: FinanceId
+  expected_version: number
+}
+
+export interface FinanceTransferConflict {
+  conflict: true
+  account_id?: FinanceId
+  current_version: number
 }
 
 export interface FinanceMutationConflict {

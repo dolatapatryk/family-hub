@@ -36,6 +36,15 @@
   font-weight: 650;
 }
 
+.finance-transfer-form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .finance-month-select {
   min-width: 190px;
 }
@@ -49,7 +58,9 @@
 .finance-month-select select,
 .finance-item-form input,
 .finance-item-form select,
-.finance-scenario-form input {
+.finance-scenario-form input,
+.finance-transfer-form input,
+.finance-transfer-form select {
   width: 100%;
   min-width: 0;
   min-height: 40px;
@@ -196,12 +207,63 @@
   font-size: 13px;
 }
 
+.finance-transfer-form {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(170px, 1fr) minmax(100px, .55fr) minmax(130px, .7fr) minmax(170px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 0 19px 17px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.finance-transfer-form .primary-button {
+  min-height: 40px;
+}
+
+.finance-transfer-history {
+  padding-top: 1px;
+}
+
+.finance-transfer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 62px;
+  padding: 10px 19px;
+  border-top: 1px solid #eef2f0;
+}
+
+.finance-transfer-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.finance-transfer-copy strong,
+.finance-transfer-copy span {
+  overflow-wrap: anywhere;
+}
+
+.finance-transfer-copy strong {
+  font-size: 14px;
+}
+
+.finance-transfer-copy span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
 .finance-error {
   margin: 10px 19px 0;
 }
 
 @media (max-width: 950px) {
   .finance-item-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .finance-transfer-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -251,9 +313,21 @@
 
   .finance-item-form,
   .finance-item-edit-form,
-  .finance-scenario-form {
+  .finance-scenario-form,
+  .finance-transfer-form {
     grid-template-columns: 1fr;
     padding-inline: 14px;
+  }
+
+  .finance-transfer-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 9px;
+    padding-inline: 14px;
+  }
+
+  .finance-transfer-row .finance-edit-button {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 
   .finance-item-form .primary-button {

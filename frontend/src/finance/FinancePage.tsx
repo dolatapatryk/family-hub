@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageHeader'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
 import { financeMinorUnitsToMoney, formatPln } from './money'
+import { SavingsTransfersPanel } from './SavingsTransfersPanel'
 import type {
   FinanceAllocationRole,
   FinanceBudgetLine,
@@ -15,7 +16,7 @@ import type {
   FinanceScenario,
 } from './types'
 
-type FinanceView = 'budget' | 'scenarios'
+type FinanceView = 'budget' | 'scenarios' | 'transfers'
 
 const budgetTypeNames: Record<FinanceBudgetType, string> = {
   income: 'Przychód',
@@ -430,7 +431,7 @@ export function FinancePage() {
       <PageHeader
         eyebrow="Finanse"
         title="Budżet domowy"
-        description="Planuj miesięczne pozycje i porównuj scenariusze. Rola osobistej alokacji jest zapisana przy każdej pozycji."
+        description="Planuj budżet, porównuj scenariusze i zapisuj przelewy między dostępnymi kontami."
         action={view === 'budget' ? (
           <div className="finance-month-actions">
             <label className="finance-month-select">Początkowe pozycje
@@ -453,6 +454,9 @@ export function FinancePage() {
         </button>
         <button type="button" aria-pressed={view === 'scenarios'} className={view === 'scenarios' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('scenarios')}>
           Scenariusze
+        </button>
+        <button type="button" aria-pressed={view === 'transfers'} className={view === 'transfers' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('transfers')}>
+          Przelewy
         </button>
       </div>
 
@@ -552,7 +556,7 @@ export function FinancePage() {
           )}
           {createMonth.isError && <p className="error-message finance-error" role="alert">{errorText(createMonth.error)}</p>}
         </section>
-      ) : (
+      ) : view === 'scenarios' ? (
         <div className="finance-scenarios-layout">
           <section className="panel finance-panel">
             <div className="panel-head">
@@ -657,6 +661,13 @@ export function FinancePage() {
             {scenarioList.length === 0 && !scenarios.isPending && <p className="panel-message">Dodaj scenariusz, aby wprowadzać jego pozycje.</p>}
           </section>
         </div>
+      ) : (
+        <SavingsTransfersPanel
+          key={`${profile.household_id}:${profile.id}`}
+          api={api}
+          householdId={profile.household_id}
+          userId={profile.id}
+        />
       )}
     </>
   )
