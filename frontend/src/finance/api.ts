@@ -6,9 +6,11 @@ import type {
   FinanceBudgetItem,
   FinanceBudgetType,
   FinanceCategory,
+  FinanceCreateMonthInput,
   FinanceId,
   FinanceMonth,
   FinanceMoney,
+  FinanceMutationConflict,
   FinanceScenario,
   FinanceScenarioItemChanges,
   FinanceScenarioItem,
@@ -50,6 +52,52 @@ async function resolve<T>(
     if (error) throw new Error(error.message)
     if (data === null) throw new Error('Family Hub returned an empty finance response. Please try again.')
     return data
+  } catch (error) {
+    if (isAbortError(error)) throw error
+    throw normalizeError(error)
+  }
+}
+
+export class FinanceVersionConflictError extends Error implements FinanceMutationConflict {
+  readonly code = 'version_conflict' as const
+
+  constructor(
+    readonly expected_version: number,
+    readonly current_version: number | null,
+  ) {
+    super(current_version === null
+      ? 'This finance item was removed or is no longer available.'
+      : 'This finance item changed after it was loaded. The latest version has been refreshed.')
+    this.name = 'FinanceVersionConflictError'
+  }
+}
+
+type VersionedUpdateResponse = {
+  data: { id: FinanceId } | null
+  error: { message: string } | null
+}
+
+type CurrentVersionResponse = {
+  data: { version: number } | null
+  error: { message: string } | null
+}
+
+async function resolveVersionedUpdate(
+  request: () => PromiseLike<VersionedUpdateResponse>,
+  readCurrentVersion: () => PromiseLike<CurrentVersionResponse>,
+  expectedVersion: number,
+): Promise<void> {
+  try {
+    const { data, error } = await request()
+    if (error) throw normalizeError(error)
+    if (data) return
+
+    const current = await readCurrentVersion()
+    if (current.error) throw normalizeError(current.error)
+    throw new FinanceVersionConflictError(
+      expectedVersion,
+      current.data ? Number(current.data.version) : null,
+    )
   } catch (error) {
     if (isAbortError(error)) throw error
     throw normalizeError(error)
@@ -170,12 +218,17 @@ export function createFinanceApi(
     return rows.map(toScenarioItem)
   }
 
-  async function createMonth(monthStart: string): Promise<FinanceMonth> {
+  async function createMonth(input: FinanceCreateMonthInput): Promise<FinanceMonth> {
     const supabaseClient = requireSupabase(client)
-    return resolve<FinanceMonth>(() => supabaseClient.from('finance_months')
-      .insert({ household_id: householdId, created_by: userId, month_start: monthStart })
-      .select(monthColumns)
-      .single())
+    const sourceKind = input.source.kind
+    return resolve<FinanceMonth>(() => supabaseClient.rpc('finance_create_month', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_month_start: input.month_start,
+      p_source_kind: sourceKind,
+      p_source_month_id: input.source.kind === 'recurring' ? input.source.source_month_id : null,
+      p_scenario_id: input.source.kind === 'scenario' ? input.source.scenario_id : null,
+    }))
   }
 
   async function createScenario(input: { name: string; description: string | null; sort_order: number }): Promise<FinanceScenario> {
@@ -238,13 +291,21 @@ export function createFinanceApi(
   ): Promise<void> {
     assertRoleMatchesCategory(allocationRole, categoryType)
     const supabaseClient = requireSupabase(client)
-    await resolve<{ id: FinanceId }>(() => supabaseClient.from('finance_budget_items')
-      .update({ allocation_role: allocationRole })
-      .eq('id', id)
-      .eq('household_id', householdId)
-      .eq('version', expectedVersion)
-      .select('id')
-      .single())
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_budget_items')
+        .update({ allocation_role: allocationRole })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .eq('version', expectedVersion)
+        .select('id')
+        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_budget_items')
+        .select('version')
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      expectedVersion,
+    )
   }
 
   async function updateScenarioItemAllocationRole(
@@ -255,47 +316,71 @@ export function createFinanceApi(
   ): Promise<void> {
     assertRoleMatchesCategory(allocationRole, categoryType)
     const supabaseClient = requireSupabase(client)
-    await resolve<{ id: FinanceId }>(() => supabaseClient.from('finance_scenario_items')
-      .update({ allocation_role: allocationRole })
-      .eq('id', id)
-      .eq('household_id', householdId)
-      .eq('version', expectedVersion)
-      .select('id')
-      .single())
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_scenario_items')
+        .update({ allocation_role: allocationRole })
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .eq('version', expectedVersion)
+        .select('id')
+        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_scenario_items')
+        .select('version')
+        .eq('id', id)
+        .eq('household_id', householdId)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      expectedVersion,
+    )
   }
 
   async function updateBudgetItem(input: UpdateFinanceItemInput): Promise<void> {
     assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
-    await resolve<{ id: FinanceId }>(() => supabaseClient.from('finance_budget_items')
-      .update({
-        category_id: input.category_id,
-        name: input.name.trim(),
-        amount: moneyToFinanceMinorUnits(input.amount),
-        allocation_role: input.allocation_role,
-      })
-      .eq('id', input.id)
-      .eq('household_id', householdId)
-      .eq('version', input.expected_version)
-      .select('id')
-      .single())
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_budget_items')
+        .update({
+          category_id: input.category_id,
+          name: input.name.trim(),
+          amount: moneyToFinanceMinorUnits(input.amount),
+          allocation_role: input.allocation_role,
+        })
+        .eq('id', input.id)
+        .eq('household_id', householdId)
+        .eq('version', input.expected_version)
+        .select('id')
+        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_budget_items')
+        .select('version')
+        .eq('id', input.id)
+        .eq('household_id', householdId)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      input.expected_version,
+    )
   }
 
   async function updateScenarioItem(input: UpdateFinanceItemInput): Promise<void> {
     assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
-    await resolve<{ id: FinanceId }>(() => supabaseClient.from('finance_scenario_items')
-      .update({
-        category_id: input.category_id,
-        name: input.name.trim(),
-        amount: moneyToFinanceMinorUnits(input.amount),
-        allocation_role: input.allocation_role,
-      })
-      .eq('id', input.id)
-      .eq('household_id', householdId)
-      .eq('version', input.expected_version)
-      .select('id')
-      .single())
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_scenario_items')
+        .update({
+          category_id: input.category_id,
+          name: input.name.trim(),
+          amount: moneyToFinanceMinorUnits(input.amount),
+          allocation_role: input.allocation_role,
+        })
+        .eq('id', input.id)
+        .eq('household_id', householdId)
+        .eq('version', input.expected_version)
+        .select('id')
+        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_scenario_items')
+        .select('version')
+        .eq('id', input.id)
+        .eq('household_id', householdId)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      input.expected_version,
+    )
   }
 
   return {

@@ -40,6 +40,12 @@
   min-width: 190px;
 }
 
+.finance-month-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
 .finance-month-select select,
 .finance-item-form input,
 .finance-item-form select,

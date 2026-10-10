@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
-import { createFinanceApi } from './api'
+import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
 import { financeMinorUnitsToMoney, formatPln } from './money'
 import type {
@@ -10,6 +10,7 @@ import type {
   FinanceBudgetLine,
   FinanceBudgetType,
   FinanceCategory,
+  FinanceCreateMonthInput,
   FinanceMonth,
   FinanceScenario,
 } from './types'
@@ -43,6 +44,11 @@ function nextMonthStart(months: FinanceMonth[]) {
 }
 
 function errorText(error: unknown) {
+  if (error instanceof FinanceVersionConflictError) {
+    return error.current_version === null
+      ? 'Ta pozycja została usunięta lub nie jest już dostępna.'
+      : 'Ktoś zmienił tę pozycję. Załadowano najnowszą wersję — sprawdź ją przed ponowną edycją.'
+  }
   return error instanceof Error ? error.message : 'Nie udało się zapisać zmian.'
 }
 
@@ -195,6 +201,7 @@ export function FinancePage() {
   const queryClient = useQueryClient()
   const api = useMemo(() => createFinanceApi(profile.household_id, profile.id), [profile.household_id, profile.id])
   const [view, setView] = useState<FinanceView>('budget')
+  const [monthSource, setMonthSource] = useState('empty')
   const [selectedMonthId, setSelectedMonthId] = useState('')
   const [selectedScenarioId, setSelectedScenarioId] = useState('')
   const [editingBudgetItemId, setEditingBudgetItemId] = useState('')
@@ -209,6 +216,7 @@ export function FinancePage() {
   const [scenarioItemAmount, setScenarioItemAmount] = useState('')
   const [scenarioCategoryId, setScenarioCategoryId] = useState('')
   const [scenarioItemRole, setScenarioItemRole] = useState<FinanceAllocationRole>('standard')
+  const createMonthRequest = useRef<{ signature: string; request_id: string } | null>(null)
 
   const months = useQuery({
     queryKey: ['financeMonths', profile.household_id],
@@ -253,11 +261,17 @@ export function FinancePage() {
   })
 
   const createMonth = useMutation({
-    mutationFn: (monthStart: string) => api.createMonth(monthStart),
-    onSuccess: async month => {
-      queryClient.setQueryData<FinanceMonth[]>(['financeMonths', profile.household_id], current => [month, ...(current ?? [])])
+    mutationFn: (input: FinanceCreateMonthInput) => api.createMonth(input),
+    onSuccess: async (month, input) => {
+      if (createMonthRequest.current?.request_id === input.request_id) createMonthRequest.current = null
+      queryClient.setQueryData<FinanceMonth[]>(['financeMonths', profile.household_id], current =>
+        [month, ...(current ?? []).filter(candidate => candidate.id !== month.id)]
+          .sort((left, right) => right.month_start.localeCompare(left.month_start)))
       setSelectedMonthId(month.id)
-      await queryClient.invalidateQueries({ queryKey: ['financeMonths', profile.household_id] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['financeMonths', profile.household_id] }),
+        queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id, month.id] }),
+      ])
     },
   })
   const createScenario = useMutation({
@@ -319,6 +333,15 @@ export function FinancePage() {
         await queryClient.invalidateQueries({ queryKey: ['financeScenarioItems', profile.household_id] })
       }
     },
+    onError: async (error, input) => {
+      if (!(error instanceof FinanceVersionConflictError)) return
+      if (input.kind === 'budget') setEditingBudgetItemId('')
+      else setEditingScenarioItemId('')
+      const queryKey = input.kind === 'budget'
+        ? ['financeBudgetItems', profile.household_id]
+        : ['financeScenarioItems', profile.household_id]
+      await queryClient.invalidateQueries({ queryKey })
+    },
   })
 
   const monthList = months.data ?? []
@@ -330,6 +353,28 @@ export function FinancePage() {
   const scenarioLines = makeLines(scenarioItems.data ?? [], categoryList)
   const activeMonth = monthList.find(month => month.id === selectedMonthId)
   const activeScenario = scenarioList.find(scenario => scenario.id === selectedScenarioId)
+  const latestMonth = monthList[0]
+  const selectedScenarioSourceId = monthSource.startsWith('scenario:') ? monthSource.slice('scenario:'.length) : ''
+  const effectiveMonthSource = selectedScenarioSourceId && scenarioList.some(scenario => scenario.id === selectedScenarioSourceId)
+    ? monthSource
+    : monthSource === 'recurring' && latestMonth
+      ? 'recurring'
+      : 'empty'
+
+  function submitNewMonth() {
+    const source: FinanceCreateMonthInput['source'] = effectiveMonthSource === 'recurring' && latestMonth
+      ? { kind: 'recurring', source_month_id: latestMonth.id }
+      : effectiveMonthSource.startsWith('scenario:')
+        ? { kind: 'scenario', scenario_id: effectiveMonthSource.slice('scenario:'.length) }
+        : { kind: 'empty' }
+    const inputWithoutRequest = { month_start: nextMonthStart(monthList), source }
+    const signature = JSON.stringify(inputWithoutRequest)
+    if (createMonthRequest.current?.signature !== signature) {
+      createMonthRequest.current = { signature, request_id: globalThis.crypto.randomUUID() }
+    }
+    const request = createMonthRequest.current
+    if (request) createMonth.mutate({ ...inputWithoutRequest, request_id: request.request_id })
+  }
 
   function chooseBudgetCategory(categoryId: string) {
     setBudgetCategoryId(categoryId)
@@ -387,9 +432,18 @@ export function FinancePage() {
         title="Budżet domowy"
         description="Planuj miesięczne pozycje i porównuj scenariusze. Rola osobistej alokacji jest zapisana przy każdej pozycji."
         action={view === 'budget' ? (
-          <button className="primary-button" type="button" onClick={() => createMonth.mutate(nextMonthStart(monthList))} disabled={createMonth.isPending || months.isPending}>
-            {createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz następny miesiąc' : 'Utwórz bieżący miesiąc'}
-          </button>
+          <div className="finance-month-actions">
+            <label className="finance-month-select">Początkowe pozycje
+              <select value={effectiveMonthSource} onChange={event => setMonthSource(event.target.value)} disabled={createMonth.isPending || months.isPending}>
+                <option value="empty">Pusty miesiąc</option>
+                {latestMonth && <option value="recurring">Powtarzalne z {displayMonth(latestMonth)}</option>}
+                {scenarioList.map(scenario => <option key={scenario.id} value={`scenario:${scenario.id}`}>Scenariusz: {scenario.name}</option>)}
+              </select>
+            </label>
+            <button className="primary-button" type="button" onClick={submitNewMonth} disabled={createMonth.isPending || months.isPending}>
+              {createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz następny miesiąc' : 'Utwórz bieżący miesiąc'}
+            </button>
+          </div>
         ) : undefined}
       />
 
@@ -403,6 +457,9 @@ export function FinancePage() {
       </div>
 
       {pageErrors.map((error, index) => <p className="error-message" role="alert" key={index}>{errorText(error)}</p>)}
+      {updateFinanceItem.error instanceof FinanceVersionConflictError && (
+        <p className="error-message" role="alert">{errorText(updateFinanceItem.error)}</p>
+      )}
 
       {view === 'budget' ? (
         <section className="panel finance-panel">
