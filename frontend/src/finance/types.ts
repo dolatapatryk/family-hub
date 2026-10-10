@@ -116,6 +116,34 @@ export interface FinanceSaveSavingsAccountInput {
   sort_order: number
 }
 
+export type FinanceAccountLifecycleAction = 'archive' | 'restore' | 'balance' | 'visibility'
+
+export interface FinanceAccountLifecyclePreview {
+  account_id: FinanceId
+  version: number
+  snapshot_token: string
+  account_count: number
+  linked_plan_count: number
+  own_balance_minor: FinanceMinorUnits
+  active_children_balance_minor: FinanceMinorUnits
+  display_balance_minor: FinanceMinorUnits
+  is_archived: boolean
+  ancestor_archived: boolean
+  visibility: FinanceVisibility
+  can_change_visibility: boolean
+  external_transfer_count: number
+}
+
+export interface FinanceAccountLifecycleInput {
+  request_id: FinanceId
+  account_id: FinanceId
+  expected_version: number
+  snapshot_token: string
+  action: FinanceAccountLifecycleAction
+  display_balance?: FinanceMoney | null
+  visibility?: FinanceVisibility | null
+}
+
 export interface FinanceSaveSavingsTransactionInput {
   request_id: FinanceId
   transaction_id?: FinanceId | null
@@ -230,6 +258,57 @@ export interface FinanceProjectExpense extends FinanceRow {
   amount: FinanceMinorUnits
   notes: string | null
   sort_order: number
+}
+
+export interface FinanceRecordMutationInput {
+  request_id: FinanceId
+  id?: FinanceId | null
+  expected_version?: number | null
+}
+
+export interface FinanceSaveSavingsPlanInput extends FinanceRecordMutationInput {
+  name: string
+  plan_type: FinanceSavingsPlanType
+  account_id: FinanceId | null
+  monthly_amount: FinanceMoney
+  annual_amount_override: FinanceMoney | null
+  visibility: FinanceVisibility
+  sort_order: number
+}
+
+export interface FinanceSaveIrregularReserveInput extends FinanceRecordMutationInput {
+  name: string
+  annual_amount: FinanceMoney
+  sort_order: number
+}
+
+export interface FinanceSaveProjectInput extends FinanceRecordMutationInput {
+  name: string
+  description: string | null
+  target_budget: FinanceMoney | null
+  is_archived: boolean
+  sort_order: number
+}
+
+export interface FinanceSaveProjectExpenseInput extends FinanceRecordMutationInput {
+  project_id: FinanceId
+  expense_date: string | null
+  name: string
+  amount: FinanceMoney
+  notes: string | null
+  sort_order: number
+}
+
+export interface FinanceDeleteRecordInput {
+  request_id: FinanceId
+  id: FinanceId
+  expected_version: number
+}
+
+export interface FinanceLoadSavingsPlanResult {
+  month_id: FinanceId
+  generated: Array<{ plan_id: FinanceId; draft_id: FinanceId; account_id: FinanceId }>
+  skipped: Array<{ plan_id: FinanceId; reason: 'irregular_plan' | 'unlinked_plan' | 'zero_amount' | 'archived_account' | 'already_loaded' | 'account_already_planned' }>
 }
 
 /** A budget item with its normalized category classification joined for reads. */

@@ -7,6 +7,9 @@ import { calculateMonthSummary } from './calculations'
 import { financeMinorUnitsToMoney, formatPln } from './money'
 import { SavingsTransfersPanel } from './SavingsTransfersPanel'
 import { SavingsAccountsPanel } from './SavingsAccountsPanel'
+import { SavingsPlansPanel } from './SavingsPlansPanel'
+import { FinanceSummariesPanel } from './FinanceSummariesPanel'
+import { ProjectsPanel } from './ProjectsPanel'
 import type {
   FinanceAllocationRole,
   FinanceBudgetLine,
@@ -17,7 +20,7 @@ import type {
   FinanceScenario,
 } from './types'
 
-type FinanceView = 'budget' | 'scenarios' | 'savings' | 'transfers'
+type FinanceView = 'budget' | 'scenarios' | 'savings' | 'transfers' | 'plans' | 'summaries' | 'projects'
 
 const budgetTypeNames: Record<FinanceBudgetType, string> = {
   income: 'Przychód',
@@ -462,6 +465,9 @@ export function FinancePage() {
         <button type="button" aria-pressed={view === 'transfers'} className={view === 'transfers' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('transfers')}>
           Przelewy
         </button>
+        <button type="button" aria-pressed={view === 'plans'} className={view === 'plans' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('plans')}>Plany i rezerwy</button>
+        <button type="button" aria-pressed={view === 'summaries'} className={view === 'summaries' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('summaries')}>Podsumowanie</button>
+        <button type="button" aria-pressed={view === 'projects'} className={view === 'projects' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('projects')}>Projekty</button>
       </div>
 
       {pageErrors.map((error, index) => <p className="error-message" role="alert" key={index}>{errorText(error)}</p>)}
@@ -675,6 +681,12 @@ export function FinancePage() {
           selectedMonthId={selectedMonthId}
           onSelectMonth={setSelectedMonthId}
         />
+      ) : view === 'plans' ? (
+        <SavingsPlansPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
+      ) : view === 'summaries' ? (
+        <FinanceSummariesPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
+      ) : view === 'projects' ? (
+        <ProjectsPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} />
       ) : (
         <SavingsTransfersPanel
           key={`${profile.household_id}:${profile.id}`}

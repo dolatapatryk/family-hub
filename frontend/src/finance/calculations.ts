@@ -6,8 +6,15 @@ import type {
   FinancePlannedSavingsTransaction,
   FinanceSavingsAccount,
   FinanceSavingsDraftPreviewItem,
+  FinanceSavingsTransaction,
+  FinanceViewer,
+  FinanceVisibility,
+  FinanceSavingsAccountType,
+  FinanceSavingsPlan,
+  FinanceProject,
+  FinanceProjectExpense,
 } from './types'
-import { addMoney, formatMoneyDecimal, moneyRatio, parseMoney, subtractMoney, sumMoney } from './money.ts'
+import { addMoney, financeMinorUnitsToMoney, formatMoneyDecimal, moneyRatio, parseMoney, subtractMoney, sumMoney } from './money.ts'
 
 export function calculateMonthSummary(items: FinanceBudgetLine[]): FinanceMonthSummary {
   const total = (type: FinanceBudgetType, predicate: (item: FinanceBudgetLine) => boolean = () => true) =>
@@ -104,6 +111,16 @@ export function getActiveSavingsAccounts<T extends SavingsAccountBalanceInput>(a
   return accounts.filter(account => !isSavingsAccountArchived(account, accounts))
 }
 
+/** The displayed active tree excludes independently archived descendants. */
+export function calculateActiveSavingsTreeBalance(
+  account: SavingsAccountBalanceInput,
+  accounts: SavingsAccountBalanceInput[],
+  transactions: SavingsTransactionBalanceInput[],
+): FinanceMoney {
+  if (isSavingsAccountArchived(account, accounts)) return '0.00'
+  return calculateSavingsAccountTreeBalance(account, getActiveSavingsAccounts(accounts), transactions)
+}
+
 /** Classify the caller-visible drafts before asking the database to accept them. */
 export function previewSavingsDraftAcceptance(
   drafts: FinancePlannedSavingsTransaction[],
@@ -144,4 +161,53 @@ export function aggregateSavingsHistoryByDate(
   return [...totals.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([date, amount]) => ({ date, amount: formatMoneyDecimal(amount) }))
+}
+
+/** Round up to one grosz, so twelve allocations cover the annual reserve. */
+export function calculateIrregularMonthlyReserve(annualMinor: string): FinanceMoney {
+  const annual = BigInt(annualMinor)
+  if (annual < 0n) throw new Error('Annual reserve must be nonnegative.')
+  return formatMoneyDecimal((annual + 11n) / 12n)
+}
+
+export function calculateSavingsPlanAnnualAmount(plan: Pick<FinanceSavingsPlan, 'monthly_amount' | 'annual_amount_override'>): FinanceMoney {
+  return formatMoneyDecimal(plan.annual_amount_override == null ? BigInt(plan.monthly_amount) * 12n : BigInt(plan.annual_amount_override))
+}
+
+export function calculateSavingsAudienceSummary(
+  accounts: FinanceSavingsAccount[],
+  transactions: FinanceSavingsTransaction[],
+  viewer: FinanceViewer,
+  visibility: FinanceVisibility,
+  monthStart: string | null,
+) {
+  const audienceAccounts = accounts.filter(a => a.household_id === viewer.household_id && a.visibility === visibility
+    && (visibility === 'household' || a.owner_user_id === viewer.user_id))
+  const ids = new Set(audienceAccounts.map(a => a.id))
+  const movements = transactions.filter(t => t.household_id === viewer.household_id && ids.has(t.account_id))
+  const balanceInputs = audienceAccounts.map(a => ({ ...a, opening_balance: financeMinorUnitsToMoney(a.opening_balance) }))
+  const active = getActiveSavingsAccounts(balanceInputs)
+  const moneyMovements = movements.map(t => ({ ...t, amount: financeMinorUnitsToMoney(t.amount) }))
+  const typeBalances: Record<FinanceSavingsAccountType, FinanceMoney> = { cash: '0.00', goal: '0.00', investment: '0.00', retirement: '0.00' }
+  for (const a of active) typeBalances[a.account_type] = addMoney(typeBalances[a.account_type], calculateSavingsBalance(a, moneyMovements))
+  const monthly = new Map<string, bigint>()
+  for (const movement of movements) {
+    if (movement.transfer_id || movement.excluded_from_monthly_savings || BigInt(movement.amount) <= 0n) continue
+    const month = `${movement.transaction_date.slice(0, 7)}-01`
+    monthly.set(month, (monthly.get(month) ?? 0n) + BigInt(movement.amount))
+  }
+  return {
+    active_balance: sumMoney(Object.values(typeBalances)),
+    balances_by_type: typeBalances,
+    actual_monthly_savings: formatMoneyDecimal(monthStart ? monthly.get(monthStart) ?? 0n : 0n),
+    history: [...monthly.entries()].sort(([a], [b]) => b.localeCompare(a))
+      .map(([month_start, amount]) => ({ month_start, amount: formatMoneyDecimal(amount) })),
+  }
+}
+
+export function calculateProjectTotals(project: FinanceProject, expenses: FinanceProjectExpense[]) {
+  const spent = sumMoney(expenses.filter(e => e.household_id === project.household_id && e.project_id === project.id)
+    .map(e => financeMinorUnitsToMoney(e.amount)))
+  const target = project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget)
+  return { spent, target, remaining: target == null ? null : subtractMoney(target, spent) }
 }

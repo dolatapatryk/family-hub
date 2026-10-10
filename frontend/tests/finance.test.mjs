@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createFinanceApi, FinanceVersionConflictError } from '../src/finance/api.ts'
-import { previewSavingsDraftAcceptance } from '../src/finance/calculations.ts'
+import { calculateActiveSavingsTreeBalance, calculateIrregularMonthlyReserve, calculateProjectTotals, calculateSavingsAudienceSummary, calculateSavingsPlanAnnualAmount, previewSavingsDraftAcceptance } from '../src/finance/calculations.ts'
 import { canTransferBetweenSavingsAccounts } from '../src/finance/privacy.ts'
 
 const owner = 'member-owner'
@@ -69,6 +69,145 @@ function fakeClient({ rpcResult, tableResults = {} } = {}) {
     },
   }
 }
+
+test('active tree balance excludes archived descendants without double counting', () => {
+  const root = { id: 'root', opening_balance: '100.00' }
+  const child = { id: 'child', parent_id: 'root', opening_balance: '50.00' }
+  const archived = { id: 'archive', parent_id: 'root', opening_balance: '1000.00', is_archived: true }
+  const hiddenChild = { id: 'hidden', parent_id: 'archive', opening_balance: '900.00' }
+  const accounts = [root, child, archived, hiddenChild]
+  const movements = [{ account_id: 'root', amount: '-20.00' }, { account_id: 'child', amount: '12.34' }]
+  assert.equal(calculateActiveSavingsTreeBalance(root, accounts, movements), '142.34')
+  assert.equal(calculateActiveSavingsTreeBalance(child, accounts, movements), '62.34')
+  assert.equal(calculateActiveSavingsTreeBalance(hiddenChild, accounts, movements), '0.00')
+  assert.equal(calculateActiveSavingsTreeBalance({ ...root, is_archived: true }, [{ ...root, is_archived: true }, child], movements), '0.00')
+})
+
+test('lifecycle uses a snapshot token and exact correction amount through a dedicated RPC', async () => {
+  const client = fakeClient({ rpcResult: { data: { account_id: 'root', version: 2 }, error: null } })
+  const api = createFinanceApi(household, owner, client)
+  await api.previewAccountLifecycle('root')
+  await api.applyAccountLifecycle({ request_id: 'correction', account_id: 'root', expected_version: 1,
+    snapshot_token: 'tree-and-history-hash', action: 'balance', display_balance: '90071992547409.93' })
+  assert.deepEqual(client.rpcCalls[0], { name: 'finance_preview_account_lifecycle', args: { p_household_id: household, p_account_id: 'root' } })
+  assert.deepEqual(client.rpcCalls[1], { name: 'finance_apply_account_lifecycle', args: {
+    p_household_id: household, p_request_id: 'correction', p_account_id: 'root', p_expected_version: 1,
+    p_snapshot_token: 'tree-and-history-hash', p_action: 'balance', p_display_balance_minor: '9007199254740993', p_visibility: null,
+  } })
+})
+
+test('lifecycle conflict survives even when the account version did not change', async () => {
+  const client = fakeClient({ rpcResult: { data: { conflict: true, current_version: 1 }, error: null } })
+  await assert.rejects(createFinanceApi(household, owner, client).applyAccountLifecycle({
+    request_id: 'archive', account_id: 'root', expected_version: 1, snapshot_token: 'stale-history', action: 'archive',
+  }), error => error instanceof FinanceVersionConflictError && error.current_version === 1)
+})
+
+test('reserve rounding covers the annual amount and plan annual overrides remain exact', () => {
+  assert.equal(calculateIrregularMonthlyReserve('10000'), '8.34')
+  assert.equal(calculateIrregularMonthlyReserve('1'), '0.01')
+  assert.equal(calculateIrregularMonthlyReserve('0'), '0.00')
+  assert.equal(calculateIrregularMonthlyReserve('9007199254740993'), '7505999378950.83')
+  assert.throws(() => calculateIrregularMonthlyReserve('-1'))
+  assert.equal(calculateSavingsPlanAnnualAmount({ monthly_amount: '12345', annual_amount_override: null }), '1481.40')
+  assert.equal(calculateSavingsPlanAnnualAmount({ monthly_amount: '12345', annual_amount_override: '150000' }), '1500.00')
+})
+
+test('savings summaries keep private audiences isolated, avoid tree double counts, and retain archived history', () => {
+  const accounts = [
+    { ...account('root'), opening_balance: '10000' },
+    { ...account('child', { parent_id: 'root' }), opening_balance: '5000' },
+    { ...account('archived', { is_archived: true }), opening_balance: '90000' },
+    { ...account('inactive-child', { parent_id: 'archived' }), opening_balance: '10000' },
+    { ...account('private', { visibility: 'private' }), opening_balance: '20000' },
+    { ...account('other-private', { visibility: 'private', owner_user_id: 'other-member' }), opening_balance: '99999' },
+    { ...account('other-household', { household_id: 'outside' }), opening_balance: '88888' },
+  ]
+  const movement = (account_id, amount, overrides = {}) => ({ id: `movement-${account_id}-${amount}`, household_id: household,
+    account_id, amount, transaction_date: '2026-10-11', excluded_from_monthly_savings: false, transfer_id: null, ...overrides })
+  const movements = [movement('root', '1000'), movement('child', '-500'), movement('archived', '700'),
+    movement('root', '500', { excluded_from_monthly_savings: true }), movement('root', '-200', { transfer_id: 'transfer' }),
+    movement('child', '200', { transfer_id: 'transfer' }), movement('private', '333'), movement('other-private', '888'),
+    movement('other-household', '999', { household_id: 'outside' }), movement('root', '600', { transaction_date: '2026-09-30' })]
+  const viewer = { household_id: household, user_id: owner }
+  const shared = calculateSavingsAudienceSummary(accounts, movements, viewer, 'household', '2026-10-01')
+  assert.equal(shared.active_balance, '166.00')
+  assert.equal(shared.actual_monthly_savings, '17.00')
+  assert.deepEqual(shared.history, [{ month_start: '2026-10-01', amount: '17.00' }, { month_start: '2026-09-01', amount: '6.00' }])
+  const personal = calculateSavingsAudienceSummary(accounts, movements, viewer, 'private', '2026-10-01')
+  assert.equal(personal.active_balance, '203.33')
+  assert.equal(personal.actual_monthly_savings, '3.33')
+  assert.equal(calculateSavingsAudienceSummary(accounts, movements, { ...viewer, user_id: 'other-member' }, 'private', '2026-10-01').actual_monthly_savings, '8.88')
+})
+
+test('project totals preserve signed refunds and absent targets, and cannot include other projects or households', () => {
+  const project = { id: 'project', household_id: household, target_budget: '10000' }
+  const expenses = [{ project_id: 'project', household_id: household, amount: '12345' },
+    { project_id: 'project', household_id: household, amount: '-2345' },
+    { project_id: 'other', household_id: household, amount: '99999' },
+    { project_id: 'project', household_id: 'outside', amount: '88888' }]
+  assert.deepEqual(calculateProjectTotals(project, expenses), { spent: '100.00', target: '100.00', remaining: '0.00' })
+  assert.deepEqual(calculateProjectTotals({ ...project, target_budget: null }, expenses), { spent: '100.00', target: null, remaining: null })
+  assert.equal(calculateProjectTotals(project, expenses.slice(0, 1)).remaining, '-23.45')
+})
+
+test('plan, reserve, project and expense reads retain bigint text and page through all rows', async () => {
+  const client = fakeClient({ tableResults: {
+    finance_savings_plans: { data: Array.from({ length: 1003 }, (_, i) => ({ id: `plan-${i}`, monthly_amount_minor: '9007199254740993', annual_amount_override_minor: '99999999999999999' })), error: null },
+    finance_irregular_expense_plans: { data: [{ annual_amount_minor: '9007199254740993' }], error: null },
+    finance_projects: { data: [{ target_budget_minor: null }], error: null },
+    finance_project_expenses: { data: [{ amount_minor: '-9007199254740993', expense_date: null }], error: null },
+  } })
+  const api = createFinanceApi(household, owner, client)
+  const plans = await api.listSavingsPlans()
+  assert.equal(plans.length, 1003)
+  assert.equal(plans[1002].monthly_amount, '9007199254740993')
+  assert.equal((await api.listIrregularReserves())[0].annual_amount, '9007199254740993')
+  assert.equal((await api.listProjects())[0].target_budget, null)
+  assert.equal((await api.listProjectExpenses())[0].amount, '-9007199254740993')
+  for (const call of client.calls) {
+    assert.ok(call.operations.some(op => op[0] === 'eq' && op[1] === 'household_id' && op[2] === household))
+    assert.match(call.operations.find(op => op[0] === 'select')[1], /::text/)
+  }
+})
+
+test('plan mutation carries explicit links, exact amounts, expected versions and idempotent request IDs', async () => {
+  const client = fakeClient({ rpcResult: { data: { plan_id: 'plan', version: 2 }, error: null } })
+  const api = createFinanceApi(household, owner, client)
+  await api.saveSavingsPlan({ request_id: 'save-plan', id: 'plan', expected_version: 1, name: ' Goal ', plan_type: 'goal', account_id: 'account',
+    monthly_amount: '123,45', annual_amount_override: '1500.00', visibility: 'private', sort_order: 4 })
+  assert.deepEqual(client.rpcCalls[0], { name: 'finance_mutate_savings_plan', args: {
+    p_household_id: household, p_request_id: 'save-plan', p_plan_id: 'plan', p_expected_version: 1, p_delete: false,
+    p_details: { name: 'Goal', plan_type: 'goal', account_id: 'account', monthly_amount_minor: '12345', annual_amount_override_minor: '150000', visibility: 'private', sort_order: 4 },
+  } })
+  await api.deleteSavingsPlan({ request_id: 'delete-plan', id: 'plan', expected_version: 2 })
+  assert.equal(client.rpcCalls[1].args.p_delete, true)
+  assert.equal(client.rpcCalls[1].args.p_details, null)
+  await api.loadSavingsPlans({ request_id: 'load-plans', month_id: 'october' })
+  assert.deepEqual(client.rpcCalls[2], { name: 'finance_load_savings_plan', args: { p_household_id: household, p_request_id: 'load-plans', p_month_id: 'october' } })
+})
+
+test('shared mutations use narrow RPCs, retain null dates, and send signed expense minor units', async () => {
+  const client = fakeClient({ rpcResult: { data: { id: 'record', version: 2 }, error: null } })
+  const api = createFinanceApi(household, owner, client)
+  await api.saveIrregularReserve({ request_id: 'reserve', name: ' Insurance ', annual_amount: '100.01', sort_order: 0 })
+  await api.saveProject({ request_id: 'project', id: 'project', expected_version: 1, name: 'Kitchen', description: null, target_budget: '90071992547409.93', is_archived: true, sort_order: 0 })
+  await api.saveProjectExpense({ request_id: 'expense', project_id: 'project', name: 'Refund', amount: '-23.45', expense_date: null, notes: null, sort_order: 0 })
+  assert.equal(client.rpcCalls[0].args.p_details.amount_minor, '10001')
+  assert.equal(client.rpcCalls[1].args.p_details.target_budget_minor, '9007199254740993')
+  assert.equal(client.rpcCalls[1].args.p_details.is_archived, true)
+  assert.equal(client.rpcCalls[2].args.p_details.amount_minor, '-2345')
+  assert.equal(client.rpcCalls[2].args.p_details.expense_date, null)
+  assert.ok(client.rpcCalls.every(call => call.name === 'finance_mutate_shared_record'))
+  await api.deleteProjectExpense({ request_id: 'delete-expense', id: 'expense', expected_version: 2 })
+  assert.equal(client.rpcCalls[3].args.p_delete, true)
+})
+
+test('plan and shared record stale versions surface conflicts', async () => {
+  const api = createFinanceApi(household, owner, fakeClient({ rpcResult: { data: { conflict: true, current_version: 7 }, error: null } }))
+  await assert.rejects(api.deleteSavingsPlan({ request_id: 'plan', id: 'plan', expected_version: 6 }), FinanceVersionConflictError)
+  await assert.rejects(api.deleteProject({ request_id: 'project', id: 'project', expected_version: 6 }), FinanceVersionConflictError)
+})
 
 test('transfer privacy permits matching household scope or same-owner private accounts only', () => {
   assert.equal(canTransferBetweenSavingsAccounts(

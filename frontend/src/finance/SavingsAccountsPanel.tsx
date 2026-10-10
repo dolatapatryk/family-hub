@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  calculateSavingsAccountTreeBalance,
+  calculateActiveSavingsTreeBalance,
+  calculateSavingsBalance,
+  isSavingsAccountArchived,
   getActiveSavingsAccounts,
   previewSavingsDraftAcceptance,
 } from './calculations'
 import { FinanceVersionConflictError, createFinanceApi } from './api'
+import { SavingsAccountLifecycle } from './SavingsAccountLifecycle'
 import { financeMinorUnitsToMoney, formatPln, moneyToFinanceMinorUnits } from './money'
 import type {
   FinanceSavingsAccount,
@@ -94,6 +97,7 @@ export function SavingsAccountsPanel({
   const [openingBalance, setOpeningBalance] = useState('0.00')
   const [targetAmount, setTargetAmount] = useState('')
   const [visibility, setVisibility] = useState<FinanceVisibility>('private')
+  const [parentAccountId, setParentAccountId] = useState('')
   const [editingAccountId, setEditingAccountId] = useState('')
   const [editAccountName, setEditAccountName] = useState('')
   const [editAccountType, setEditAccountType] = useState<FinanceSavingsAccountType>('cash')
@@ -153,15 +157,16 @@ export function SavingsAccountsPanel({
     (total, item) => item.state === 'ready' ? total + BigInt(item.draft.amount) : total,
     0n,
   )
-  const selectedAccount = activeAccounts.find(account => account.id === selectedAccountId)
+  const selectedAccount = accountList.find(account => account.id === selectedAccountId)
+  const selectedAccountActive = activeAccounts.some(account => account.id === selectedAccountId)
   const selectedTransactions = transactionList.filter(transaction => transaction.account_id === selectedAccountId)
   const selectedDrafts = draftList.filter(draft => draft.account_id === selectedAccountId)
 
   useEffect(() => {
-    if (!activeAccounts.some(account => account.id === selectedAccountId)) {
-      setSelectedAccountId(activeAccounts[0]?.id ?? '')
+    if (!accountList.some(account => account.id === selectedAccountId)) {
+      setSelectedAccountId(accountList[0]?.id ?? '')
     }
-  }, [activeAccounts, selectedAccountId])
+  }, [accountList, selectedAccountId])
 
   function invalidateSavings() {
     return Promise.all([
@@ -180,6 +185,7 @@ export function SavingsAccountsPanel({
       opening_balance?: string | null
       target_amount: string | null
       visibility: FinanceVisibility
+      parent_id?: string | null
     }) => {
       let requestId = accountRequests.current.get(input.signature)
       if (!requestId) {
@@ -194,7 +200,7 @@ export function SavingsAccountsPanel({
         account_type: input.account_type,
         parent_id: input.account_id
           ? accountList.find(account => account.id === input.account_id)?.parent_id ?? null
-          : null,
+          : input.parent_id ?? null,
         opening_balance: input.opening_balance ?? null,
         target_amount: input.target_amount,
         color: null,
@@ -211,6 +217,7 @@ export function SavingsAccountsPanel({
         setAccountName('')
         setOpeningBalance('0.00')
         setTargetAmount('')
+        setParentAccountId('')
       }
       setEditingAccountId('')
       await invalidateSavings()
@@ -405,14 +412,16 @@ export function SavingsAccountsPanel({
 
   function submitNewAccount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const signature = JSON.stringify({ name: accountName.trim(), accountType, openingBalance, targetAmount, visibility })
+    const inheritedVisibility = accountList.find(account => account.id === parentAccountId)?.visibility ?? visibility
+    const signature = JSON.stringify({ name: accountName.trim(), accountType, openingBalance, targetAmount, visibility: inheritedVisibility, parentAccountId })
     saveAccount.mutate({
       signature,
       name: accountName.trim(),
       account_type: accountType,
       opening_balance: openingBalance,
       target_amount: targetAmount.trim() || null,
-      visibility,
+      visibility: inheritedVisibility,
+      parent_id: parentAccountId || null,
     })
   }
 
@@ -567,7 +576,7 @@ export function SavingsAccountsPanel({
 
   const accountRows = accountList.map(account => ({
     account,
-    balance: calculateSavingsAccountTreeBalance(
+    balance: calculateActiveSavingsTreeBalance(
       {
         id: account.id,
         opening_balance: financeMinorUnitsToMoney(account.opening_balance),
@@ -714,9 +723,15 @@ export function SavingsAccountsPanel({
           </select>
         </label>
         <label>Zakres
-          <select value={visibility} onChange={event => setVisibility(event.target.value as FinanceVisibility)}>
+          <select value={accountList.find(account => account.id === parentAccountId)?.visibility ?? visibility} disabled={Boolean(parentAccountId)} onChange={event => setVisibility(event.target.value as FinanceVisibility)}>
             <option value="private">Prywatne</option>
             <option value="household">Domowe</option>
+          </select>
+        </label>
+        <label>Konto nadrzędne
+          <select value={parentAccountId} onChange={event => setParentAccountId(event.target.value)}>
+            <option value="">Brak · nowe drzewo</option>
+            {activeAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}
           </select>
         </label>
         <label>Saldo początkowe
@@ -735,14 +750,18 @@ export function SavingsAccountsPanel({
       <div className="finance-savings-account-list">
         {accountRows.map(({ account, balance }) => (
           <div className="finance-savings-account-card" key={account.id}>
-            <button className="finance-savings-account-select" type="button" onClick={() => setSelectedAccountId(account.id)} aria-pressed={selectedAccountId === account.id} disabled={!activeAccounts.some(active => active.id === account.id)}>
+            <button className="finance-savings-account-select" type="button" onClick={() => setSelectedAccountId(account.id)} aria-pressed={selectedAccountId === account.id}>
               <span className="finance-savings-account-copy">
                 <strong>{account.name}</strong>
-                <span>{accountTypeNames[account.account_type]} · {privacyLabel(account.visibility)}{account.is_archived ? ' · Archiwalne' : ''}</span>
+                <span>{accountTypeNames[account.account_type]} · {privacyLabel(account.visibility)}{isSavingsAccountArchived(account, accountList) ? ' · Archiwalne (konto lub przodek)' : ''}</span>
+                {account.parent_id && <span>Podkonto: {accountList.find(parent => parent.id === account.parent_id)?.name}</span>}
+                <span>Własne saldo: {formatPln(calculateSavingsBalance({ id: account.id, opening_balance: financeMinorUnitsToMoney(account.opening_balance) }, transactionList.map(t => ({ account_id: t.account_id, amount: financeMinorUnitsToMoney(t.amount) }))))}</span>
+                {account.target_amount && <span>Cel: {formatPln(financeMinorUnitsToMoney(account.target_amount))}</span>}
               </span>
-              <strong>{formatPln(balance)}</strong>
+              <strong>{formatPln(balance)}<small> · aktywne drzewo</small></strong>
             </button>
             <button className="button-quiet finance-edit-button" type="button" onClick={() => startAccountEdit(account)} disabled={saveAccount.isPending}>Edytuj</button>
+            <SavingsAccountLifecycle api={api} account={account} userId={userId} inactive={isSavingsAccountArchived(account, accountList)} />
             {editingAccountId === account.id && (
               <form className="finance-savings-edit-form" onSubmit={event => submitAccountEdit(event, account)}>
                 <label>Nazwa<input required maxLength={160} value={editAccountName} onChange={event => setEditAccountName(event.target.value)} /></label>
@@ -765,6 +784,8 @@ export function SavingsAccountsPanel({
       {selectedAccount && (
         <div className="finance-savings-transactions">
           <h3 className="finance-subheading">Ruchy · {selectedAccount.name}</h3>
+          {!selectedAccountActive && <p className="panel-message">Historia zarchiwizowanego konta. Przywróć drzewo, aby dodawać lub edytować ruchy.</p>}
+          {selectedAccountActive && <>
           <form className="finance-savings-transaction-form" onSubmit={submitTransaction}>
             <label>Rodzaj
               <select value={transactionDirection} onChange={event => setTransactionDirection(event.target.value as TransactionDirection)}>
@@ -784,6 +805,7 @@ export function SavingsAccountsPanel({
           </form>
           {transactionFormError && <p className="error-message finance-error" role="alert">{transactionFormError}</p>}
           {saveTransaction.isError && <p className="error-message finance-error" role="alert">{errorText(saveTransaction.error)}</p>}
+          </>}
           {transactions.isPending && <p className="panel-message" role="status">Ładuję historię konta…</p>}
           {selectedTransactions.length === 0 && !transactions.isPending && <p className="panel-message">To konto nie ma jeszcze ruchów.</p>}
           {selectedTransactions.map(transaction => {
@@ -819,7 +841,7 @@ export function SavingsAccountsPanel({
                 <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(transaction.amount))}</strong>
                 {!isTransfer && (
                   <div className="finance-savings-transaction-actions">
-                    <button className="button-quiet finance-edit-button" type="button" onClick={() => startTransactionEdit(transaction)} disabled={saveTransaction.isPending || deleteTransaction.isPending}>Edytuj</button>
+                    <button className="button-quiet finance-edit-button" type="button" onClick={() => startTransactionEdit(transaction)} disabled={!selectedAccountActive || saveTransaction.isPending || deleteTransaction.isPending}>Edytuj</button>
                     <button className="button-quiet finance-edit-button" type="button" onClick={() => deleteTransaction.mutate(transaction)} disabled={deleteTransaction.isPending || saveTransaction.isPending}>Usuń</button>
                   </div>
                 )}
@@ -834,7 +856,7 @@ export function SavingsAccountsPanel({
               <p className="panel-message">Utwórz miesiąc w budżecie, aby zaplanować ruchy oszczędnościowe.</p>
             ) : (
               <>
-                <form className="finance-savings-draft-form" onSubmit={submitDraft}>
+                {selectedAccountActive && <form className="finance-savings-draft-form" onSubmit={submitDraft}>
                   <label>Kwota
                     <input required inputMode="decimal" value={draftAmount} onChange={event => setDraftAmount(event.target.value)} placeholder="0,00" />
                   </label>
@@ -844,7 +866,7 @@ export function SavingsAccountsPanel({
                   <button className="primary-button" type="submit" disabled={!selectedMonthId || saveDraft.isPending}>
                     {saveDraft.isPending ? 'Zapisuję plan…' : 'Dodaj planowany ruch'}
                   </button>
-                </form>
+                </form>}
                 {draftFormError && <p className="error-message finance-error" role="alert">{draftFormError}</p>}
                 {saveDraft.isError && <p className="error-message finance-error" role="alert">{errorText(saveDraft.error)}</p>}
                 {drafts.isPending && <p className="panel-message" role="status">Ładuję planowane ruchy…</p>}

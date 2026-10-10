@@ -5,10 +5,49 @@ integrity, grants, RLS, and pgTAP source are implemented but have not yet been
 applied to a local database. Phase 3 is in progress: versioned account,
 ordinary transaction, and savings draft writes; atomic idempotent transfer
 creation/deletion; and atomic, idempotent savings draft acceptance with a
-selected-month preview/results flow are implemented. Sharing, archive/balance
-operations, summaries, and export contracts remain ahead. Database verification
-source is present but the database tests have not been run. Amounts are stored
+selected-month preview/results flow are implemented. Account lifecycle previews,
+archive/restore, balance corrections, and owner-controlled tree visibility are
+implemented in source, together with plan/reserve management, audience-separated
+actual savings summaries, and shared project/expense tracking. Database
+verification source is present but the database tests have not been run. Amounts are stored
 as bounded bigint minor units. No finance data has been changed.
+
+## Current in-app work (2026-10-11)
+
+Continue from `27b55dd` in Family Hub only. Home Budget is unchanged. Data
+import, export/restore, migration review, and cutover are excluded from this
+work; the historical migration roadmap below remains for reference.
+Database tests are intentionally unrun, and database migrations are not applied.
+
+- [x] Account lifecycle implementation: child creation with inherited scope/owner;
+  inherited archive/restore with independent child flags; archived history;
+  exact active-tree balance correction without savings income; owner-only root
+  visibility changes propagating to linked plans; external-transfer blockers.
+- [x] Lifecycle preview tokens detect changes to accounts, ancestors, movements,
+  drafts, and linked plans; apply uses the household lock, optimistic versions,
+  and idempotent receipts. Frontend tests/build pass. pgTAP source added, unrun.
+- [x] Savings plan and shared irregular reserve management: versioned/idempotent
+  CRUD, inherited linked-account audience/type, owner-controlled link/scope
+  changes, and pending-draft blockers. Atomic selected-month loading skips
+  irregular, unlinked, zero, archived, and already-planned accounts; private
+  durable markers prevent regenerating a loaded plan/account after acceptance
+  or deletion of its draft. Loading never creates budget rows or movements.
+- [x] Actual savings summaries: separate household and viewer-private active
+  balances (each account once), balances by type, selected-month positive
+  nonexcluded actual deposits, and monthly history including archived accounts.
+  Transfers, drafts, balance corrections, and withdrawals do not add deposits.
+- [x] Shared projects and expenses: versioned/idempotent create/edit/delete,
+  project archive/restore, preserved optional dates, signed refunds, target/spent/
+  remaining totals. Projects with expenses must be archived rather than deleted;
+  archived expense histories remain readable and cannot be changed until restore.
+
+Verification: 51 frontend tests and the production build pass. Desktop and
+narrow-screen fixture previews were checked for lifecycle previews, plan/reserve
+editors, audience summaries, and project expense entry. Three new pgTAP suites
+cover lifecycle, plan loading/management, and shared reserve/project mutations;
+these are verification **source only** and were intentionally not run. No local
+or deployed database was changed. Runtime database and authenticated end-to-end
+verification remain outstanding; do not treat this checklist as rollout approval.
 
 ## Recommended outcome
 
@@ -159,7 +198,11 @@ are separate future features.
 
 Use the `finance_` prefix in `public` for the browser-facing domain tables.
 Keep migration metadata and internal mutation receipts in `private`.
-The proposal has **13 domain tables**, plus **3 internal support tables**.
+The original proposal has **13 domain tables**, plus **3 internal support tables**.
+The in-app plan loader also adds `private.finance_savings_plan_month_loads`,
+a server-only durable marker keyed by household/month/plan. It retains the
+generated draft/account IDs after draft acceptance or deletion and blocks
+another generated allocation to the same account in that month.
 No separate family/household table or generic JSON state table is needed.
 
 ### Common conventions
@@ -537,11 +580,11 @@ demo/reset functions confined to a clearly separate demo environment.
 | --- | --- | --- |
 | 1. Freeze behavior and contracts | Source-derived fixtures, money representation, privacy rules, row/API types, schema review | Monthly summary, account/tree balance, date grouping, archive inheritance, allowances, and standalone project semantics have parity expectations. Intended acceptance/privacy changes are documented. |
 | 2. Database foundation | New migrations for the 13 domain tables, internal tables, composite FKs, indexes, triggers, grants, RLS | Fresh local DB applies all migrations; same-household shared access and private isolation pass pgTAP, including direct REST-style access. |
-| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, acceptance, copy month, archive/balance correction, and sharing transitions are atomic; unauthorized calls fail; retry/concurrency checks pass. **Progress:** versioned account, ordinary transaction, and draft RPCs; account/movement/draft screens; transfer RPCs/screen; atomic idempotent draft acceptance; selected-month preview/results; and pgTAP/frontend verification source are added. Database runtime verification remains pending; sharing/archive/balance operations, summaries, and exports remain. |
+| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, acceptance, copy month, archive/balance correction, and sharing transitions are atomic; unauthorized calls fail; retry/concurrency checks pass. **Source progress:** account/movement/draft writes; transfers; draft acceptance with preview/results; lifecycle preview/apply with dependency snapshots; plan management/loading with durable monthly markers; shared reserve/project mutations; and audience-separated client summaries are implemented. Frontend verification passes; pgTAP/runtime verification remains unrun. Export is outside the current scope. |
 | 4. Importer | Validator, ID mapping, preview/privacy choices, atomic import, reconciliation receipt | Representative snapshots import with matching counts/totals; bad references or transfer pairs cause no writes; identical retry does not duplicate rows. |
 | 5. Budget vertical slice | Finance layout/routes, month setup, dashboard, budget editing and recurring copy | Household members can use a fresh shared budget and an imported budget; stale edit shows a conflict; empty state works. |
-| 6. Savings vertical slice | Account/goal trees, privacy labels, transactions, transfers, drafts, plans/reserves, archive/restore | Owner sees own private accounts; another member sees only shared accounts; shared and personal totals reconcile; drafts post exactly once. |
-| 7. Remaining parity | Scenarios, project expense pages, accessible export/restore | Scenario creates a correct new month; project totals stay separate; export/restore round-trip includes all accessible finance entities. |
+| 6. Savings vertical slice | Account/goal trees, privacy labels, transactions, transfers, drafts, plans/reserves, archive/restore | **Source implemented:** account trees/lifecycle, movements, transfers, drafts/acceptance, plans/reserves, and separate household/personal summaries. Owner/member/outsider pgTAP source is present; runtime verification remains pending. |
+| 7. Remaining parity | Scenarios, project expense pages, accessible export/restore | **In-app source implemented:** scenarios/month creation and shared project/expense management with independent totals. Export/restore is excluded from the current work and remains future migration scope. |
 | 8. Household cutover | Staging rehearsal, final export, import/reconciliation, desktop/mobile review, target deployment | Two members complete end-to-end flows; outsider cannot read data; final authoritative snapshot reconciles; old app is retained read-only for rollback. |
 
 Start with phases 1–4 before importing any real data. The first useful product

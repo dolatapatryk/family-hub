@@ -1,8 +1,96 @@
 .finance-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin: 0 0 18px;
   border-bottom: 1px solid var(--color-line);
+}
+
+.finance-management-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.finance-management-panel {
+  padding: 0 19px 18px;
+}
+
+.finance-management-panel .panel-head {
+  padding-inline: 0;
+  gap: 12px;
+}
+
+.finance-management-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  padding-block: 14px;
+}
+
+.finance-management-form label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.finance-management-form input,
+.finance-management-form select {
+  width: 100%;
+  min-height: 40px;
+  min-width: 0;
+}
+
+.finance-management-form p,
+.finance-management-form .finance-edit-actions,
+.finance-account-lifecycle,
+.finance-account-lifecycle .finance-savings-edit-form > p,
+.finance-account-lifecycle .finance-savings-edit-form > h3,
+.finance-account-lifecycle .finance-checkbox-label {
+  grid-column: 1 / -1;
+}
+
+.finance-management-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--color-line);
+  padding-block: 12px;
+  overflow-wrap: anywhere;
+}
+
+.finance-management-row p {
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.finance-account-lifecycle .finance-edit-actions {
+  flex-wrap: wrap;
+}
+
+.finance-account-lifecycle .finance-savings-edit-form > p {
+  margin-block: 4px;
+}
+
+@media (max-width: 760px) {
+  .finance-management-form,
+  .finance-management-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .finance-management-panel .panel-head {
+    flex-wrap: wrap;
+  }
+
+  .finance-savings-account-card .finance-savings-account-select {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .finance-tab {

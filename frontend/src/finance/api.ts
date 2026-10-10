@@ -3,6 +3,8 @@ import { supabase } from '../auth/supabase.ts'
 import { moneyToFinanceMinorUnits } from './money.ts'
 import type {
   FinanceAllocationRole,
+  FinanceAccountLifecycleInput,
+  FinanceAccountLifecyclePreview,
   FinanceBudgetItem,
   FinanceBudgetType,
   FinanceCategory,
@@ -27,6 +29,17 @@ import type {
   FinanceScenarioItem,
   FinanceTransferInput,
   FinanceTransferResult,
+  FinanceSavingsPlan,
+  FinanceIrregularExpensePlan,
+  FinanceProject,
+  FinanceProjectExpense,
+  FinanceSaveSavingsPlanInput,
+  FinanceSaveIrregularReserveInput,
+  FinanceSaveProjectInput,
+  FinanceSaveProjectExpenseInput,
+  FinanceDeleteRecordInput,
+  FinanceRecordMutationInput,
+  FinanceLoadSavingsPlanResult,
 } from './types'
 
 type FinanceBudgetItemRow = Omit<FinanceBudgetItem, 'amount'> & { amount_minor: string }
@@ -51,6 +64,11 @@ const savingsTransferColumns = 'id, household_id, created_by, created_at, update
 const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, budget_month_id, excluded_from_monthly_savings, transfer_id, source_planned_transaction_id'
 const savingsDraftColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, account_id, amount_minor:amount::text, description, source_savings_plan_id'
 const financePageSize = 500
+const commonColumns = 'id, household_id, created_by, created_at, updated_at, version'
+const savingsPlanColumns = `${commonColumns}, name, plan_type, account_id, monthly_amount_minor:monthly_amount::text, annual_amount_override_minor:annual_amount_override::text, visibility, owner_user_id, sort_order`
+const reserveColumns = `${commonColumns}, name, annual_amount_minor:annual_amount::text, sort_order`
+const projectColumns = `${commonColumns}, name, description, target_budget_minor:target_budget::text, is_archived, sort_order`
+const projectExpenseColumns = `${commonColumns}, project_id, expense_date, name, amount_minor:amount::text, notes, sort_order`
 
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
 const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, parent_id, color, sort_order'
@@ -216,6 +234,76 @@ export function createFinanceApi(
   userId: FinanceId,
   client: SupabaseClient | null = supabase,
 ) {
+  async function listManagedRecords<T>(table: string, columns: string, signal?: AbortSignal): Promise<T[]> {
+    return readAllPages<T>((from, to) => {
+      let query = requireSupabase(client).from(table).select(columns).eq('household_id', householdId)
+        .order('sort_order', { ascending: true }).order('id', { ascending: true }).range(from, to)
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+    })
+  }
+
+  async function listSavingsPlans(signal?: AbortSignal): Promise<FinanceSavingsPlan[]> {
+    const rows = await listManagedRecords<Omit<FinanceSavingsPlan, 'monthly_amount' | 'annual_amount_override'> & {
+      monthly_amount_minor: string; annual_amount_override_minor: string | null
+    }>('finance_savings_plans', savingsPlanColumns, signal)
+    return rows.map(({ monthly_amount_minor, annual_amount_override_minor, ...row }) => ({
+      ...row, monthly_amount: monthly_amount_minor, annual_amount_override: annual_amount_override_minor,
+    }))
+  }
+
+  async function listIrregularReserves(signal?: AbortSignal): Promise<FinanceIrregularExpensePlan[]> {
+    const rows = await listManagedRecords<Omit<FinanceIrregularExpensePlan, 'annual_amount'> & { annual_amount_minor: string }>('finance_irregular_expense_plans', reserveColumns, signal)
+    return rows.map(({ annual_amount_minor, ...row }) => ({ ...row, annual_amount: annual_amount_minor }))
+  }
+
+  async function listProjects(signal?: AbortSignal): Promise<FinanceProject[]> {
+    const rows = await listManagedRecords<Omit<FinanceProject, 'target_budget'> & { target_budget_minor: string | null }>('finance_projects', projectColumns, signal)
+    return rows.map(({ target_budget_minor, ...row }) => ({ ...row, target_budget: target_budget_minor }))
+  }
+
+  async function listProjectExpenses(signal?: AbortSignal): Promise<FinanceProjectExpense[]> {
+    const rows = await listManagedRecords<Omit<FinanceProjectExpense, 'amount'> & { amount_minor: string }>('finance_project_expenses', projectExpenseColumns, signal)
+    return rows.map(({ amount_minor, ...row }) => ({ ...row, amount: amount_minor }))
+  }
+
+  async function mutateManagedRecord(input: FinanceRecordMutationInput, details: Record<string, unknown> | null, entity: 'plan' | 'reserve' | 'project' | 'expense'): Promise<void> {
+    const result = await resolve<{ conflict?: boolean; current_version?: number }>(() => requireSupabase(client).rpc(
+      entity === 'plan' ? 'finance_mutate_savings_plan' : 'finance_mutate_shared_record', {
+        p_household_id: householdId, p_request_id: input.request_id,
+        ...(entity === 'plan' ? { p_plan_id: input.id ?? null } : { p_entity: entity, p_id: input.id ?? null }),
+        p_expected_version: input.expected_version ?? null, p_delete: details === null, p_details: details,
+      }))
+    if (result.conflict) throw new FinanceVersionConflictError(input.expected_version ?? 0, result.current_version ?? null)
+  }
+
+  function saveSavingsPlan(input: FinanceSaveSavingsPlanInput) {
+    return mutateManagedRecord(input, { name: input.name.trim(), plan_type: input.plan_type, account_id: input.account_id,
+      monthly_amount_minor: moneyToFinanceMinorUnits(input.monthly_amount),
+      annual_amount_override_minor: input.annual_amount_override == null ? null : moneyToFinanceMinorUnits(input.annual_amount_override),
+      visibility: input.visibility, sort_order: input.sort_order }, 'plan')
+  }
+  function deleteSavingsPlan(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'plan') }
+  function saveIrregularReserve(input: FinanceSaveIrregularReserveInput) {
+    return mutateManagedRecord(input, { name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.annual_amount), sort_order: input.sort_order }, 'reserve')
+  }
+  function deleteIrregularReserve(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'reserve') }
+  function saveProject(input: FinanceSaveProjectInput) {
+    return mutateManagedRecord(input, { name: input.name.trim(), description: input.description,
+      target_budget_minor: input.target_budget == null ? null : moneyToFinanceMinorUnits(input.target_budget),
+      is_archived: input.is_archived, sort_order: input.sort_order }, 'project')
+  }
+  function deleteProject(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'project') }
+  function saveProjectExpense(input: FinanceSaveProjectExpenseInput) {
+    return mutateManagedRecord(input, { project_id: input.project_id, expense_date: input.expense_date,
+      name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.amount), notes: input.notes, sort_order: input.sort_order }, 'expense')
+  }
+  function deleteProjectExpense(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'expense') }
+  function loadSavingsPlans(input: { request_id: FinanceId; month_id: FinanceId }): Promise<FinanceLoadSavingsPlanResult> {
+    return resolve<FinanceLoadSavingsPlanResult>(() => requireSupabase(client).rpc('finance_load_savings_plan', {
+      p_household_id: householdId, p_request_id: input.request_id, p_month_id: input.month_id,
+    }))
+  }
   async function listMonths(signal?: AbortSignal): Promise<FinanceMonth[]> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceMonth[]>(() => {
@@ -441,6 +529,27 @@ export function createFinanceApi(
     if ('conflict' in result) {
       throw new FinanceVersionConflictError(input.expected_version, Number(result.current_version))
     }
+  }
+
+  async function previewAccountLifecycle(accountId: FinanceId): Promise<FinanceAccountLifecyclePreview> {
+    return resolve<FinanceAccountLifecyclePreview>(() => requireSupabase(client).rpc('finance_preview_account_lifecycle', {
+      p_household_id: householdId,
+      p_account_id: accountId,
+    }))
+  }
+
+  async function applyAccountLifecycle(input: FinanceAccountLifecycleInput): Promise<void> {
+    const result = await resolve<{ conflict?: boolean; current_version?: number }>(() => requireSupabase(client).rpc('finance_apply_account_lifecycle', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_account_id: input.account_id,
+      p_expected_version: input.expected_version,
+      p_snapshot_token: input.snapshot_token,
+      p_action: input.action,
+      p_display_balance_minor: input.display_balance == null ? null : moneyToFinanceMinorUnits(input.display_balance),
+      p_visibility: input.visibility ?? null,
+    }))
+    if (result.conflict) throw new FinanceVersionConflictError(input.expected_version, result.current_version ?? null)
   }
 
   async function saveSavingsAccount(input: FinanceSaveSavingsAccountInput): Promise<void> {
@@ -758,6 +867,9 @@ export function createFinanceApi(
   }
 
   return {
+    listSavingsPlans, listIrregularReserves, listProjects, listProjectExpenses,
+    saveSavingsPlan, deleteSavingsPlan, saveIrregularReserve, deleteIrregularReserve,
+    saveProject, deleteProject, saveProjectExpense, deleteProjectExpense, loadSavingsPlans,
     listMonths,
     listCategories,
     listBudgetItems,
@@ -771,6 +883,8 @@ export function createFinanceApi(
     createSavingsTransfer,
     deleteSavingsTransfer,
     saveSavingsAccount,
+    previewAccountLifecycle,
+    applyAccountLifecycle,
     saveSavingsTransaction,
     deleteSavingsTransaction,
     saveSavingsDraft,
