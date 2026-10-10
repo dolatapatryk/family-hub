@@ -14,6 +14,10 @@ import type {
   FinanceMutationConflict,
   FinanceSavingsAccount,
   FinanceSavingsTransferRecord,
+  FinanceSavingsTransaction,
+  FinanceSaveSavingsAccountInput,
+  FinanceSaveSavingsTransactionInput,
+  FinanceDeleteSavingsTransactionInput,
   FinanceScenario,
   FinanceScenarioItemChanges,
   FinanceScenarioItem,
@@ -35,9 +39,11 @@ type FinanceTransferMovementRow = {
   amount_minor: string
   description: string | null
 }
+type FinanceSavingsTransactionRow = Omit<FinanceSavingsTransaction, 'amount'> & { amount_minor: string }
 
 const savingsAccountColumns = 'id, household_id, created_by, created_at, updated_at, version, name, account_type, parent_id, opening_balance_minor:opening_balance::text, target_amount_minor:target_amount::text, color, is_archived, visibility, owner_user_id, sort_order'
 const savingsTransferColumns = 'id, household_id, created_by, created_at, updated_at, version'
+const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, budget_month_id, excluded_from_monthly_savings, transfer_id, source_planned_transaction_id'
 const financePageSize = 500
 
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
@@ -159,6 +165,11 @@ function toSavingsAccount(row: FinanceSavingsAccountRow): FinanceSavingsAccount 
   }
 }
 
+function toSavingsTransaction(row: FinanceSavingsTransactionRow): FinanceSavingsTransaction {
+  const { amount_minor, ...transaction } = row
+  return { ...transaction, amount: amount_minor }
+}
+
 function assertRoleMatchesCategory(role: FinanceAllocationRole, categoryType: FinanceBudgetType) {
   if (role === 'personal_allowance' && categoryType !== 'saving') {
     throw new Error('Personal allowances can only use a saving category.')
@@ -249,6 +260,21 @@ export function createFinanceApi(
       return query as unknown as PromiseLike<{ data: FinanceSavingsAccountRow[] | null; error: { message: string } | null }>
     })
     return rows.map(toSavingsAccount)
+  }
+
+  async function listSavingsTransactions(signal?: AbortSignal): Promise<FinanceSavingsTransaction[]> {
+    const supabaseClient = requireSupabase(client)
+    const rows = await readAllPages<FinanceSavingsTransactionRow>((from, to) => {
+      let query = supabaseClient.from('finance_savings_transactions')
+        .select(savingsTransactionColumns)
+        .eq('household_id', householdId)
+        .order('transaction_date', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: FinanceSavingsTransactionRow[] | null; error: { message: string } | null }>
+    })
+    return rows.map(toSavingsTransaction)
   }
 
   async function listSavingsTransfers(signal?: AbortSignal): Promise<FinanceSavingsTransferRecord[]> {
@@ -387,6 +413,97 @@ export function createFinanceApi(
 
     if ('conflict' in result) {
       throw new FinanceVersionConflictError(input.expected_version, Number(result.current_version))
+    }
+  }
+
+  async function saveSavingsAccount(input: FinanceSaveSavingsAccountInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const response = await resolve<{
+      account_id: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    }>(() => supabaseClient.rpc('finance_save_account', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_account_id: input.account_id ?? null,
+      p_expected_version: input.expected_version ?? null,
+      p_name: input.name.trim(),
+      p_account_type: input.account_type,
+      p_parent_id: input.parent_id,
+      p_opening_balance_minor: input.opening_balance == null
+        ? null
+        : moneyToFinanceMinorUnits(input.opening_balance),
+      p_target_amount_minor: input.target_amount == null
+        ? null
+        : moneyToFinanceMinorUnits(input.target_amount),
+      p_color: input.color,
+      p_visibility: input.visibility,
+      p_sort_order: input.sort_order,
+    }) as unknown as PromiseLike<{ data: {
+      account_id: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    } | null; error: { message: string } | null }>)
+    if (response.conflict) {
+      throw new FinanceVersionConflictError(
+        input.expected_version ?? 0,
+        response.current_version == null ? null : Number(response.current_version),
+      )
+    }
+  }
+
+  async function saveSavingsTransaction(input: FinanceSaveSavingsTransactionInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const response = await resolve<{
+      transaction_id: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    }>(() => supabaseClient.rpc('finance_save_transaction', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_transaction_id: input.transaction_id ?? null,
+      p_expected_version: input.expected_version ?? null,
+      p_account_id: input.account_id,
+      p_transaction_date: input.transaction_date,
+      p_amount_minor: moneyToFinanceMinorUnits(input.amount),
+      p_description: input.description?.trim() || null,
+      p_budget_month_id: input.budget_month_id,
+      p_excluded_from_monthly_savings: input.excluded_from_monthly_savings,
+    }) as unknown as PromiseLike<{ data: {
+      transaction_id: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    } | null; error: { message: string } | null }>)
+    if (response.conflict) {
+      throw new FinanceVersionConflictError(
+        input.expected_version ?? 0,
+        response.current_version == null ? null : Number(response.current_version),
+      )
+    }
+  }
+
+  async function deleteSavingsTransaction(input: FinanceDeleteSavingsTransactionInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const response = await resolve<{
+      deleted: true
+      transaction_id: FinanceId
+      account_id: FinanceId
+    } | { conflict: true; transaction_id: FinanceId; current_version: number }>(() => supabaseClient.rpc('finance_delete_transaction', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_transaction_id: input.transaction_id,
+      p_expected_version: input.expected_version,
+    }) as unknown as PromiseLike<{ data: {
+      deleted: true
+      transaction_id: FinanceId
+      account_id: FinanceId
+    } | { conflict: true; transaction_id: FinanceId; current_version: number } | null; error: { message: string } | null }>)
+    if ('conflict' in response) {
+      throw new FinanceVersionConflictError(input.expected_version, Number(response.current_version))
     }
   }
 
@@ -547,12 +664,16 @@ export function createFinanceApi(
     listCategories,
     listBudgetItems,
     listSavingsAccounts,
+    listSavingsTransactions,
     listSavingsTransfers,
     listScenarios,
     listScenarioItems,
     createMonth,
     createSavingsTransfer,
     deleteSavingsTransfer,
+    saveSavingsAccount,
+    saveSavingsTransaction,
+    deleteSavingsTransaction,
     createScenario,
     createBudgetItem,
     createScenarioItem,

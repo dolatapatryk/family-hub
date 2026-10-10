@@ -153,6 +153,118 @@ test('transfer history reads every page beyond the PostgREST default result wind
   assert.ok(client.calls.filter(call => call.table === 'finance_savings_transactions').length > 1)
 })
 
+test('savings transaction reads cast bigint values to exact minor-unit text and page through history', async () => {
+  const movements = Array.from({ length: 501 }, (_, index) => ({
+    id: `movement-${index}`,
+    household_id: household,
+    created_by: owner,
+    created_at: '2026-10-09T12:00:00Z',
+    updated_at: '2026-10-09T12:00:00Z',
+    version: 1,
+    account_id: 'source',
+    transaction_date: '2026-10-09',
+    amount_minor: String(index - 250),
+    description: null,
+    budget_month_id: null,
+    excluded_from_monthly_savings: false,
+    transfer_id: null,
+    source_planned_transaction_id: null,
+  }))
+  const client = fakeClient({ tableResults: { finance_savings_transactions: { data: movements, error: null } } })
+  const history = await createFinanceApi(household, owner, client).listSavingsTransactions()
+
+  assert.equal(history.length, 501)
+  assert.equal(history[0].amount, '-250')
+  assert.equal(history[500].amount, '250')
+  assert.match(client.calls[0].operations.find(([name]) => name === 'select')[1], /amount::text/)
+  assert.ok(client.calls.filter(call => call.table === 'finance_savings_transactions').length > 1)
+})
+
+test('account save RPC sends exact opening and target minor units', async () => {
+  const client = fakeClient({ rpcResult: { data: { account_id: 'account-new', version: 1 }, error: null } })
+  const api = createFinanceApi(household, owner, client)
+  await api.saveSavingsAccount({
+    request_id: 'account-request',
+    name: '  Emergency fund  ',
+    account_type: 'goal',
+    parent_id: null,
+    opening_balance: '125.05',
+    target_amount: '500.00',
+    color: null,
+    visibility: 'private',
+    sort_order: 4,
+  })
+
+  assert.deepEqual(client.rpcCalls[0], {
+    name: 'finance_save_account',
+    args: {
+      p_household_id: household,
+      p_request_id: 'account-request',
+      p_account_id: null,
+      p_expected_version: null,
+      p_name: 'Emergency fund',
+      p_account_type: 'goal',
+      p_parent_id: null,
+      p_opening_balance_minor: '12505',
+      p_target_amount_minor: '50000',
+      p_color: null,
+      p_visibility: 'private',
+      p_sort_order: 4,
+    },
+  })
+})
+
+test('account and transaction stale versions surface frontend conflicts', async () => {
+  const accountClient = fakeClient({ rpcResult: {
+    data: { conflict: true, account_id: 'account-1', current_version: 9 }, error: null,
+  } })
+  await assert.rejects(createFinanceApi(household, owner, accountClient).saveSavingsAccount({
+    request_id: 'account-update', account_id: 'account-1', expected_version: 8,
+    name: 'Updated', account_type: 'cash', parent_id: null, opening_balance: null,
+    target_amount: null, color: null, visibility: 'household', sort_order: 0,
+  }), error => error instanceof FinanceVersionConflictError
+    && error.expected_version === 8 && error.current_version === 9)
+
+  const transactionClient = fakeClient({ rpcResult: {
+    data: { conflict: true, transaction_id: 'movement-1', current_version: 3 }, error: null,
+  } })
+  await assert.rejects(createFinanceApi(household, owner, transactionClient).saveSavingsTransaction({
+    request_id: 'movement-update', transaction_id: 'movement-1', expected_version: 2,
+    account_id: 'account-1', transaction_date: '2026-10-09', amount: '-1.25',
+    description: null, budget_month_id: null, excluded_from_monthly_savings: true,
+  }), error => error instanceof FinanceVersionConflictError
+    && error.expected_version === 2 && error.current_version === 3)
+})
+
+test('ordinary transaction writes preserve signed minor units and deletion request identity', async () => {
+  const saveClient = fakeClient({ rpcResult: { data: { transaction_id: 'movement-1', version: 1 }, error: null } })
+  const api = createFinanceApi(household, owner, saveClient)
+  await api.saveSavingsTransaction({
+    request_id: 'movement-create', account_id: 'account-1', transaction_date: '2026-10-09',
+    amount: '-25.40', description: '  Withdrawal  ', budget_month_id: null,
+    excluded_from_monthly_savings: false,
+  })
+  assert.equal(saveClient.rpcCalls[0].name, 'finance_save_transaction')
+  assert.equal(saveClient.rpcCalls[0].args.p_amount_minor, '-2540')
+  assert.equal(saveClient.rpcCalls[0].args.p_description, 'Withdrawal')
+
+  const deleteClient = fakeClient({ rpcResult: {
+    data: { deleted: true, transaction_id: 'movement-1', account_id: 'account-1' }, error: null,
+  } })
+  await createFinanceApi(household, owner, deleteClient).deleteSavingsTransaction({
+    request_id: 'movement-delete', transaction_id: 'movement-1', expected_version: 5,
+  })
+  assert.deepEqual(deleteClient.rpcCalls[0], {
+    name: 'finance_delete_transaction',
+    args: {
+      p_household_id: household,
+      p_request_id: 'movement-delete',
+      p_transaction_id: 'movement-1',
+      p_expected_version: 5,
+    },
+  })
+})
+
 test('transfer RPC receives exact minor units and both endpoint versions', async () => {
   const client = fakeClient()
   const api = createFinanceApi(household, owner, client)

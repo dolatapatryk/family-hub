@@ -45,6 +45,130 @@
   font-weight: 650;
 }
 
+.finance-savings-account-form,
+.finance-savings-edit-form,
+.finance-savings-transaction-form,
+.finance-savings-transaction-edit {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  padding: 5px 19px 16px;
+}
+
+.finance-savings-account-form label,
+.finance-savings-edit-form label,
+.finance-savings-transaction-form label,
+.finance-savings-transaction-edit label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.finance-savings-account-form input,
+.finance-savings-account-form select,
+.finance-savings-edit-form input,
+.finance-savings-edit-form select,
+.finance-savings-transaction-form input,
+.finance-savings-transaction-form select,
+.finance-savings-transaction-edit input,
+.finance-savings-transaction-edit select {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+}
+
+.finance-savings-account-list {
+  display: grid;
+  gap: 9px;
+  padding-inline: 19px;
+}
+
+.finance-savings-account-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 11px 13px;
+}
+
+.finance-savings-account-select {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.finance-savings-account-select[aria-pressed="true"] .finance-savings-account-copy strong {
+  color: var(--color-blue);
+}
+
+.finance-savings-account-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.finance-savings-account-copy span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.finance-savings-account-card > .finance-edit-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.finance-savings-edit-form,
+.finance-savings-transaction-edit {
+  grid-column: 1 / -1;
+  padding: 10px 0 2px;
+}
+
+.finance-savings-transactions {
+  margin-top: 20px;
+}
+
+.finance-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
+.finance-checkbox-label input {
+  width: 16px !important;
+  min-height: 16px !important;
+}
+
+.finance-savings-transaction-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--color-line);
+  padding: 12px 19px;
+}
+
+.finance-savings-transaction-amount {
+  white-space: nowrap;
+}
+
+.finance-savings-transaction-actions {
+  display: flex;
+  gap: 4px;
+}
+
 .finance-month-select {
   min-width: 190px;
 }
@@ -267,6 +391,13 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .finance-savings-account-form,
+  .finance-savings-edit-form,
+  .finance-savings-transaction-form,
+  .finance-savings-transaction-edit {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .finance-item-edit-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -314,8 +445,16 @@
   .finance-item-form,
   .finance-item-edit-form,
   .finance-scenario-form,
-  .finance-transfer-form {
+  .finance-transfer-form,
+  .finance-savings-account-form,
+  .finance-savings-edit-form,
+  .finance-savings-transaction-form,
+  .finance-savings-transaction-edit {
     grid-template-columns: 1fr;
+    padding-inline: 14px;
+  }
+
+  .finance-savings-account-list {
     padding-inline: 14px;
   }
 
@@ -323,6 +462,16 @@
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 9px;
     padding-inline: 14px;
+  }
+
+  .finance-savings-transaction-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding-inline: 14px;
+  }
+
+  .finance-savings-transaction-actions {
+    grid-column: 1 / -1;
   }
 
   .finance-transfer-row .finance-edit-button {

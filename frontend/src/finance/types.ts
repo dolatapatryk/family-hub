@@ -101,6 +101,40 @@ export interface FinanceSavingsTransaction extends FinanceRow {
   source_planned_transaction_id: FinanceId | null
 }
 
+export interface FinanceSaveSavingsAccountInput {
+  request_id: FinanceId
+  account_id?: FinanceId | null
+  expected_version?: number | null
+  name: string
+  account_type: FinanceSavingsAccountType
+  parent_id: FinanceId | null
+  /** Required for creation; account balance corrections use a separate contract. */
+  opening_balance?: FinanceMoney | null
+  target_amount: FinanceMoney | null
+  color: string | null
+  visibility: FinanceVisibility
+  sort_order: number
+}
+
+export interface FinanceSaveSavingsTransactionInput {
+  request_id: FinanceId
+  transaction_id?: FinanceId | null
+  expected_version?: number | null
+  account_id: FinanceId
+  transaction_date: string
+  /** Signed amount: positive deposits, negative withdrawals. */
+  amount: FinanceMoney
+  description: string | null
+  budget_month_id: FinanceId | null
+  excluded_from_monthly_savings: boolean
+}
+
+export interface FinanceDeleteSavingsTransactionInput {
+  request_id: FinanceId
+  transaction_id: FinanceId
+  expected_version: number
+}
+
 export interface FinancePlannedSavingsTransaction extends FinanceRow {
   month_id: FinanceId
   account_id: FinanceId
