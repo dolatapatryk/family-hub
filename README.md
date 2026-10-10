@@ -142,10 +142,17 @@ Calendar and Today; no yearly copies are inserted. February 29 uses February
 **Siłownia** has private, reusable templates and personal plans. Start a plan
 from a template to save an independent copy of its duration and weekly
 prescription; later template edits apply to new plans only. The plan page shows
-the week/day grid and progress from completed workout slots. End an active plan
-early to keep its history and free the active-plan slot. Apply pending database
-migrations with `npx supabase migration up --local` before using the plan flow.
-Workout entry and result history are being implemented in a later step.
+the week/day grid and progress from completed workout slots. Start or resume the
+next session, record actual reps or seconds for each set, and optionally save a
+base weight with individual set overrides. Drafts can be saved repeatedly
+without advancing the plan. Finishing a session advances the plan in one database
+transaction; completed results can be corrected later without changing progress.
+The history page lists completed sessions and ended plans. Weight defaults and
+set overrides carry forward from earlier completed sessions in the same plan;
+actual results always start blank in a new session. End an active plan early to
+keep completed history and free the active-plan slot. Apply pending database
+migrations with `npx supabase migration up --local` before using the gym flows,
+including `20261011130000_gym_workouts.sql` for workout entry and history.
 
 ## Recurring household tasks
 

@@ -89,16 +89,18 @@ function toDefinition(days: DayDraft[]): GymTemplateDefinition {
       id: day.id,
       name: day.name.trim(),
       blocks: day.blocks.map(block => {
-        const exercises = block.exercises.map((exercise): GymExercise => ({
-          id: exercise.id,
-          name: exercise.name.trim(),
-          sets: numericField(exercise.sets),
-          mode: exercise.mode,
-          target_min: numericField(exercise.targetMin),
-          target_max: numericField(exercise.range ? exercise.targetMax : exercise.targetMin),
-          unilateral: exercise.unilateral,
-          load_type: exercise.loadType,
-        }))
+        const exercises = block.exercises.map((exercise): GymExercise => {
+          const fields = {
+            id: exercise.id,
+            name: exercise.name.trim(),
+            sets: numericField(exercise.sets),
+            target_min: numericField(exercise.targetMin),
+            target_max: numericField(exercise.range ? exercise.targetMax : exercise.targetMin),
+            unilateral: exercise.unilateral,
+            load_type: exercise.loadType,
+          }
+          return exercise.mode === 'reps' ? { ...fields, mode: 'reps' } : { ...fields, mode: 'time' }
+        })
         if (block.type === 'single') return { id: block.id, type: 'single', exercises: [exercises[0]] }
         return { id: block.id, type: 'superset', exercises: exercises as [GymExercise, GymExercise, ...GymExercise[]] }
       }),

@@ -1,6 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase.ts'
-import type { GymPlan, GymTemplate, GymTemplateDefinition, GymWorkout, SaveGymTemplateInput } from './types'
+import type {
+  GymPlan,
+  GymTemplate,
+  GymTemplateDefinition,
+  GymWorkout,
+  GymWorkoutCompletion,
+  GymWorkoutDetails,
+  GymWorkoutExerciseInput,
+  SaveGymTemplateInput,
+} from './types'
 
 interface GymTemplateRow {
   id: string
@@ -44,6 +53,23 @@ interface GymWorkoutRow {
   completed_at: string | null
   created_at: string
   updated_at: string
+}
+
+interface GymWorkoutExerciseRow {
+  workout_id: string
+  owner_user_id: string
+  exercise_id: string
+  default_weight_grams: number | null
+}
+
+interface GymWorkoutSetRow {
+  workout_id: string
+  owner_user_id: string
+  exercise_id: string
+  set_number: number
+  actual_reps: number | null
+  actual_seconds: number | null
+  weight_override_grams: number | null
 }
 
 const templateColumns = 'id, owner_user_id, name, weeks_count, days_per_week, definition, definition_version, revision, archived_at, created_at, updated_at'
@@ -132,9 +158,8 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
       .eq('owner_user_id', userId)
       .eq('id', templateId)
       .is('archived_at', null)
-      .maybeSingle<GymTemplateRow>()
     if (signal) query = query.abortSignal(signal)
-    const { data: row, error } = await query
+    const { data: row, error } = await query.maybeSingle<GymTemplateRow>()
     if (error) throw new Error(error.message)
     if (!row) throw new Error('Nie znaleziono aktywnego szablonu treningowego.')
     return toGymTemplate(row)
@@ -177,9 +202,8 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
       .select(planColumns)
       .eq('owner_user_id', userId)
       .eq('status', 'active')
-      .maybeSingle<GymPlanRow>()
     if (signal) query = query.abortSignal(signal)
-    const { data: row, error } = await query
+    const { data: row, error } = await query.maybeSingle<GymPlanRow>()
     if (error) throw new Error(error.message)
     return row ? toGymPlan(row) : null
   }
@@ -191,9 +215,8 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
       .select(planColumns)
       .eq('owner_user_id', userId)
       .eq('id', planId)
-      .maybeSingle<GymPlanRow>()
     if (signal) query = query.abortSignal(signal)
-    const { data: row, error } = await query
+    const { data: row, error } = await query.maybeSingle<GymPlanRow>()
     if (error) throw new Error(error.message)
     if (!row) throw new Error('Nie znaleziono tego planu treningowego.')
     return toGymPlan(row)
@@ -213,6 +236,53 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
     return rows.map(toGymWorkout)
   }
 
+  async function getWorkoutDetails(workoutId: string, signal?: AbortSignal): Promise<GymWorkoutDetails> {
+    const supabaseClient = requireSupabase(client)
+    let workoutQuery = supabaseClient
+      .from('gym_workouts')
+      .select(workoutColumns)
+      .eq('owner_user_id', userId)
+      .eq('id', workoutId)
+    if (signal) workoutQuery = workoutQuery.abortSignal(signal)
+    const { data: workoutRow, error: workoutError } = await workoutQuery.maybeSingle<GymWorkoutRow>()
+    if (workoutError) throw new Error(workoutError.message)
+    if (!workoutRow) throw new Error('Nie znaleziono tego treningu.')
+
+    let exercisesQuery = supabaseClient
+      .from('gym_workout_exercises')
+      .select('workout_id, owner_user_id, exercise_id, default_weight_grams')
+      .eq('owner_user_id', userId)
+      .eq('workout_id', workoutId)
+      .order('exercise_id', { ascending: true })
+    let setsQuery = supabaseClient
+      .from('gym_workout_sets')
+      .select('workout_id, owner_user_id, exercise_id, set_number, actual_reps, actual_seconds, weight_override_grams')
+      .eq('owner_user_id', userId)
+      .eq('workout_id', workoutId)
+      .order('exercise_id', { ascending: true })
+      .order('set_number', { ascending: true })
+    if (signal) {
+      exercisesQuery = exercisesQuery.abortSignal(signal)
+      setsQuery = setsQuery.abortSignal(signal)
+    }
+    const [exerciseRows, setRows] = await Promise.all([
+      resolve<GymWorkoutExerciseRow[]>(exercisesQuery),
+      resolve<GymWorkoutSetRow[]>(setsQuery),
+    ])
+
+    return {
+      workout: toGymWorkout(workoutRow),
+      exercises: exerciseRows.map(row => ({ exerciseId: row.exercise_id, defaultWeightGrams: row.default_weight_grams })),
+      sets: setRows.map(row => ({
+        exerciseId: row.exercise_id,
+        setNumber: row.set_number,
+        actualReps: row.actual_reps,
+        actualSeconds: row.actual_seconds,
+        weightOverrideGrams: row.weight_override_grams,
+      })),
+    }
+  }
+
   async function startPlan(templateId: string, name: string): Promise<string> {
     const supabaseClient = requireSupabase(client)
     return resolve<string>(supabaseClient.rpc('start_gym_plan', {
@@ -226,5 +296,63 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
     return resolve<string>(supabaseClient.rpc('abandon_gym_plan', { p_plan_id: planId }))
   }
 
-  return { list, get, save, archive, listPlans, activePlan, getPlan, listWorkouts, startPlan, abandonPlan }
+  async function startWorkout(planId: string, weekNumber: number, dayNumber: number): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<string>(supabaseClient.rpc('start_gym_workout', {
+      p_plan_id: planId,
+      p_week_number: weekNumber,
+      p_day_number: dayNumber,
+    }))
+  }
+
+  async function saveWorkoutDraft(workoutId: string, expectedRevision: number, results: GymWorkoutExerciseInput[]): Promise<number> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<number>(supabaseClient.rpc('save_gym_workout_draft', {
+      p_workout_id: workoutId,
+      p_expected_revision: expectedRevision,
+      p_results: results,
+    }))
+  }
+
+  async function completeWorkout(
+    workoutId: string,
+    expectedRevision: number,
+    results: GymWorkoutExerciseInput[],
+    performedOn: string,
+  ): Promise<GymWorkoutCompletion> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<GymWorkoutCompletion>(supabaseClient.rpc('complete_gym_workout', {
+      p_workout_id: workoutId,
+      p_expected_revision: expectedRevision,
+      p_results: results,
+      p_performed_on: performedOn,
+    }))
+  }
+
+  async function correctWorkoutResults(workoutId: string, expectedRevision: number, results: GymWorkoutExerciseInput[]): Promise<number> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<number>(supabaseClient.rpc('correct_gym_workout_results', {
+      p_workout_id: workoutId,
+      p_expected_revision: expectedRevision,
+      p_results: results,
+    }))
+  }
+
+  return {
+    list,
+    get,
+    save,
+    archive,
+    listPlans,
+    activePlan,
+    getPlan,
+    listWorkouts,
+    getWorkoutDetails,
+    startPlan,
+    abandonPlan,
+    startWorkout,
+    saveWorkoutDraft,
+    completeWorkout,
+    correctWorkoutResults,
+  }
 }

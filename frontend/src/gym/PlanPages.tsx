@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
@@ -7,7 +7,7 @@ import { useToast } from '../components/ToastProvider'
 import { createGymApi } from './api'
 import { exercisePrescription, getGymPlanProgress, getGymTemplateSummary } from './gym'
 import { gymKeys } from './queries'
-import type { GymPlan, GymPlanProgress, GymPlanSlot } from './types'
+import type { GymPlan, GymPlanProgress, GymPlanSlot, GymWorkout } from './types'
 
 function planStatusLabel(status: GymPlan['status']) {
   if (status === 'active') return 'Aktywny'
@@ -27,6 +27,15 @@ function dayName(plan: GymPlan, dayNumber: number) {
 
 function planDate(value: string) {
   return new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium' }).format(new Date(value))
+}
+
+function formatHistoryDateTime(value: string) {
+  return new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function formatPerformedDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium' }).format(new Date(year, month - 1, day))
 }
 
 function progressLabel(progress: GymPlanProgress) {
@@ -67,6 +76,10 @@ export function GymHomePage() {
     queryFn: ({ signal }) => api.listWorkouts(activePlan.data!.id, signal),
     enabled: Boolean(activePlan.data),
   })
+  const progress = activePlan.data && workouts.data ? getGymPlanProgress(activePlan.data, workouts.data) : null
+  const nextWorkout = progress?.currentSlot
+    ? workouts.data?.find(workout => workout.weekNumber === progress.currentSlot?.weekNumber && workout.dayNumber === progress.currentSlot?.dayNumber)
+    : undefined
 
   return <>
     <PageHeader eyebrow="Trening osobisty" title="Siłownia" description="Twój aktywny plan, postępy i prywatne szablony treningowe." action={<Link className="primary-button" to="/gym/templates">Szablony treningowe</Link>} />
@@ -74,7 +87,10 @@ export function GymHomePage() {
     {activePlan.isError && <div className="panel error-message" role="alert"><p>Nie udało się pobrać aktywnego planu: {activePlan.error.message}</p><button className="button-quiet" type="button" disabled={activePlan.isFetching} onClick={() => void activePlan.refetch()}>Spróbuj ponownie</button></div>}
     {activePlan.data && workouts.isPending && <section className="panel"><p className="panel-message" role="status">Ładuję postępy…</p></section>}
     {activePlan.data && workouts.isError && <div className="panel error-message" role="alert"><p>Nie udało się pobrać postępów: {workouts.error.message}</p><button className="button-quiet" type="button" disabled={workouts.isFetching} onClick={() => void workouts.refetch()}>Spróbuj ponownie</button></div>}
-    {activePlan.data && workouts.data && <PlanProgressSummary plan={activePlan.data} progress={getGymPlanProgress(activePlan.data, workouts.data)} />}
+    {activePlan.data && progress && <PlanProgressSummary plan={activePlan.data} progress={progress} />}
+    {activePlan.data && progress?.currentSlot && <Link className="primary-button gym-home-workout-action" to={`/gym/plans/${activePlan.data.id}/workouts/${progress.currentSlot.weekNumber}/${progress.currentSlot.dayNumber}`}>
+      {nextWorkout?.status === 'draft' ? 'Wznów trening' : 'Rozpocznij trening'} · tydzień {progress.currentSlot.weekNumber}, dzień {progress.currentSlot.dayNumber}
+    </Link>}
     {activePlan.data && <Link className="gym-home-plan-link" to={`/gym/plans/${activePlan.data.id}`}>Otwórz plan i siatkę treningów <span aria-hidden="true">→</span></Link>}
     {activePlan.data === null && <section className="panel empty-panel gym-no-active-plan">
       <h2>Nie masz aktywnego planu.</h2>
@@ -194,11 +210,17 @@ export function GymPlanPage() {
             <div className="gym-week-heading"><h2 id={`gym-week-${weekNumber}`}>Tydzień {weekNumber}</h2><span>{progress.slots.filter(slot => slot.weekNumber === weekNumber && slot.status === 'completed').length} / {currentPlan.daysPerWeek} ukończonych</span></div>
             <div className="gym-week-grid">{progress.slots.filter(slot => slot.weekNumber === weekNumber).map(slot => {
               const isCurrent = progress.currentSlot?.weekNumber === slot.weekNumber && progress.currentSlot.dayNumber === slot.dayNumber
-              return <div className={`gym-slot is-${slot.status}${isCurrent ? ' is-next' : ''}`} key={`${slot.weekNumber}-${slot.dayNumber}`} aria-current={isCurrent ? 'step' : undefined}>
+              const isAccessible = slot.status === 'completed' || isCurrent
+              const className = `gym-slot is-${slot.status}${isCurrent ? ' is-next' : ''}`
+              const contents = <>
                 <span className="gym-slot-day">Dzień {slot.dayNumber}</span>
                 <strong>{dayName(currentPlan, slot.dayNumber)}</strong>
                 <span className="gym-slot-status">{slotStatusLabel(slot.status)}</span>
-              </div>
+                {isAccessible && <span className="gym-slot-action">{slot.status === 'completed' ? 'Zobacz wyniki' : slot.status === 'in_progress' ? 'Wznów trening' : 'Rozpocznij trening'} <span aria-hidden="true">→</span></span>}
+              </>
+              return isAccessible
+                ? <Link className={className} key={`${slot.weekNumber}-${slot.dayNumber}`} to={`/gym/plans/${currentPlan.id}/workouts/${slot.weekNumber}/${slot.dayNumber}`} aria-current={isCurrent ? 'step' : undefined}>{contents}</Link>
+                : <div className={className} key={`${slot.weekNumber}-${slot.dayNumber}`}>{contents}</div>
             })}</div>
           </section>
         })}
@@ -223,11 +245,37 @@ export function GymHistoryPage() {
     queryFn: ({ signal }) => api.listPlans(signal),
   })
   const history = plans.data?.filter(plan => plan.status !== 'active') ?? []
+  const workoutQueries = useQueries({
+    queries: (plans.data ?? []).map(plan => ({
+      queryKey: gymKeys.workouts(profile.id, plan.id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => api.listWorkouts(plan.id, signal),
+    })),
+  })
+  const workoutQueryError = workoutQueries.find(query => query.isError)?.error
+  const workoutHistory = workoutQueries.flatMap((query, queryIndex) => (query.data ?? [])
+    .filter(workout => workout.status === 'completed')
+    .map(workout => ({ workout, plan: plans.data?.[queryIndex] })))
+    .filter((item): item is { workout: GymWorkout; plan: GymPlan } => Boolean(item.plan))
+    .sort((left, right) => (right.workout.completedAt ?? '').localeCompare(left.workout.completedAt ?? ''))
+  const isWorkoutHistoryPending = Boolean(plans.data) && workoutQueries.some(query => query.isPending)
 
   return <>
-    <PageHeader eyebrow="Siłownia" title="Historia planów" description="Ukończone i wcześniej zakończone plany pozostają dostępne razem z zapisanym postępem." action={<Link className="text-button" to="/gym">Wróć do Siłowni</Link>} />
+    <PageHeader eyebrow="Siłownia" title="Historia treningów" description="Zobacz wyniki ukończonych sesji oraz postęp zakończonych planów." action={<Link className="text-button" to="/gym">Wróć do Siłowni</Link>} />
     {plans.isPending && <section className="panel"><p className="panel-message" role="status">Ładuję historię…</p></section>}
     {plans.isError && <div className="panel error-message" role="alert"><p>Nie udało się pobrać historii: {plans.error.message}</p><button className="button-quiet" type="button" disabled={plans.isFetching} onClick={() => void plans.refetch()}>Spróbuj ponownie</button></div>}
+    {plans.data && isWorkoutHistoryPending && <section className="panel"><p className="panel-message" role="status">Ładuję ukończone treningi…</p></section>}
+    {plans.data && workoutQueryError && <div className="panel error-message" role="alert"><p>Nie udało się pobrać ukończonych treningów: {workoutQueryError.message}</p><button className="button-quiet" type="button" onClick={() => void Promise.all(workoutQueries.map(query => query.refetch()))}>Spróbuj ponownie</button></div>}
+    {plans.data && !isWorkoutHistoryPending && !workoutQueryError && workoutHistory.length === 0 && <section className="panel empty-panel"><h2>Nie ma jeszcze ukończonych treningów.</h2><p>Po zakończeniu pierwszego dnia jego wyniki pojawią się tutaj.</p></section>}
+    {workoutHistory.length > 0 && <section className="gym-history-section" aria-labelledby="gym-completed-workouts-title">
+      <div className="gym-section-heading"><div><h2 id="gym-completed-workouts-title">Ukończone treningi</h2><p>Otwórz sesję, aby przejrzeć albo poprawić wyniki serii.</p></div><span className="gym-count-pill">{workoutHistory.length}</span></div>
+      <ul className="gym-template-list gym-workout-history-list">{workoutHistory.map(({ workout, plan }) => <li className="gym-template-card" key={workout.id}>
+        <div className="gym-template-card-main"><div className="gym-template-card-copy">
+          <div className="gym-template-title-row"><h3>{plan.name}</h3><span className="gym-status-label">Ukończony</span></div>
+          <p className="gym-template-meta">{workout.performedOn ? formatPerformedDate(workout.performedOn) : 'Data nieznana'} · {workout.completedAt ? formatHistoryDateTime(workout.completedAt) : 'czas nieznany'} · tydzień {workout.weekNumber}, dzień {workout.dayNumber} · {dayName(plan, workout.dayNumber)}</p>
+          <p className="gym-workout-history-prescription">{plan.definitionSnapshot.days[workout.dayNumber - 1]?.blocks.reduce((count, block) => count + block.exercises.length, 0) ?? 0} ćwiczeń · wyniki zapisane osobno dla każdej serii</p>
+        </div><Link className="text-button" to={`/gym/plans/${plan.id}/workouts/${workout.weekNumber}/${workout.dayNumber}`}>Zobacz wyniki</Link></div>
+      </li>)}</ul>
+    </section>}
     {plans.data && history.length === 0 && <section className="panel empty-panel"><h2>Nie ma jeszcze zakończonych planów.</h2><p>Po ukończeniu planu albo zakończeniu go wcześniej pojawi się tutaj.</p></section>}
     {plans.data && history.length > 0 && <ul className="gym-template-list gym-plan-history-list">{history.map(item => {
       const completedDates = [item.completedAt, item.abandonedAt].filter(Boolean) as string[]
