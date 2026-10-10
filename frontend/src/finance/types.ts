@@ -207,6 +207,23 @@ export type FinanceBudgetItemMutation =
   | { kind: 'create'; changes: FinanceBudgetItemChanges }
   | { kind: 'update'; id: FinanceId; expected_version: number; changes: FinanceBudgetItemChanges }
 
+export interface FinanceScenarioItemChanges {
+  scenario_id: FinanceId
+  category_id: FinanceId
+  name: string
+  /** Decimal major-unit input; the adapter converts it to bigint minor units. */
+  amount: FinanceMoney
+  allocation_role: FinanceAllocationRole
+  is_planned: boolean
+  is_recurring: boolean
+  notes: string | null
+  sort_order: number
+}
+
+export type FinanceScenarioItemMutation =
+  | { kind: 'create'; changes: FinanceScenarioItemChanges }
+  | { kind: 'update'; id: FinanceId; expected_version: number; changes: FinanceScenarioItemChanges }
+
 /** Implementations cast persisted bigint amount fields to text in PostgREST selects. */
 export type FinanceBudgetApi = {
   listMonths(signal?: AbortSignal): Promise<FinanceMonth[]>

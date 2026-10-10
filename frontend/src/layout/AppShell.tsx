@@ -14,6 +14,7 @@ interface AppShellProps {
 
 const navigation = [
   { to: '/', label: 'Dziś', icon: 'today', end: true },
+  { to: '/finance', label: 'Finanse', icon: 'finance', end: false },
   { to: '/tasks', label: 'Zadania', icon: 'tasks', end: false },
   { to: '/shopping', label: 'Zakupy', icon: 'shopping', end: false },
   { to: '/household', label: 'Domownicy', icon: 'members', end: false },
@@ -29,6 +30,7 @@ function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] })
     members: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.5a3 3 0 0 1 0 5.8M17 14a5 5 0 0 1 3.5 4.8" /></>,
     calendar: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01" /></>,
     annual: <><rect x="3" y="8" width="18" height="13" rx="2" /><path d="M3 12h18M12 8v13" /><path d="M12 8H8.5a2.5 2.5 0 1 1 2.4-3.2L12 8Zm0 0h3.5a2.5 2.5 0 1 0-2.4-3.2L12 8Z" /></>,
+    finance: <><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h3" /><circle cx="16.5" cy="15" r="1.5" /></>,
   }
 
   return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
