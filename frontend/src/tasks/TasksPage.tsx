@@ -87,10 +87,9 @@ export function TasksPage() {
           <span>{formOpen ? 'Anuluj' : 'Dodaj zadanie'}</span>
         </button>}
       />
-      <div className="tasks-toolbar">
-        <p className="task-meta">Dodajesz jako <strong>{profile.name}</strong></p>
-        {tasks.data && <span className="small-muted">{openCount} otwartych · {tasks.data.length - openCount} ukończonych</span>}
-      </div>
+      {tasks.data && <div className="tasks-toolbar">
+        <span className="small-muted">{openCount} otwartych · {tasks.data.length - openCount} ukończonych</span>
+      </div>}
       {notice && <p role="status" className="task-notice">{notice}</p>}
       <form id="add-task-form" className="panel task-form" hidden={!formOpen} onSubmit={submit}>
         <div className="panel-head"><div><h2 className="panel-title">Dodaj zadanie</h2><p className="panel-kicker">Dodaj termin lub przypisz je do domownika.</p></div></div>

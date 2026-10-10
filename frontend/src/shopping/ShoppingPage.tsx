@@ -103,7 +103,7 @@ export function ShoppingPage() {
           </label>
           <button className="primary-button shopping-add" type="submit" disabled={!name.trim() || create.isPending}>{create.isPending ? 'Dodaję…' : '+ Dodaj'}</button>
         </div>
-        <div className="shopping-form-foot"><p className="task-meta">Dodajesz jako <strong>{profile.name}</strong></p>{create.isError && <p className="error-message" role="alert">{create.error.message}</p>}</div>
+        {create.isError && <div className="shopping-form-foot"><p className="error-message" role="alert">{create.error.message}</p></div>}
       </form>
       <p className="shopping-notice" role="status">{notice}</p>
       {items.isPending && <p className="panel-message" role="status">Ładuję listę zakupów…</p>}
