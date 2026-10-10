@@ -671,6 +671,9 @@ export function FinancePage() {
           api={api}
           householdId={profile.household_id}
           userId={profile.id}
+          months={monthList}
+          selectedMonthId={selectedMonthId}
+          onSelectMonth={setSelectedMonthId}
         />
       ) : (
         <SavingsTransfersPanel

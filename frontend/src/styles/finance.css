@@ -48,7 +48,9 @@
 .finance-savings-account-form,
 .finance-savings-edit-form,
 .finance-savings-transaction-form,
-.finance-savings-transaction-edit {
+.finance-savings-transaction-edit,
+.finance-savings-draft-form,
+.finance-savings-draft-edit {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: end;
@@ -59,7 +61,9 @@
 .finance-savings-account-form label,
 .finance-savings-edit-form label,
 .finance-savings-transaction-form label,
-.finance-savings-transaction-edit label {
+.finance-savings-transaction-edit label,
+.finance-savings-draft-form label,
+.finance-savings-draft-edit label {
   display: grid;
   min-width: 0;
   gap: 6px;
@@ -75,7 +79,11 @@
 .finance-savings-transaction-form input,
 .finance-savings-transaction-form select,
 .finance-savings-transaction-edit input,
-.finance-savings-transaction-edit select {
+.finance-savings-transaction-edit select,
+.finance-savings-draft-form input,
+.finance-savings-draft-form select,
+.finance-savings-draft-edit input,
+.finance-savings-draft-edit select {
   width: 100%;
   min-width: 0;
   min-height: 40px;
@@ -131,13 +139,18 @@
 }
 
 .finance-savings-edit-form,
-.finance-savings-transaction-edit {
+.finance-savings-transaction-edit,
+.finance-savings-draft-edit {
   grid-column: 1 / -1;
   padding: 10px 0 2px;
 }
 
 .finance-savings-transactions {
   margin-top: 20px;
+}
+
+.finance-savings-drafts {
+  margin-top: 24px;
 }
 
 .finance-checkbox-label {
@@ -394,7 +407,9 @@
   .finance-savings-account-form,
   .finance-savings-edit-form,
   .finance-savings-transaction-form,
-  .finance-savings-transaction-edit {
+  .finance-savings-transaction-edit,
+  .finance-savings-draft-form,
+  .finance-savings-draft-edit {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -449,7 +464,9 @@
   .finance-savings-account-form,
   .finance-savings-edit-form,
   .finance-savings-transaction-form,
-  .finance-savings-transaction-edit {
+  .finance-savings-transaction-edit,
+  .finance-savings-draft-form,
+  .finance-savings-draft-edit {
     grid-template-columns: 1fr;
     padding-inline: 14px;
   }

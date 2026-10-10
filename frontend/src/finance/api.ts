@@ -13,11 +13,14 @@ import type {
   FinanceMoney,
   FinanceMutationConflict,
   FinanceSavingsAccount,
+  FinancePlannedSavingsTransaction,
   FinanceSavingsTransferRecord,
   FinanceSavingsTransaction,
   FinanceSaveSavingsAccountInput,
   FinanceSaveSavingsTransactionInput,
   FinanceDeleteSavingsTransactionInput,
+  FinanceSaveSavingsDraftInput,
+  FinanceDeleteSavingsDraftInput,
   FinanceScenario,
   FinanceScenarioItemChanges,
   FinanceScenarioItem,
@@ -40,10 +43,12 @@ type FinanceTransferMovementRow = {
   description: string | null
 }
 type FinanceSavingsTransactionRow = Omit<FinanceSavingsTransaction, 'amount'> & { amount_minor: string }
+type FinanceSavingsDraftRow = Omit<FinancePlannedSavingsTransaction, 'amount'> & { amount_minor: string }
 
 const savingsAccountColumns = 'id, household_id, created_by, created_at, updated_at, version, name, account_type, parent_id, opening_balance_minor:opening_balance::text, target_amount_minor:target_amount::text, color, is_archived, visibility, owner_user_id, sort_order'
 const savingsTransferColumns = 'id, household_id, created_by, created_at, updated_at, version'
 const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, budget_month_id, excluded_from_monthly_savings, transfer_id, source_planned_transaction_id'
+const savingsDraftColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, account_id, amount_minor:amount::text, description, source_savings_plan_id'
 const financePageSize = 500
 
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
@@ -170,6 +175,11 @@ function toSavingsTransaction(row: FinanceSavingsTransactionRow): FinanceSavings
   return { ...transaction, amount: amount_minor }
 }
 
+function toSavingsDraft(row: FinanceSavingsDraftRow): FinancePlannedSavingsTransaction {
+  const { amount_minor, ...draft } = row
+  return { ...draft, amount: amount_minor }
+}
+
 function assertRoleMatchesCategory(role: FinanceAllocationRole, categoryType: FinanceBudgetType) {
   if (role === 'personal_allowance' && categoryType !== 'saving') {
     throw new Error('Personal allowances can only use a saving category.')
@@ -275,6 +285,22 @@ export function createFinanceApi(
       return query as unknown as PromiseLike<{ data: FinanceSavingsTransactionRow[] | null; error: { message: string } | null }>
     })
     return rows.map(toSavingsTransaction)
+  }
+
+  async function listSavingsDrafts(monthId: FinanceId, signal?: AbortSignal): Promise<FinancePlannedSavingsTransaction[]> {
+    const supabaseClient = requireSupabase(client)
+    const rows = await readAllPages<FinanceSavingsDraftRow>((from, to) => {
+      let query = supabaseClient.from('finance_planned_savings_transactions')
+        .select(savingsDraftColumns)
+        .eq('household_id', householdId)
+        .eq('month_id', monthId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: FinanceSavingsDraftRow[] | null; error: { message: string } | null }>
+    })
+    return rows.map(toSavingsDraft)
   }
 
   async function listSavingsTransfers(signal?: AbortSignal): Promise<FinanceSavingsTransferRecord[]> {
@@ -507,6 +533,62 @@ export function createFinanceApi(
     }
   }
 
+  async function saveSavingsDraft(input: FinanceSaveSavingsDraftInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const response = await resolve<{
+      draft_id: FinanceId
+      month_id?: FinanceId
+      account_id?: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    }>(() => supabaseClient.rpc('finance_save_draft', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_draft_id: input.draft_id ?? null,
+      p_expected_version: input.expected_version ?? null,
+      p_month_id: input.month_id,
+      p_account_id: input.account_id,
+      p_amount_minor: moneyToFinanceMinorUnits(input.amount),
+      p_description: input.description?.trim() || null,
+      p_source_savings_plan_id: input.source_savings_plan_id ?? null,
+    }) as unknown as PromiseLike<{ data: {
+      draft_id: FinanceId
+      month_id?: FinanceId
+      account_id?: FinanceId
+      version?: number
+      conflict?: true
+      current_version?: number
+    } | null; error: { message: string } | null }>)
+    if (response.conflict) {
+      throw new FinanceVersionConflictError(
+        input.expected_version ?? 0,
+        response.current_version == null ? null : Number(response.current_version),
+      )
+    }
+  }
+
+  async function deleteSavingsDraft(input: FinanceDeleteSavingsDraftInput): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    const response = await resolve<{
+      deleted: true
+      draft_id: FinanceId
+      account_id: FinanceId
+    } | { conflict: true; draft_id: FinanceId; current_version: number }>(() => supabaseClient.rpc('finance_delete_draft', {
+      p_household_id: householdId,
+      p_request_id: input.request_id,
+      p_draft_id: input.draft_id,
+      p_expected_version: input.expected_version,
+    }) as unknown as PromiseLike<{ data: {
+      deleted: true
+      draft_id: FinanceId
+      account_id: FinanceId
+    } | { conflict: true; draft_id: FinanceId; current_version: number } | null; error: { message: string } | null }>)
+    if ('conflict' in response) {
+      throw new FinanceVersionConflictError(input.expected_version, Number(response.current_version))
+    }
+  }
+
   async function createScenario(input: { name: string; description: string | null; sort_order: number }): Promise<FinanceScenario> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceScenario>(() => supabaseClient.from('finance_scenarios')
@@ -665,6 +747,7 @@ export function createFinanceApi(
     listBudgetItems,
     listSavingsAccounts,
     listSavingsTransactions,
+    listSavingsDrafts,
     listSavingsTransfers,
     listScenarios,
     listScenarioItems,
@@ -674,6 +757,8 @@ export function createFinanceApi(
     saveSavingsAccount,
     saveSavingsTransaction,
     deleteSavingsTransaction,
+    saveSavingsDraft,
+    deleteSavingsDraft,
     createScenario,
     createBudgetItem,
     createScenarioItem,

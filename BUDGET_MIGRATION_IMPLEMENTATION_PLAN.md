@@ -2,11 +2,12 @@
 
 Prepared: 2026-10-10. Status: phase-one contracts and phase-two schema,
 integrity, grants, RLS, and pgTAP source are implemented but have not yet been
-applied to a local database. Phase 3 is in progress: versioned account and
-ordinary transaction writes, atomic idempotent transfer creation/deletion, and
-their frontend flows are implemented; drafts, sharing/archive/balance
-operations, summaries, and export contracts remain ahead. Amounts are stored
-as bounded bigint minor units. No finance data has been changed.
+applied to a local database. Phase 3 is in progress: versioned account,
+ordinary transaction, and savings draft writes; atomic idempotent transfer
+creation/deletion; and their frontend flows are implemented. Sharing,
+archive/balance operations, draft acceptance, summaries, and export contracts
+remain ahead. Amounts are stored as bounded bigint minor units. No finance data
+has been changed.
 
 ## Recommended outcome
 
@@ -533,7 +534,7 @@ demo/reset functions confined to a clearly separate demo environment.
 | --- | --- | --- |
 | 1. Freeze behavior and contracts | Source-derived fixtures, money representation, privacy rules, row/API types, schema review | Monthly summary, account/tree balance, date grouping, archive inheritance, allowances, and standalone project semantics have parity expectations. Intended acceptance/privacy changes are documented. |
 | 2. Database foundation | New migrations for the 13 domain tables, internal tables, composite FKs, indexes, triggers, grants, RLS | Fresh local DB applies all migrations; same-household shared access and private isolation pass pgTAP, including direct REST-style access. |
-| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, acceptance, copy month, archive/balance correction, and sharing transitions are atomic; unauthorized calls fail; retry/concurrency checks pass. **Progress:** versioned account and ordinary transaction RPCs, account/movement screens, transfer RPCs/screen, and pgTAP/frontend verification source are added. Database runtime verification remains pending; drafts, sharing/archive/balance operations, summaries, and exports remain. |
+| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, acceptance, copy month, archive/balance correction, and sharing transitions are atomic; unauthorized calls fail; retry/concurrency checks pass. **Progress:** versioned account, ordinary transaction, and draft RPCs; account/movement/draft screens; transfer RPCs/screen; and pgTAP/frontend verification source are added. Database runtime verification remains pending; sharing/archive/balance operations, draft acceptance, summaries, and exports remain. |
 | 4. Importer | Validator, ID mapping, preview/privacy choices, atomic import, reconciliation receipt | Representative snapshots import with matching counts/totals; bad references or transfer pairs cause no writes; identical retry does not duplicate rows. |
 | 5. Budget vertical slice | Finance layout/routes, month setup, dashboard, budget editing and recurring copy | Household members can use a fresh shared budget and an imported budget; stale edit shows a conflict; empty state works. |
 | 6. Savings vertical slice | Account/goal trees, privacy labels, transactions, transfers, drafts, plans/reserves, archive/restore | Owner sees own private accounts; another member sees only shared accounts; shared and personal totals reconcile; drafts post exactly once. |

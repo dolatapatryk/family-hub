@@ -6,6 +6,8 @@ import { financeMinorUnitsToMoney, formatPln, moneyToFinanceMinorUnits } from '.
 import type {
   FinanceSavingsAccount,
   FinanceSavingsAccountType,
+  FinanceMonth,
+  FinancePlannedSavingsTransaction,
   FinanceSavingsTransaction,
   FinanceVisibility,
 } from './types'
@@ -28,6 +30,12 @@ function privacyLabel(visibility: FinanceVisibility) {
   return visibility === 'household' ? 'Domowe' : 'Prywatne'
 }
 
+function monthLabel(month: FinanceMonth) {
+  if (month.display_name) return month.display_name
+  return new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' })
+    .format(new Date(`${month.month_start}T12:00:00`))
+}
+
 function errorText(error: unknown) {
   if (error instanceof FinanceVersionConflictError) {
     return error.current_version === null
@@ -46,10 +54,16 @@ export function SavingsAccountsPanel({
   api,
   householdId,
   userId,
+  months,
+  selectedMonthId,
+  onSelectMonth,
 }: {
   api: ReturnType<typeof createFinanceApi>
   householdId: string
   userId: string
+  months: FinanceMonth[]
+  selectedMonthId: string
+  onSelectMonth: (monthId: string) => void
 }) {
   const queryClient = useQueryClient()
   const [accountName, setAccountName] = useState('')
@@ -75,19 +89,38 @@ export function SavingsAccountsPanel({
   const [editTransactionDescription, setEditTransactionDescription] = useState('')
   const [editExcludeFromSavings, setEditExcludeFromSavings] = useState(false)
   const [transactionEditFormError, setTransactionEditFormError] = useState('')
+  const [draftAmount, setDraftAmount] = useState('')
+  const [draftDescription, setDraftDescription] = useState('')
+  const [draftFormError, setDraftFormError] = useState('')
+  const [editingDraftId, setEditingDraftId] = useState('')
+  const [editDraftAmount, setEditDraftAmount] = useState('')
+  const [editDraftDescription, setEditDraftDescription] = useState('')
+  const [editDraftAccountId, setEditDraftAccountId] = useState('')
+  const [editDraftMonthId, setEditDraftMonthId] = useState('')
+  const [draftEditFormError, setDraftEditFormError] = useState('')
   const accountRequests = useRef(new Map<string, string>())
   const transactionRequests = useRef(new Map<string, string>())
   const deleteRequests = useRef(new Map<string, string>())
+  const draftRequests = useRef(new Map<string, string>())
+  const draftDeleteRequests = useRef(new Map<string, string>())
 
   const accountsKey = ['financeSavingsAccounts', householdId, userId] as const
   const transactionsKey = ['financeSavingsTransactions', householdId, userId] as const
+  const draftsKey = ['financeSavingsDrafts', householdId, userId, selectedMonthId] as const
   const accounts = useQuery({ queryKey: accountsKey, queryFn: ({ signal }) => api.listSavingsAccounts(signal) })
   const transactions = useQuery({ queryKey: transactionsKey, queryFn: ({ signal }) => api.listSavingsTransactions(signal) })
+  const drafts = useQuery({
+    queryKey: draftsKey,
+    queryFn: ({ signal }) => api.listSavingsDrafts(selectedMonthId, signal),
+    enabled: Boolean(selectedMonthId),
+  })
   const accountList = accounts.data ?? []
   const activeAccounts = useMemo(() => getActiveSavingsAccounts(accountList), [accountList])
   const transactionList = transactions.data ?? []
+  const draftList = drafts.data ?? []
   const selectedAccount = activeAccounts.find(account => account.id === selectedAccountId)
   const selectedTransactions = transactionList.filter(transaction => transaction.account_id === selectedAccountId)
+  const selectedDrafts = draftList.filter(draft => draft.account_id === selectedAccountId)
 
   useEffect(() => {
     if (!activeAccounts.some(account => account.id === selectedAccountId)) {
@@ -226,6 +259,81 @@ export function SavingsAccountsPanel({
     },
   })
 
+  const saveDraft = useMutation({
+    mutationFn: async (input: {
+      signature: string
+      draft_id?: string
+      expected_version?: number
+      month_id: string
+      account_id: string
+      amount: string
+      description: string
+      source_savings_plan_id: string | null
+    }) => {
+      let requestId = draftRequests.current.get(input.signature)
+      if (!requestId) {
+        requestId = globalThis.crypto.randomUUID()
+        draftRequests.current.set(input.signature, requestId)
+      }
+      await api.saveSavingsDraft({
+        request_id: requestId,
+        draft_id: input.draft_id ?? null,
+        expected_version: input.expected_version ?? null,
+        month_id: input.month_id,
+        account_id: input.account_id,
+        amount: input.amount,
+        description: input.description.trim() || null,
+        source_savings_plan_id: input.source_savings_plan_id,
+      })
+      return input.signature
+    },
+    onSuccess: async (signature, input) => {
+      draftRequests.current.delete(signature)
+      if (!input.draft_id) {
+        setDraftAmount('')
+        setDraftDescription('')
+      } else {
+        setSelectedAccountId(input.account_id)
+        onSelectMonth(input.month_id)
+      }
+      setEditingDraftId('')
+      setDraftEditFormError('')
+      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
+    },
+    onError: async (error, input) => {
+      if (!(error instanceof FinanceVersionConflictError)) return
+      draftRequests.current.delete(input.signature)
+      setEditingDraftId('')
+      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
+    },
+  })
+
+  const deleteDraft = useMutation({
+    mutationFn: async (draft: FinancePlannedSavingsTransaction) => {
+      const signature = `${draft.id}:${draft.version}`
+      let requestId = draftDeleteRequests.current.get(signature)
+      if (!requestId) {
+        requestId = globalThis.crypto.randomUUID()
+        draftDeleteRequests.current.set(signature, requestId)
+      }
+      await api.deleteSavingsDraft({
+        request_id: requestId,
+        draft_id: draft.id,
+        expected_version: draft.version,
+      })
+      return signature
+    },
+    onSuccess: async signature => {
+      draftDeleteRequests.current.delete(signature)
+      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
+    },
+    onError: async (error, draft) => {
+      if (!(error instanceof FinanceVersionConflictError)) return
+      draftDeleteRequests.current.delete(`${draft.id}:${draft.version}`)
+      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
+    },
+  })
+
   function startAccountEdit(account: FinanceSavingsAccount) {
     setEditingAccountId(account.id)
     setEditAccountName(account.name)
@@ -322,6 +430,79 @@ export function SavingsAccountsPanel({
     })
   }
 
+  function submitDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedAccount || !selectedMonthId) return
+    try {
+      moneyToFinanceMinorUnits(draftAmount)
+      setDraftFormError('')
+    } catch (error) {
+      setDraftFormError(errorText(error))
+      return
+    }
+    const description = draftDescription.trim()
+    const signature = JSON.stringify({
+      month_id: selectedMonthId,
+      account_id: selectedAccount.id,
+      amount: draftAmount,
+      description,
+      source_savings_plan_id: null,
+    })
+    saveDraft.mutate({
+      signature,
+      month_id: selectedMonthId,
+      account_id: selectedAccount.id,
+      amount: draftAmount,
+      description,
+      source_savings_plan_id: null,
+    })
+  }
+
+  function startDraftEdit(draft: FinancePlannedSavingsTransaction) {
+    setEditingDraftId(draft.id)
+    setDraftEditFormError('')
+    setEditDraftAmount(financeMinorUnitsToMoney(draft.amount))
+    setEditDraftDescription(draft.description ?? '')
+    setEditDraftAccountId(draft.account_id)
+    setEditDraftMonthId(draft.month_id)
+  }
+
+  function submitDraftEdit(event: FormEvent<HTMLFormElement>, draft: FinancePlannedSavingsTransaction) {
+    event.preventDefault()
+    if (!activeAccounts.some(account => account.id === editDraftAccountId)
+      || !months.some(month => month.id === editDraftMonthId)) {
+      setDraftEditFormError('Wybierz dostępne konto i miesiąc.')
+      return
+    }
+    try {
+      moneyToFinanceMinorUnits(editDraftAmount)
+      setDraftEditFormError('')
+    } catch (error) {
+      setDraftEditFormError(errorText(error))
+      return
+    }
+    const description = editDraftDescription.trim()
+    const signature = JSON.stringify({
+      id: draft.id,
+      version: draft.version,
+      month_id: editDraftMonthId,
+      account_id: editDraftAccountId,
+      amount: editDraftAmount,
+      description,
+      source_savings_plan_id: draft.source_savings_plan_id,
+    })
+    saveDraft.mutate({
+      signature,
+      draft_id: draft.id,
+      expected_version: draft.version,
+      month_id: editDraftMonthId,
+      account_id: editDraftAccountId,
+      amount: editDraftAmount,
+      description,
+      source_savings_plan_id: draft.source_savings_plan_id,
+    })
+  }
+
   const accountRows = accountList.map(account => ({
     account,
     balance: calculateSavingsAccountTreeBalance(
@@ -353,11 +534,19 @@ export function SavingsAccountsPanel({
           <h2 className="panel-title">Konta oszczędnościowe</h2>
           <p className="panel-kicker">Konta prywatne widzi tylko ich właściciel. Zmiany salda i historia uwzględniają wszystkie ruchy.</p>
         </div>
+        {months.length > 0 && (
+          <label className="finance-month-select">Miesiąc planu
+            <select value={selectedMonthId} onChange={event => onSelectMonth(event.target.value)}>
+              {months.map(month => <option value={month.id} key={month.id}>{monthLabel(month)}</option>)}
+            </select>
+          </label>
+        )}
       </div>
 
       {accounts.isPending && <p className="panel-message" role="status">Ładuję konta…</p>}
       {accounts.isError && <p className="error-message finance-error" role="alert">{errorText(accounts.error)}</p>}
       {transactions.isError && <p className="error-message finance-error" role="alert">{errorText(transactions.error)}</p>}
+      {drafts.isError && <p className="error-message finance-error" role="alert">{errorText(drafts.error)}</p>}
 
       <form className="finance-savings-account-form" onSubmit={submitNewAccount}>
         <label>Nazwa konta
@@ -482,6 +671,76 @@ export function SavingsAccountsPanel({
             )
           })}
           {deleteTransaction.isError && <p className="error-message finance-error" role="alert">{errorText(deleteTransaction.error)}</p>}
+
+          <div className="finance-savings-drafts">
+            <h3 className="finance-subheading">Planowane ruchy · {selectedAccount.name}</h3>
+            {months.length === 0 ? (
+              <p className="panel-message">Utwórz miesiąc w budżecie, aby zaplanować ruchy oszczędnościowe.</p>
+            ) : (
+              <>
+                <form className="finance-savings-draft-form" onSubmit={submitDraft}>
+                  <label>Kwota
+                    <input required inputMode="decimal" value={draftAmount} onChange={event => setDraftAmount(event.target.value)} placeholder="0,00" />
+                  </label>
+                  <label>Opis
+                    <input maxLength={2000} value={draftDescription} onChange={event => setDraftDescription(event.target.value)} placeholder="Opcjonalny opis" />
+                  </label>
+                  <button className="primary-button" type="submit" disabled={!selectedMonthId || saveDraft.isPending}>
+                    {saveDraft.isPending ? 'Zapisuję plan…' : 'Dodaj planowany ruch'}
+                  </button>
+                </form>
+                {draftFormError && <p className="error-message finance-error" role="alert">{draftFormError}</p>}
+                {saveDraft.isError && <p className="error-message finance-error" role="alert">{errorText(saveDraft.error)}</p>}
+                {drafts.isPending && <p className="panel-message" role="status">Ładuję planowane ruchy…</p>}
+                {selectedDrafts.length === 0 && !drafts.isPending && <p className="panel-message">Brak planowanych ruchów w tym miesiącu.</p>}
+                {selectedDrafts.map(draft => {
+                  if (editingDraftId === draft.id) {
+                    return (
+                      <form className="finance-savings-draft-edit" key={draft.id} onSubmit={event => submitDraftEdit(event, draft)}>
+                        <label>Konto
+                          <select
+                            required
+                            value={editDraftAccountId}
+                            onChange={event => setEditDraftAccountId(event.target.value)}
+                            disabled={saveDraft.isPending || Boolean(draft.source_savings_plan_id)}
+                          >
+                            {activeAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}
+                          </select>
+                        </label>
+                        <label>Miesiąc
+                          <select required value={editDraftMonthId} onChange={event => setEditDraftMonthId(event.target.value)} disabled={saveDraft.isPending}>
+                            {months.map(month => <option value={month.id} key={month.id}>{monthLabel(month)}</option>)}
+                          </select>
+                        </label>
+                        <label>Kwota<input required inputMode="decimal" value={editDraftAmount} onChange={event => setEditDraftAmount(event.target.value)} /></label>
+                        <label>Opis<input maxLength={2000} value={editDraftDescription} onChange={event => setEditDraftDescription(event.target.value)} /></label>
+                        {draft.source_savings_plan_id && <p className="panel-message">Konto jest przypisane do źródłowego planu oszczędności.</p>}
+                        {draftEditFormError && <p className="error-message finance-error" role="alert">{draftEditFormError}</p>}
+                        <div className="finance-edit-actions">
+                          <button className="primary-button" type="submit" disabled={saveDraft.isPending}>Zapisz plan</button>
+                          <button className="button-quiet" type="button" onClick={() => { setEditingDraftId(''); setDraftEditFormError('') }} disabled={saveDraft.isPending}>Anuluj</button>
+                        </div>
+                      </form>
+                    )
+                  }
+                  return (
+                    <div className="finance-savings-transaction-row" key={draft.id}>
+                      <div className="finance-transfer-copy">
+                        <strong>{draft.description || 'Planowany ruch oszczędnościowy'}</strong>
+                        <span>{monthLabel(months.find(month => month.id === draft.month_id) ?? months[0])}{draft.source_savings_plan_id ? ' · plan oszczędności' : ''}</span>
+                      </div>
+                      <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(draft.amount))}</strong>
+                      <div className="finance-savings-transaction-actions">
+                        <button className="button-quiet finance-edit-button" type="button" onClick={() => startDraftEdit(draft)} disabled={saveDraft.isPending || deleteDraft.isPending}>Edytuj</button>
+                        <button className="button-quiet finance-edit-button" type="button" onClick={() => deleteDraft.mutate(draft)} disabled={deleteDraft.isPending || saveDraft.isPending}>Usuń</button>
+                      </div>
+                    </div>
+                  )
+                })}
+                {deleteDraft.isError && <p className="error-message finance-error" role="alert">{errorText(deleteDraft.error)}</p>}
+              </>
+            )}
+          </div>
         </div>
       )}
     </section>

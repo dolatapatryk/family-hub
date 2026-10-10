@@ -143,6 +143,24 @@ export interface FinancePlannedSavingsTransaction extends FinanceRow {
   source_savings_plan_id: FinanceId | null
 }
 
+export interface FinanceSaveSavingsDraftInput {
+  request_id: FinanceId
+  draft_id?: FinanceId | null
+  expected_version?: number | null
+  month_id: FinanceId
+  account_id: FinanceId
+  /** Signed decimal major-unit input, converted exactly to integer minor units. */
+  amount: FinanceMoney
+  description: string | null
+  source_savings_plan_id?: FinanceId | null
+}
+
+export interface FinanceDeleteSavingsDraftInput {
+  request_id: FinanceId
+  draft_id: FinanceId
+  expected_version: number
+}
+
 export interface FinanceSavingsPlan extends FinanceRow {
   name: string
   plan_type: FinanceSavingsPlanType
