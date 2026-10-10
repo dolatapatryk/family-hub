@@ -6,6 +6,7 @@ import { CalendarPage } from './calendar/CalendarPage'
 import { DashboardPage } from './dashboard/DashboardPage'
 import { GoogleCalendarSettingsPage } from './googleCalendar/GoogleCalendarSettingsPage'
 import { GymTemplateEditorPage, GymTemplatesPage } from './gym/TemplatePages'
+import { GymHistoryPage, GymHomePage, GymPlanPage, GymPlanStartPage } from './gym/PlanPages'
 import { HouseholdPage } from './household/HouseholdPage'
 import { AppShell } from './layout/AppShell'
 import { ShoppingPage } from './shopping/ShoppingPage'
@@ -37,7 +38,10 @@ function AuthenticatedApp() {
         <Route path="/calendar" element={<CalendarRoute />} />
         <Route path="/calendar/settings" element={<GoogleCalendarSettingsPage />} />
         <Route path="/annual-dates" element={<AnnualDatesPage />} />
-        <Route path="/gym" element={<Navigate to="/gym/templates" replace />} />
+        <Route path="/gym" element={<GymHomePage />} />
+        <Route path="/gym/history" element={<GymHistoryPage />} />
+        <Route path="/gym/plans/:planId" element={<GymPlanPage />} />
+        <Route path="/gym/templates/:templateId/start" element={<GymPlanStartPage />} />
         <Route path="/gym/templates" element={<GymTemplatesPage />} />
         <Route path="/gym/templates/new" element={<GymTemplateEditorPage />} />
         <Route path="/gym/templates/:templateId/edit" element={<GymTemplateEditorPage />} />

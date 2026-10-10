@@ -137,6 +137,16 @@ Other dates store only month/day. Occurrences are generated in memory for
 Calendar and Today; no yearly copies are inserted. February 29 uses February
 28 in non-leap years. Edit or delete annual definitions only in **Ważne daty**.
 
+## Training plans
+
+**Siłownia** has private, reusable templates and personal plans. Start a plan
+from a template to save an independent copy of its duration and weekly
+prescription; later template edits apply to new plans only. The plan page shows
+the week/day grid and progress from completed workout slots. End an active plan
+early to keep its history and free the active-plan slot. Apply pending database
+migrations with `npx supabase migration up --local` before using the plan flow.
+Workout entry and result history are being implemented in a later step.
+
 ## Recurring household tasks
 
 From **Zadania**, create a weekly or monthly recurring responsibility by

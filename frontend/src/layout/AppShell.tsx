@@ -22,7 +22,7 @@ const navigation = [
   { to: '/household', label: 'Domownicy', icon: 'members', end: false },
   { to: '/calendar', label: 'Kalendarz', icon: 'calendar', end: false },
   { to: '/annual-dates', label: 'Ważne daty', icon: 'annual', end: false },
-  { to: '/gym/templates', label: 'Siłownia', icon: 'gym', end: false },
+  { to: '/gym', label: 'Siłownia', icon: 'gym', end: false },
 ] as const
 
 function NavigationIcon({ name }: { name: (typeof navigation)[number]['icon'] }) {

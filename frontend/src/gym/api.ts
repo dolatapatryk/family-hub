@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase.ts'
-import type { GymTemplate, GymTemplateDefinition, SaveGymTemplateInput } from './types'
+import type { GymPlan, GymTemplate, GymTemplateDefinition, GymWorkout, SaveGymTemplateInput } from './types'
 
 interface GymTemplateRow {
   id: string
@@ -16,7 +16,39 @@ interface GymTemplateRow {
   updated_at: string
 }
 
+interface GymPlanRow {
+  id: string
+  owner_user_id: string
+  source_template_id: string | null
+  name: string
+  weeks_count: number
+  days_per_week: number
+  definition_snapshot: GymTemplateDefinition
+  definition_version: number
+  status: GymPlan['status']
+  started_at: string
+  completed_at: string | null
+  abandoned_at: string | null
+}
+
+interface GymWorkoutRow {
+  id: string
+  plan_id: string
+  owner_user_id: string
+  week_number: number
+  day_number: number
+  status: GymWorkout['status']
+  revision: number
+  performed_on: string | null
+  started_at: string
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 const templateColumns = 'id, owner_user_id, name, weeks_count, days_per_week, definition, definition_version, revision, archived_at, created_at, updated_at'
+const planColumns = 'id, owner_user_id, source_template_id, name, weeks_count, days_per_week, definition_snapshot, definition_version, status, started_at, completed_at, abandoned_at'
+const workoutColumns = 'id, plan_id, owner_user_id, week_number, day_number, status, revision, performed_on, started_at, completed_at, created_at, updated_at'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
   if (!client) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
@@ -40,6 +72,38 @@ function toGymTemplate(row: GymTemplateRow): GymTemplate {
     definitionVersion: row.definition_version,
     revision: row.revision,
     archivedAt: row.archived_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function toGymPlan(row: GymPlanRow): GymPlan {
+  return {
+    id: row.id,
+    sourceTemplateId: row.source_template_id,
+    name: row.name,
+    weeksCount: row.weeks_count,
+    daysPerWeek: row.days_per_week,
+    definitionSnapshot: row.definition_snapshot,
+    definitionVersion: row.definition_version,
+    status: row.status,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    abandonedAt: row.abandoned_at,
+  }
+}
+
+function toGymWorkout(row: GymWorkoutRow): GymWorkout {
+  return {
+    id: row.id,
+    planId: row.plan_id,
+    weekNumber: row.week_number,
+    dayNumber: row.day_number,
+    status: row.status,
+    revision: row.revision,
+    performedOn: row.performed_on,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -94,5 +158,73 @@ export function createGymApi(userId: string, client: SupabaseClient | null = sup
     return resolve<string>(supabaseClient.rpc('archive_gym_template', { p_template_id: templateId }))
   }
 
-  return { list, get, save, archive }
+  async function listPlans(signal?: AbortSignal): Promise<GymPlan[]> {
+    const supabaseClient = requireSupabase(client)
+    let query = supabaseClient
+      .from('gym_plans')
+      .select(planColumns)
+      .eq('owner_user_id', userId)
+      .order('started_at', { ascending: false })
+    if (signal) query = query.abortSignal(signal)
+    const rows = await resolve<GymPlanRow[]>(query)
+    return rows.map(toGymPlan)
+  }
+
+  async function activePlan(signal?: AbortSignal): Promise<GymPlan | null> {
+    const supabaseClient = requireSupabase(client)
+    let query = supabaseClient
+      .from('gym_plans')
+      .select(planColumns)
+      .eq('owner_user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle<GymPlanRow>()
+    if (signal) query = query.abortSignal(signal)
+    const { data: row, error } = await query
+    if (error) throw new Error(error.message)
+    return row ? toGymPlan(row) : null
+  }
+
+  async function getPlan(planId: string, signal?: AbortSignal): Promise<GymPlan> {
+    const supabaseClient = requireSupabase(client)
+    let query = supabaseClient
+      .from('gym_plans')
+      .select(planColumns)
+      .eq('owner_user_id', userId)
+      .eq('id', planId)
+      .maybeSingle<GymPlanRow>()
+    if (signal) query = query.abortSignal(signal)
+    const { data: row, error } = await query
+    if (error) throw new Error(error.message)
+    if (!row) throw new Error('Nie znaleziono tego planu treningowego.')
+    return toGymPlan(row)
+  }
+
+  async function listWorkouts(planId: string, signal?: AbortSignal): Promise<GymWorkout[]> {
+    const supabaseClient = requireSupabase(client)
+    let query = supabaseClient
+      .from('gym_workouts')
+      .select(workoutColumns)
+      .eq('owner_user_id', userId)
+      .eq('plan_id', planId)
+      .order('week_number', { ascending: true })
+      .order('day_number', { ascending: true })
+    if (signal) query = query.abortSignal(signal)
+    const rows = await resolve<GymWorkoutRow[]>(query)
+    return rows.map(toGymWorkout)
+  }
+
+  async function startPlan(templateId: string, name: string): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<string>(supabaseClient.rpc('start_gym_plan', {
+      p_template_id: templateId,
+      p_name: name,
+    }))
+  }
+
+  async function abandonPlan(planId: string): Promise<string> {
+    const supabaseClient = requireSupabase(client)
+    return resolve<string>(supabaseClient.rpc('abandon_gym_plan', { p_plan_id: planId }))
+  }
+
+  return { list, get, save, archive, listPlans, activePlan, getPlan, listWorkouts, startPlan, abandonPlan }
 }

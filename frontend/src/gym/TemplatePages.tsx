@@ -170,6 +170,7 @@ export function GymTemplatesPage() {
             <div className="gym-template-days">{template.definition.days.map((day, index) => <span key={day.id}><strong>{day.name.trim() || `Dzień ${index + 1}`}</strong><span>{day.blocks.length} {day.blocks.length === 1 ? 'blok' : 'bloki'} · {day.blocks.reduce((count, block) => count + block.exercises.length, 0)} ćw.</span></span>)}</div>
           </div>
           <div className="gym-template-actions">
+            {!template.archivedAt && <Link className="text-button" to={`/gym/templates/${template.id}/start`}>Rozpocznij plan</Link>}
             {!template.archivedAt && <Link className="text-button" to={`/gym/templates/${template.id}/edit`}>Edytuj</Link>}
             {!template.archivedAt && <button className="text-button item-remove-button" type="button" disabled={archive.isPending} onClick={() => setConfirmArchiveId(confirmArchiveId === template.id ? null : template.id)} aria-expanded={confirmArchiveId === template.id}>Archiwizuj</button>}
           </div>

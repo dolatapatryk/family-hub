@@ -128,6 +128,11 @@
   gap: 4px;
 }
 
+.gym-template-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .gym-empty-action {
   margin-top: 15px;
 }
@@ -578,5 +583,352 @@
 
   .gym-icon-button {
     width: 40px;
+  }
+}
+
+.gym-plan-summary {
+  margin-bottom: 14px;
+}
+
+.gym-plan-summary-heading,
+.gym-week-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gym-plan-summary-heading .panel-kicker {
+  margin: 0 0 5px;
+}
+
+.gym-plan-status {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #edf2ef;
+  color: #526b61;
+  font-size: 11px;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.gym-plan-status.is-active {
+  background: #e5f3ec;
+  color: #23634d;
+}
+
+.gym-plan-status.is-completed {
+  background: #e9eefb;
+  color: #405c9a;
+}
+
+.gym-plan-status.is-abandoned {
+  background: #f2efea;
+  color: #776856;
+}
+
+.gym-plan-meta,
+.gym-plan-note {
+  margin: 7px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gym-progress-track {
+  overflow: hidden;
+  height: 9px;
+  margin-top: 17px;
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+.gym-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #468c73;
+  transition: width .2s ease;
+}
+
+.gym-progress-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 16px;
+  margin-top: 8px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.gym-progress-caption strong {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.gym-next-slot {
+  margin: 15px 0 0;
+  padding: 11px 12px;
+  border: 1px solid #dfece5;
+  border-radius: 10px;
+  background: #f7fbf8;
+  color: #3f5c50;
+  font-size: 13px;
+}
+
+.gym-home-plan-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  margin-bottom: 23px;
+  padding: 0 15px;
+  border: 1px solid var(--color-line);
+  border-radius: 11px;
+  background: var(--color-card);
+  color: var(--color-blue);
+  font-size: 13px;
+  font-weight: 680;
+  text-decoration: none;
+}
+
+.gym-home-plan-link:hover {
+  border-color: #bfd4ca;
+  background: #fbfdfc;
+}
+
+.gym-no-active-plan {
+  margin-bottom: 22px;
+}
+
+.gym-home-secondary-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #9ba8a2;
+  font-size: 12px;
+}
+
+.gym-plan-start-form {
+  display: grid;
+  gap: 16px;
+}
+
+.gym-plan-review {
+  display: grid;
+  gap: 15px;
+}
+
+.gym-plan-name-field {
+  display: block;
+  max-width: 520px;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.gym-plan-name-field input {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  margin-top: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: #fbfdfc;
+  color: var(--color-ink);
+  font-size: 14px;
+}
+
+.gym-plan-name-field input:focus {
+  border-color: #75aaa1;
+}
+
+.gym-plan-review-days {
+  display: grid;
+  gap: 10px;
+}
+
+.gym-plan-review-days > article {
+  display: grid;
+  gap: 9px;
+  padding: 13px;
+  border: 1px solid #e5ece8;
+  border-radius: 11px;
+  background: #fbfdfc;
+}
+
+.gym-plan-review-days > article > strong {
+  font-size: 14px;
+}
+
+.gym-review-block {
+  padding: 10px;
+  border: 1px solid #e9eeeb;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.gym-review-block.is-superset {
+  border-color: #d6e2ee;
+  background: #f8fafc;
+}
+
+.gym-review-block > span {
+  color: var(--color-muted);
+  font-size: 10px;
+  font-weight: 720;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.gym-review-block ul {
+  display: grid;
+  gap: 7px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gym-review-block li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.gym-review-block li strong {
+  color: var(--color-ink);
+}
+
+.gym-active-plan-warning {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+}
+
+.gym-active-plan-warning h2,
+.gym-active-plan-warning p {
+  margin: 0;
+}
+
+.gym-active-plan-warning h2 {
+  font-size: 16px;
+}
+
+.gym-active-plan-warning p {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.gym-weeks {
+  display: grid;
+  gap: 12px;
+}
+
+.gym-week-card {
+  min-width: 0;
+}
+
+.gym-week-heading {
+  margin-bottom: 12px;
+}
+
+.gym-week-heading h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.gym-week-heading > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.gym-week-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.gym-slot {
+  display: grid;
+  min-height: 102px;
+  align-content: start;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid #e4ebe7;
+  border-radius: 10px;
+  background: #fbfcfb;
+}
+
+.gym-slot.is-next {
+  border-color: #82b2a1;
+  box-shadow: 0 0 0 2px #e3f0eb;
+}
+
+.gym-slot.is-completed {
+  border-color: #d7e8df;
+  background: #f4faf6;
+}
+
+.gym-slot-day,
+.gym-slot-status {
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.gym-slot-day {
+  font-weight: 690;
+}
+
+.gym-slot strong {
+  overflow-wrap: anywhere;
+  color: var(--color-ink);
+  font-size: 12px;
+}
+
+.gym-slot.is-completed .gym-slot-status {
+  color: #347558;
+}
+
+.gym-slot.is-in_progress .gym-slot-status {
+  color: #8b6330;
+  font-weight: 700;
+}
+
+.gym-plan-end-section {
+  margin-top: 18px;
+}
+
+.gym-plan-end-section > .gym-archive-confirm {
+  border: 1px solid #f0e5ce;
+  border-radius: 11px;
+}
+
+.gym-plan-history-list .gym-template-card-main {
+  align-items: center;
+}
+
+.gym-plan-history-list .gym-template-title-row {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 620px) {
+  .gym-plan-summary-heading {
+    align-items: flex-start;
+  }
+
+  .gym-week-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gym-plan-history-list .gym-template-card-main {
+    align-items: flex-start;
   }
 }

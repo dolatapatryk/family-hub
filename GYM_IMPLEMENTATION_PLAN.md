@@ -1,8 +1,8 @@
 # Siłownia — MVP implementation plan
 
-Status: implementation plan updated with the user's MVP decisions.
-Prepared on 2026-10-10; updated on 2026-10-11. No application code or database
-schema has been changed.
+Status: MVP decisions are confirmed. Template management and plan lifecycle
+are implemented; workout entry is the next feature step.
+Prepared on 2026-10-10; updated on 2026-10-11.
 
 ## 1. Goal and scope
 

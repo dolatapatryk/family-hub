@@ -49,6 +49,53 @@ export interface GymTemplate {
   updatedAt: string
 }
 
+export type GymPlanStatus = 'active' | 'completed' | 'abandoned'
+export type GymWorkoutStatus = 'draft' | 'completed'
+
+export interface GymPlan {
+  id: string
+  sourceTemplateId: string | null
+  name: string
+  weeksCount: number
+  daysPerWeek: number
+  definitionSnapshot: GymTemplateDefinition
+  definitionVersion: number
+  status: GymPlanStatus
+  startedAt: string
+  completedAt: string | null
+  abandonedAt: string | null
+}
+
+export interface GymWorkout {
+  id: string
+  planId: string
+  weekNumber: number
+  dayNumber: number
+  status: GymWorkoutStatus
+  revision: number
+  performedOn: string | null
+  startedAt: string
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type GymSlotStatus = 'todo' | 'in_progress' | 'completed'
+
+export interface GymPlanSlot {
+  weekNumber: number
+  dayNumber: number
+  status: GymSlotStatus
+}
+
+export interface GymPlanProgress {
+  completedCount: number
+  totalCount: number
+  completedWeeks: number
+  currentSlot: { weekNumber: number; dayNumber: number } | null
+  slots: GymPlanSlot[]
+}
+
 export interface SaveGymTemplateInput {
   id: string | null
   expectedRevision: number | null

@@ -2,8 +2,11 @@ import type {
   GymBlock,
   GymDay,
   GymExercise,
+  GymPlan,
+  GymPlanProgress,
   GymTemplateDefinition,
   GymTemplateValidationIssue,
+  GymWorkout,
 } from './types'
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -137,4 +140,34 @@ export function getGymTemplateSummary(definition: GymTemplateDefinition) {
   const dayLabel = definition.days.length === 1 ? 'dzień' : 'dni'
   const exerciseLabel = exerciseCount === 1 ? 'ćwiczenie' : exerciseCount < 5 ? 'ćwiczenia' : 'ćwiczeń'
   return `${definition.days.length} ${dayLabel} · ${exerciseCount} ${exerciseLabel}${supersetCount ? ` · ${supersetCount} superserii` : ''}`
+}
+
+export function getGymPlanProgress(plan: GymPlan, workouts: GymWorkout[]): GymPlanProgress {
+  const workoutBySlot = new Map(workouts.map(workout => [`${workout.weekNumber}:${workout.dayNumber}`, workout]))
+  const slots = Array.from({ length: plan.weeksCount * plan.daysPerWeek }, (_, index) => {
+    const weekNumber = Math.floor(index / plan.daysPerWeek) + 1
+    const dayNumber = index % plan.daysPerWeek + 1
+    const workout = workoutBySlot.get(`${weekNumber}:${dayNumber}`)
+    return {
+      weekNumber,
+      dayNumber,
+      status: workout?.status === 'completed' ? 'completed' : workout?.status === 'draft' ? 'in_progress' : 'todo',
+    } as const
+  })
+  const completedCount = slots.filter(slot => slot.status === 'completed').length
+  const currentSlot = plan.status === 'active'
+    ? slots.find(slot => slot.status !== 'completed')
+    : undefined
+  const completedWeeks = Array.from({ length: plan.weeksCount }, (_, index) => {
+    const weekNumber = index + 1
+    return slots.filter(slot => slot.weekNumber === weekNumber).every(slot => slot.status === 'completed')
+  }).filter(Boolean).length
+
+  return {
+    completedCount,
+    totalCount: plan.weeksCount * plan.daysPerWeek,
+    completedWeeks,
+    currentSlot: currentSlot ? { weekNumber: currentSlot.weekNumber, dayNumber: currentSlot.dayNumber } : null,
+    slots,
+  }
 }
