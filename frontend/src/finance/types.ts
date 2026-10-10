@@ -1,11 +1,15 @@
 /**
  * Browser-facing contracts for the Finance tables described in
- * BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md. PostgreSQL numeric values stay
- * decimal strings at this boundary; calculations live in money.ts.
+ * BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md. Adapters cast persisted bigint
+ * amounts to text before JSON serialization; UI and calculation amounts use
+ * decimal strings.
  */
 
 export type FinanceId = string
+/** Major-unit decimal string used by forms, calculations, and summaries. */
 export type FinanceMoney = string
+/** Signed minor-unit integer string used by persisted bigint row fields. */
+export type FinanceMinorUnits = string
 
 export type FinanceBudgetType =
   | 'income'
@@ -45,7 +49,7 @@ export interface FinanceBudgetItem extends FinanceRow {
   month_id: FinanceId
   category_id: FinanceId
   name: string
-  amount: FinanceMoney
+  amount: FinanceMinorUnits
   allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
@@ -63,7 +67,7 @@ export interface FinanceScenarioItem extends FinanceRow {
   scenario_id: FinanceId
   category_id: FinanceId
   name: string
-  amount: FinanceMoney
+  amount: FinanceMinorUnits
   allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
@@ -75,8 +79,8 @@ export interface FinanceSavingsAccount extends FinanceRow {
   name: string
   account_type: FinanceSavingsAccountType
   parent_id: FinanceId | null
-  opening_balance: FinanceMoney
-  target_amount: FinanceMoney | null
+  opening_balance: FinanceMinorUnits
+  target_amount: FinanceMinorUnits | null
   color: string | null
   is_archived: boolean
   visibility: FinanceVisibility
@@ -89,7 +93,7 @@ export interface FinanceSavingsTransfer extends FinanceRow {}
 export interface FinanceSavingsTransaction extends FinanceRow {
   account_id: FinanceId
   transaction_date: string
-  amount: FinanceMoney
+  amount: FinanceMinorUnits
   description: string | null
   budget_month_id: FinanceId | null
   excluded_from_monthly_savings: boolean
@@ -100,7 +104,7 @@ export interface FinanceSavingsTransaction extends FinanceRow {
 export interface FinancePlannedSavingsTransaction extends FinanceRow {
   month_id: FinanceId
   account_id: FinanceId
-  amount: FinanceMoney
+  amount: FinanceMinorUnits
   description: string | null
   source_savings_plan_id: FinanceId | null
 }
@@ -109,8 +113,8 @@ export interface FinanceSavingsPlan extends FinanceRow {
   name: string
   plan_type: FinanceSavingsPlanType
   account_id: FinanceId | null
-  monthly_amount: FinanceMoney
-  annual_amount_override: FinanceMoney | null
+  monthly_amount: FinanceMinorUnits
+  annual_amount_override: FinanceMinorUnits | null
   visibility: FinanceVisibility
   owner_user_id: FinanceId
   sort_order: number
@@ -118,14 +122,14 @@ export interface FinanceSavingsPlan extends FinanceRow {
 
 export interface FinanceIrregularExpensePlan extends FinanceRow {
   name: string
-  annual_amount: FinanceMoney
+  annual_amount: FinanceMinorUnits
   sort_order: number
 }
 
 export interface FinanceProject extends FinanceRow {
   name: string
   description: string | null
-  target_budget: FinanceMoney | null
+  target_budget: FinanceMinorUnits | null
   is_archived: boolean
   sort_order: number
 }
@@ -134,7 +138,7 @@ export interface FinanceProjectExpense extends FinanceRow {
   project_id: FinanceId
   expense_date: string | null
   name: string
-  amount: FinanceMoney
+  amount: FinanceMinorUnits
   notes: string | null
   sort_order: number
 }
@@ -190,6 +194,7 @@ export interface FinanceBudgetItemChanges {
   month_id: FinanceId
   category_id: FinanceId
   name: string
+  /** Decimal major-unit input; the adapter converts it to bigint minor units. */
   amount: FinanceMoney
   allocation_role: FinanceAllocationRole
   is_planned: boolean
@@ -202,6 +207,7 @@ export type FinanceBudgetItemMutation =
   | { kind: 'create'; changes: FinanceBudgetItemChanges }
   | { kind: 'update'; id: FinanceId; expected_version: number; changes: FinanceBudgetItemChanges }
 
+/** Implementations cast persisted bigint amount fields to text in PostgREST selects. */
 export type FinanceBudgetApi = {
   listMonths(signal?: AbortSignal): Promise<FinanceMonth[]>
   listCategories(signal?: AbortSignal): Promise<FinanceCategory[]>

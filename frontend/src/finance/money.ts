@@ -1,6 +1,6 @@
-import type { FinanceMoney } from './types'
+import type { FinanceMinorUnits, FinanceMoney } from './types'
 
-// PostgreSQL numeric(18,2) supports at most 16 whole digits and two decimals.
+// Match the bounded signed bigint domain used by persisted minor-unit columns.
 export const MAX_FINANCE_MINOR_UNITS = 999_999_999_999_999_999n
 
 /** Parse a plain decimal string (or a legacy JSON number) without float math. */
@@ -16,14 +16,14 @@ export function parseMoney(value: FinanceMoney | number): bigint {
   const whole = BigInt(match[2] ?? '0')
   const fractional = (match[3] ?? match[4] ?? '').padEnd(2, '0')
   const minorUnits = whole * 100n + BigInt(fractional || '0')
-  if (minorUnits > MAX_FINANCE_MINOR_UNITS) throw new Error('Amount exceeds numeric(18,2).')
+  if (minorUnits > MAX_FINANCE_MINOR_UNITS) throw new Error('Amount exceeds the supported money range.')
 
   return match[1] === '-' ? -minorUnits : minorUnits
 }
 
 export function formatMoneyDecimal(minorUnits: bigint): FinanceMoney {
   if (minorUnits > MAX_FINANCE_MINOR_UNITS || minorUnits < -MAX_FINANCE_MINOR_UNITS) {
-    throw new Error('Amount exceeds numeric(18,2).')
+    throw new Error('Amount exceeds the supported money range.')
   }
 
   const negative = minorUnits < 0n
@@ -31,6 +31,37 @@ export function formatMoneyDecimal(minorUnits: bigint): FinanceMoney {
   const whole = absolute / 100n
   const fraction = String(absolute % 100n).padStart(2, '0')
   return `${negative ? '-' : ''}${whole}.${fraction}`
+}
+
+/** Parse a persisted bigint minor-unit string without passing through Number. */
+export function parseFinanceMinorUnits(value: FinanceMinorUnits): bigint {
+  if (!/^-?(?:0|[1-9]\d*)$/.test(value)) {
+    throw new Error('Persisted amount must be an integer minor-unit string.')
+  }
+
+  const minorUnits = BigInt(value)
+  if (minorUnits > MAX_FINANCE_MINOR_UNITS || minorUnits < -MAX_FINANCE_MINOR_UNITS) {
+    throw new Error('Amount exceeds the supported money range.')
+  }
+  return minorUnits
+}
+
+/** Serialize exact minor units for a bigint column or a bigint-safe RPC. */
+export function formatFinanceMinorUnits(minorUnits: bigint): FinanceMinorUnits {
+  if (minorUnits > MAX_FINANCE_MINOR_UNITS || minorUnits < -MAX_FINANCE_MINOR_UNITS) {
+    throw new Error('Amount exceeds the supported money range.')
+  }
+  return minorUnits.toString()
+}
+
+/** Convert persisted integer text to the decimal-string calculation format. */
+export function financeMinorUnitsToMoney(value: FinanceMinorUnits): FinanceMoney {
+  return formatMoneyDecimal(parseFinanceMinorUnits(value))
+}
+
+/** Convert a decimal-string input to the integer-string database format. */
+export function moneyToFinanceMinorUnits(value: FinanceMoney): FinanceMinorUnits {
+  return formatFinanceMinorUnits(parseMoney(value))
 }
 
 export function addMoney(...values: FinanceMoney[]): FinanceMoney {

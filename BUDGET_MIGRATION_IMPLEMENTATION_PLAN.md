@@ -1,8 +1,10 @@
 # Home Budget → Family Hub: schema and implementation plan
 
-Prepared: 2026-10-10. Status: phase-one frontend contract groundwork is in place.
-No database migrations or finance data have been changed. Database, import, and
-UI phases remain ahead.
+Prepared: 2026-10-10. Status: phase-one contracts and phase-two schema,
+integrity, grants, RLS, and pgTAP source are implemented but have not yet been
+applied to a local database. Amounts are stored as bounded bigint minor units.
+No finance data has been changed. Mutation/RPC, import, and UI phases remain
+ahead.
 
 ## Recommended outcome
 
@@ -164,12 +166,15 @@ No separate family/household table or generic JSON state table is needed.
 - Reference household to `households`; reference creator to `auth.users`.
   Make identity/household/creator/creation time immutable after insertion.
   The database controls update time and increments versions.
-- Money is `numeric(18,2)`, including signed savings movements and opening
-  balances. Use decimal strings at API boundaries and integer minor units or
-  decimal arithmetic in TypeScript; do not rely on binary floating-point sums.
-  Reject excessive precision before casting to `numeric(18,2)` to avoid silent
-  rounding. Reject non-finite values and enforce an application amount limit
-  that is safe for the chosen frontend arithmetic.
+- Persist amounts as bounded signed `bigint` minor units across every finance
+  table: PLN 100.23 is stored as 10023. The database domain caps values at
+  +/-999999999999999999 minor units. PostgREST serializes bigint columns as
+  JSON numbers by default, so row reads must explicitly cast every amount
+  column to `text` (for example, `amount::text`) before JSON serialization.
+  Keep those values as integer strings in row contracts; convert decimal input
+  strings to/from minor units with `BigInt`. UI calculations and summaries may
+  use decimal strings, but arithmetic must remain exact and reject non-finite
+  inputs or values outside the bound.
 - First release uses PLN, matching the source. Avoid adding exchange-rate or
   multicurrency accounting to this migration.
 - Calendar dates use `date`; audit timestamps use `timestamptz`. Derive local
@@ -190,9 +195,9 @@ No separate family/household table or generic JSON state table is needed.
 | --- | --- | --- |
 | `finance_months` | `month_start date`, `display_name text null` | First day of month; unique `(household_id, month_start)`. Derive year/month/localized label; preserve a legacy custom label when necessary. |
 | `finance_categories` | `name text`, `budget_type text`, `parent_id uuid null`, `color text null`, `sort_order integer` | `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
-| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount numeric(18,2)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Role `standard` or `personal_allowance`; allowance requires a saving category. Month/category composite FKs. |
+| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Role `standard` or `personal_allowance`; allowance requires a saving category. Month/category composite FKs. |
 | `finance_scenarios` | `name text`, `description text null`, `sort_order integer` | Scenario definition; separate from real months. |
-| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount numeric(18,2)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Same line semantics as budget items; scenario/category composite FKs. |
+| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Same line semantics as budget items; scenario/category composite FKs. |
 
 For normalization, store the most specific category on each item. If the source
 has `subcategoryId`, use it after proving it belongs under `categoryId`.
@@ -211,12 +216,12 @@ Renaming an allowance must not change its effect on income or savings rate.
 
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
-| `finance_savings_accounts` | `name text`, `account_type text`, `parent_id uuid null`, `opening_balance numeric(18,2)`, `target_amount numeric(18,2) null`, `color text null`, `is_archived boolean`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type `cash`, `goal`, `investment`, `retirement`; visibility `household`/`private`. Owner controls sharing. Parent composite FK; tree privacy/owner consistency and no cycles. |
+| `finance_savings_accounts` | `name text`, `account_type text`, `parent_id uuid null`, `opening_balance bigint (minor units)`, `target_amount bigint (minor units) null`, `color text null`, `is_archived boolean`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type `cash`, `goal`, `investment`, `retirement`; visibility `household`/`private`. Owner controls sharing. Parent composite FK; tree privacy/owner consistency and no cycles. |
 | `finance_savings_transfers` | No extra financial values; common identity/audit columns group two transaction legs | Transfer header gives paired legs one lifecycle. Derive endpoints, amount, and date from legs instead of duplicating them here. Access requires both legs to be accessible. |
-| `finance_savings_transactions` | `account_id uuid`, `transaction_date date`, `amount numeric(18,2)`, `description text null`, `budget_month_id uuid null`, `excluded_from_monthly_savings boolean`, `transfer_id uuid null`, `source_planned_transaction_id uuid null` | Signed delta; account/month/transfer composite FKs. Unique non-null `source_planned_transaction_id` prevents posting a draft twice. Ordinary zero deltas allowed for legacy parity. |
-| `finance_planned_savings_transactions` | `month_id uuid`, `account_id uuid`, `amount numeric(18,2)`, `description text null`, `source_savings_plan_id uuid null` | Unposted drafts only. Composite month/account/plan FKs. Optional partial unique `(household_id, month_id, account_id, source_savings_plan_id)` for plan-generated drafts. |
-| `finance_savings_plans` | `name text`, `plan_type text`, `account_id uuid null`, `monthly_amount numeric(18,2)`, `annual_amount_override numeric(18,2) null`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type also allows `irregular`; explicit account link replaces fuzzy matching. Linked plan must have the account's visibility and owner. Unbound plan starts owned by its creator. |
-| `finance_irregular_expense_plans` | `name text`, `annual_amount numeric(18,2)`, `sort_order integer` | Shared annual reserve definitions; monthly requirement is derived as annual amount / 12. |
+| `finance_savings_transactions` | `account_id uuid`, `transaction_date date`, `amount bigint (minor units)`, `description text null`, `budget_month_id uuid null`, `excluded_from_monthly_savings boolean`, `transfer_id uuid null`, `source_planned_transaction_id uuid null` | Signed delta; account/month/transfer composite FKs. Unique non-null `source_planned_transaction_id` prevents posting a draft twice. Ordinary zero deltas allowed for legacy parity. |
+| `finance_planned_savings_transactions` | `month_id uuid`, `account_id uuid`, `amount bigint (minor units)`, `description text null`, `source_savings_plan_id uuid null` | Unposted drafts only. Composite month/account/plan FKs. Optional partial unique `(household_id, month_id, account_id, source_savings_plan_id)` for plan-generated drafts. |
+| `finance_savings_plans` | `name text`, `plan_type text`, `account_id uuid null`, `monthly_amount bigint (minor units)`, `annual_amount_override bigint (minor units) null`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type also allows `irregular`; explicit account link replaces fuzzy matching. Linked plan must have the account's visibility and owner. Unbound plan starts owned by its creator. |
+| `finance_irregular_expense_plans` | `name text`, `annual_amount bigint (minor units)`, `sort_order integer` | Shared annual reserve definitions; monthly requirement is derived as annual amount / 12 using integer arithmetic and an explicit rounding rule. |
 
 `owner_user_id` references `auth.users` and is distinct from audit `created_by`.
 The server assigns a new root to the current user and a child/linked plan to the
@@ -246,8 +251,8 @@ so `transferPeerAccountId` is not duplicated in the new model.
 
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
-| `finance_projects` | `name text`, `description text null`, `target_budget numeric(18,2) null`, `is_archived boolean`, `sort_order integer` | Shared spending project; optional target. |
-| `finance_project_expenses` | `project_id uuid`, `expense_date date null`, `name text`, `amount numeric(18,2)`, `notes text null`, `sort_order integer` | Composite project FK; preserve absent dates instead of inventing them. |
+| `finance_projects` | `name text`, `description text null`, `target_budget bigint (minor units) null`, `is_archived boolean`, `sort_order integer` | Shared spending project; optional target. |
+| `finance_project_expenses` | `project_id uuid`, `expense_date date null`, `name text`, `amount bigint (minor units)`, `notes text null`, `sort_order integer` | Composite project FK; preserve absent dates instead of inventing them. |
 
 ### Internal migration and mutation tables
 
@@ -429,8 +434,8 @@ through this mode. Automatic multi-user merging is outside the first release.
 | `categoryId`, `subcategoryId` | Validate both references/type/ancestry; persist the leaf. Report inconsistent records for explicit repair. |
 | Named personal-transfer saving rows | Set `allocation_role = 'personal_allowance'` using the exact old name rule; preserve category and label. This is independent from savings-account transfer pairs. |
 | `parentId` | Remap after allocating all IDs; detect dangling parents, self-links, and cycles; enforce privacy consistently per tree. |
-| `initialBalance` | `opening_balance`, unchanged; do not create another opening transaction that would count it twice. |
-| Signed transaction amount / date | Preserve signed money; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |
+| `initialBalance` | Convert exactly to integer minor units in `opening_balance`; do not create another opening transaction that would count it twice. |
+| Signed transaction amount / date | Convert signed money exactly to integer minor units; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |
 | `transferId`, `transferPeerAccountId` | Validate exactly two reciprocal, equal/opposite legs; create one header and two remapped movements; derive peers thereafter. Broken pairs block import. |
 | `excludedFromMonthlySavings`, `isArchived`, project `archived` | Preserve flags; absent optional booleans become false. Valid transfer legs must be excluded. |
 | Planned savings rows | Import unposted drafts; no new actual transactions. |
@@ -439,9 +444,11 @@ through this mode. Automatic multi-user merging is outside the first release.
 | Missing optional collections | Use empty collections and report the missing fields; offer deliberate setup separately. Do not silently inject source demo data. |
 | Source timestamps and array order | Preserve existing valid source timestamps where available through the importer; use import time for missing audit dates; retain array order in `sort_order`. |
 
-Preflight also checks finite/exact-two-decimal money, target constraints,
-duplicate entity IDs, unknown classification values, blank labels, and every
-reference. Fail the whole import with paths such as
+Preflight also checks that decimal input money is finite, has at most two
+decimal places, and converts exactly to a bounded integer minor-unit amount;
+it also checks target constraints, duplicate entity IDs, unknown
+classification values, blank labels, and every reference. Fail the whole import
+with paths such as
 `savingsTransactions[4].accountId`; no quiet dropping of malformed rows.
 
 For initial household-private assignment, source snapshots contain no account
@@ -475,8 +482,8 @@ Suggested module structure:
 
 ```text
 frontend/src/finance/
-  types.ts                       domain models, decimal money contracts
-  money.ts                       parsing, arithmetic, PLN formatting
+  types.ts                       persisted minor-unit and UI decimal money contracts
+  money.ts                       exact conversion, arithmetic, and PLN formatting
   calculations.ts                tested summaries and account-tree calculations
   api/                           budget, savings, scenarios, projects, import adapters
   queries.ts                     keys, hooks, invalidation rules
@@ -559,7 +566,8 @@ Meaningful automated coverage:
   names, counts, IDs, balances, and transfer peer details. A user who leaves
   the household loses access even to their former private accounts.
 - Money parsing for decimal comma/dot, signed values, precision rejection,
-  non-finite inputs, large-value bounds, and exact totals.
+  non-finite inputs, large-value bounds, exact totals, and bigint-safe integer
+  strings at persisted row boundaries.
 - Account hierarchy cycles, inherited archive state, distinct own/tree totals,
   visibility propagation, external-transfer blockers, and balance corrections.
 - Two-leg transfer invariant, no partial writes, deletion of both legs, and
@@ -626,7 +634,8 @@ Repository findings:
 
 Technical references checked for the proposed database approach:
 
-- Exact decimal storage and scale behavior: [PostgreSQL numeric types](https://www.postgresql.org/docs/current/datatype-numeric.html).
+- Integer storage and bounds: [PostgreSQL integer types](https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-INT).
+- Bigint-safe row responses: [PostgREST column casting](https://docs.postgrest.org/en/stable/references/api/tables_views.html#casting-columns); cast amount columns to `text` in row projections.
 - Composite keys, referential constraints, and deletion policies: [PostgreSQL constraints](https://www.postgresql.org/docs/current/ddl-constraints.html).
 - Database RPCs, rollback on errors, invoker/definer privileges, and restricted execution: [Supabase database functions](https://supabase.com/docs/guides/database/functions).
 - Row-level isolation and invoker views: [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
