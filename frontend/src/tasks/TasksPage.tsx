@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
 import { createHouseholdMembersApi, type HouseholdMember } from '../household/api'
-import { createTasksApi, type CreateTaskInput } from './api'
+import { createTasksApi, type CreateRecurringTaskInput, type CreateTaskInput } from './api'
 import { TaskItem } from './TaskItem'
-import { groupTasks, type Task } from './tasks'
+import { formatDueDate, groupTasks, type RecurrenceCadence, type RecurringTaskRule, type Task } from './tasks'
 
 function memberName(members: HouseholdMember[] | undefined, memberId: string | null) {
   if (!memberId) return 'Wspólne'
@@ -19,6 +19,13 @@ const sectionLabels: Record<string, string> = {
   'No due date': 'Bez terminu',
   Completed: 'Ukończone',
 }
+
+const cadenceLabels: Record<RecurrenceCadence, string> = {
+  weekly: 'Co tydzień',
+  monthly: 'Co miesiąc',
+}
+
+type AddTaskInput = CreateTaskInput & { cadence: RecurrenceCadence | '' }
 
 function emptySectionMessage(heading: string) {
   if (heading === 'Today') return 'Na dziś nie ma zadań.'
@@ -36,6 +43,7 @@ export function TasksPage() {
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [assignedTo, setAssignedTo] = useState('')
+  const [cadence, setCadence] = useState<RecurrenceCadence | ''>('')
   const [notice, setNotice] = useState('')
   const addButton = useRef<HTMLButtonElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
@@ -45,26 +53,40 @@ export function TasksPage() {
     queryFn: ({ signal }) => householdMembersApi.list(signal),
   })
   const tasks = useQuery({ queryKey, queryFn: ({ signal }) => api.list(signal) })
+  const recurringQueryKey = ['recurringTasks', profile.household_id]
+  const recurringTasks = useQuery({ queryKey: recurringQueryKey, queryFn: ({ signal }) => api.listRecurring(signal) })
   const create = useMutation({
-    mutationFn: (input: CreateTaskInput) => api.create(input),
-    onSuccess: async () => {
-      setNotice('Zadanie dodane.')
+    mutationFn: (input: AddTaskInput) => input.cadence
+      ? api.createRecurring({
+        title: input.title,
+        startDate: input.dueDate ?? '',
+        cadence: input.cadence,
+        assignedTo: input.assignedTo,
+      } satisfies CreateRecurringTaskInput)
+      : api.create(input),
+    onSuccess: async (_saved, input) => {
+      setNotice(input.cadence
+        ? 'Stałe zadanie dodane. Następny termin pojawi się po ukończeniu lub pominięciu bieżącego.'
+        : 'Zadanie dodane.')
       setTitle('')
       setDueDate('')
       setAssignedTo('')
+      setCadence('')
       setFormOpen(false)
       addButton.current?.focus()
       await client.invalidateQueries({ queryKey })
+      await client.invalidateQueries({ queryKey: recurringQueryKey })
     },
   })
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (title.trim() && !create.isPending) {
+    if (title.trim() && (!cadence || dueDate) && !create.isPending) {
       create.mutate({
         title: title.trim(),
         dueDate: dueDate || null,
         assignedTo: assignedTo || null,
+        cadence,
       })
     }
   }
@@ -96,15 +118,24 @@ export function TasksPage() {
         <fieldset disabled={create.isPending}>
           <label>Tytuł<input ref={titleInput} required value={title} onChange={event => setTitle(event.target.value)} placeholder="Co trzeba zrobić?" /></label>
           <div className="task-form-options">
-            <label>Termin <span className="optional">(opcjonalnie)</span><input type="date" value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
+            <label>Termin {!cadence && <span className="optional">(opcjonalnie)</span>}<input type="date" required={Boolean(cadence)} value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
             <label>Przypisz do<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)}><option value="">Wspólne</option>{householdMembers.data?.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
           </div>
+          <label className="task-repeat-field">Powtarzanie<select value={cadence} onChange={event => setCadence(event.target.value as RecurrenceCadence | '')}><option value="">Jednorazowo</option><option value="weekly">Co tydzień</option><option value="monthly">Co miesiąc</option></select></label>
+          <p className="task-repeat-note">Rachunki z miesięczną kwotą i historią płatności dodaj w sekcji Rachunki.</p>
+          {cadence && <p className="task-repeat-note">Następny termin utworzy się po ukończeniu lub pominięciu tego wystąpienia. Rytm liczy się od poprzedniego terminu; dla końca miesiąca data dopasuje się do ostatniego dnia.</p>}
           {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
           {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}
           {create.isError && <p className="error-message" role="alert">{create.error.message}</p>}
-          <div className="form-actions"><button className="primary-button" type="submit" disabled={!title.trim()}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" onClick={() => { setFormOpen(false); addButton.current?.focus() }}>Anuluj</button></div>
+          <div className="form-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate)}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" onClick={() => { setFormOpen(false); addButton.current?.focus() }}>Anuluj</button></div>
         </fieldset>
       </form>
+      {recurringTasks.isPending && <p className="task-meta" role="status">Ładuję stałe zadania…</p>}
+      {recurringTasks.isError && <p className="error-message" role="alert">Nie udało się pobrać stałych zadań: {recurringTasks.error.message}</p>}
+      {recurringTasks.data && recurringTasks.data.length > 0 && <section className="panel recurring-panel" aria-labelledby="recurring-tasks-title">
+        <div className="panel-head"><div><h2 className="panel-title" id="recurring-tasks-title">Stałe zadania</h2><p className="panel-kicker">Wystąpienia tworzą się po ukończeniu lub pominięciu poprzedniego terminu.</p></div></div>
+        <ul className="recurring-list">{recurringTasks.data.map(rule => <RecurringTaskRuleItem key={rule.id} rule={rule} api={api} taskQueryKey={queryKey} rulesQueryKey={recurringQueryKey} members={householdMembers.data} />)}</ul>
+      </section>}
       {tasks.isPending && <p className="panel-message" role="status">Ładuję zadania…</p>}
       {tasks.isError && <div className="error-message" role="alert"><p>{tasks.error.message}</p><button className="button-quiet" disabled={tasks.isFetching} onClick={() => void tasks.refetch()}>{tasks.isFetching ? 'Ponawiam…' : 'Spróbuj ponownie'}</button></div>}
       {tasks.data?.length === 0 && <div className="panel empty-panel"><h2>Trochę oddechu.</h2><p>Nie ma jeszcze zadań. Dodaj pierwsze powyżej.</p></div>}
@@ -113,6 +144,40 @@ export function TasksPage() {
       </div>}
     </>
   )
+}
+
+function RecurringTaskRuleItem({ rule, api, taskQueryKey, rulesQueryKey, members }: {
+  rule: RecurringTaskRule
+  api: ReturnType<typeof createTasksApi>
+  taskQueryKey: readonly unknown[]
+  rulesQueryKey: readonly unknown[]
+  members: HouseholdMember[] | undefined
+}) {
+  const client = useQueryClient()
+  const [confirming, setConfirming] = useState(false)
+  const stop = useMutation({
+    mutationFn: () => api.stopRecurring(rule.id),
+    onSuccess: async () => {
+      setConfirming(false)
+      await client.invalidateQueries({ queryKey: taskQueryKey })
+      await client.invalidateQueries({ queryKey: rulesQueryKey })
+    },
+  })
+
+  return <li className="recurring-item">
+    <div className="recurring-item-copy">
+      <strong>{rule.title}</strong>
+      <span>{cadenceLabels[rule.cadence]} · Pierwszy termin: {formatDueDate(rule.startDate)} · {memberName(members, rule.assignedTo)}</span>
+    </div>
+    {!confirming
+      ? <button className="text-button" type="button" disabled={stop.isPending} onClick={() => { stop.reset(); setConfirming(true) }}>Zatrzymaj</button>
+      : <div className="recurring-confirm">
+        <span>Zatrzymać tworzenie kolejnych wystąpień?</span>
+        <button className="button-quiet" type="button" disabled={stop.isPending} onClick={() => stop.mutate()}>{stop.isPending ? 'Zatrzymuję…' : 'Zatrzymaj serię'}</button>
+        <button className="text-button" type="button" disabled={stop.isPending} onClick={() => setConfirming(false)}>Anuluj</button>
+      </div>}
+    {stop.isError && <p className="error-message" role="alert">Nie udało się zatrzymać zadania cyklicznego: {stop.error.message}</p>}
+  </li>
 }
 
 function TaskSection({ heading, items, api, queryKey, members }: {

@@ -10,6 +10,9 @@ import { PageHeader } from '../components/PageHeader'
 import { useAuth } from '../auth/AuthGate'
 import { createHouseholdMembersApi } from '../household/api'
 import { createShoppingApi } from '../shopping/api'
+import { createBillsApi } from '../bills/api'
+import { formatBillAmount, formatBillDate, isBillDueThisMonthOrOverdue } from '../bills/bills'
+import type { Bill } from '../bills/bills'
 import { ShoppingItemRow } from '../shopping/ShoppingItemRow'
 import { createTasksApi } from '../tasks/api'
 import { TaskItem } from '../tasks/TaskItem'
@@ -41,6 +44,7 @@ export function DashboardPage() {
   const client = useQueryClient()
   const tasksApi = createTasksApi(profile.household_id, profile.id)
   const shoppingApi = createShoppingApi(profile.household_id, profile.id)
+  const billsApi = createBillsApi(profile.household_id)
   const householdMembersApi = createHouseholdMembersApi(profile.household_id)
   const taskKey = ['tasks', profile.household_id]
   const shoppingKey = ['shoppingItems', profile.household_id]
@@ -49,6 +53,7 @@ export function DashboardPage() {
     queryFn: ({ signal }) => householdMembersApi.list(signal),
   })
   const shopping = useQuery({ queryKey: shoppingKey, queryFn: ({ signal }) => shoppingApi.list(signal) })
+  const bills = useQuery({ queryKey: ['bills', profile.household_id], queryFn: ({ signal }) => billsApi.list(signal) })
   const today = localDate()
   const todayRange = { start: today, end: addDays(today, 1) }
   const { events, importedEvents, importedFreshness, annualDates, tasks } = useCalendarSources(todayRange)
@@ -83,6 +88,7 @@ export function DashboardPage() {
   const dateLabel = new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()).toLocaleUpperCase('pl-PL')
   const visibleTasks = openTasks.filter(task => task.dueDate === today)
   const visibleShopping = openShopping.slice(0, 3)
+  const visibleBills = (bills.data ?? []).filter(bill => bill.active && isBillDueThisMonthOrOverdue(bill.nextDueOn, today))
   const progress = allTasks.length ? Math.round((doneCount / allTasks.length) * 100) : 0
 
   return (
@@ -90,13 +96,13 @@ export function DashboardPage() {
       <PageHeader
         eyebrow={dateLabel}
         title="Dziś w domu"
-        description="Zadania, zakupy i najbliższe plany w jednym miejscu."
+        description="Zadania, rachunki, zakupy i najbliższe plany w jednym miejscu."
         action={<button className="primary-button" type="button" aria-expanded={formOpen} aria-controls="quick-task-form" onClick={() => { if (!formOpen) addTask.reset(); setFormOpen(open => !open) }}><PlusIcon /><span>Dodaj zadanie</span></button>}
       />
 
       <div className="household-note" role="note">
         <span className="note-icon" aria-hidden="true">i</span>
-        <span><strong>Wspólny plan domu.</strong> Zadania i zakupy są widoczne dla wszystkich domowników.</span>
+        <span><strong>Wspólny plan domu.</strong> Zadania, rachunki i zakupy są widoczne dla wszystkich domowników.</span>
       </div>
 
       <form className="quick-form" id="quick-task-form" hidden={!formOpen} onSubmit={submitTask}>
@@ -154,6 +160,15 @@ export function DashboardPage() {
             {visibleShopping.length ? visibleShopping.map(item => <ShoppingItemRow key={item.id} item={item} api={shoppingApi} queryKey={shoppingKey} />) : <li className="empty-state">Lista jest pusta. Dodaj produkt.</li>}
           </ul>}
         </section>
+        <section className="panel" aria-labelledby="dashboard-bills-title">
+          <div className="panel-head">
+            <div><h2 className="panel-title" id="dashboard-bills-title">Rachunki w tym miesiącu</h2><p className="panel-kicker">Zaległe i z terminem do końca miesiąca</p></div>
+            <Link className="link-button" to="/bills">Wszystkie <span className="arrow" aria-hidden="true">›</span></Link>
+          </div>
+          {bills.isPending && <p className="panel-message" role="status">Ładuję rachunki…</p>}
+          {bills.isError && <div className="panel-message error-message" role="alert">Nie udało się pobrać rachunków. <button className="link-button" type="button" onClick={() => void bills.refetch()}>Spróbuj ponownie</button></div>}
+          {bills.data && <ul className="bill-summary-list">{visibleBills.length ? visibleBills.map(bill => <BillSummaryRow key={bill.id} bill={bill} today={today} />) : <li className="empty-state">W tym miesiącu nie ma zaległych ani zaplanowanych rachunków.</li>}</ul>}
+        </section>
         <article className="panel week-note">
           <div className="note-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12m-8.48 8.48-2.12 2.12" /><circle cx="12" cy="12" r="4" /></svg></div>
           <div><h2>Prościej, kiedy plan jest wspólny</h2><p>Dodaj zadanie, odhacz zakupy albo sprawdź najbliższe wydarzenia z kalendarza.</p></div>
@@ -161,4 +176,14 @@ export function DashboardPage() {
       </div>
     </>
   )
+}
+
+function BillSummaryRow({ bill, today }: { bill: Bill; today: string }) {
+  const overdue = bill.nextDueOn < today
+  const dueToday = bill.nextDueOn === today
+  return <li className="bill-summary-row">
+    <span className={`bill-summary-mark${overdue ? ' is-overdue' : dueToday ? ' is-today' : ''}`} aria-hidden="true">{overdue ? '!' : '•'}</span>
+    <span className="bill-summary-copy"><strong>{bill.title}</strong><small className={overdue ? 'is-overdue' : ''}>{overdue ? 'Po terminie · ' : dueToday ? 'Termin dziś · ' : 'Termin · '}{formatBillDate(bill.nextDueOn)}</small></span>
+    {bill.expectedAmountMinor !== null && <strong className="bill-summary-amount">{formatBillAmount(bill.expectedAmountMinor, bill.currency)}</strong>}
+  </li>
 }

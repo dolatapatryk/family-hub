@@ -137,6 +137,54 @@ Other dates store only month/day. Occurrences are generated in memory for
 Calendar and Today; no yearly copies are inserted. February 29 uses February
 28 in non-leap years. Edit or delete annual definitions only in **Ważne daty**.
 
+## Recurring household tasks
+
+From **Zadania**, create a weekly or monthly recurring responsibility by
+choosing its first due date and cadence. The first occurrence is a normal
+household task, so it appears in the task list, Today when due today, and the
+calendar agenda when it falls in the visible range. Completing an occurrence
+creates the next one; **Pomiń termin** archives that occurrence and advances
+the series from the prior due date. Late completions can therefore surface
+missed occurrences one at a time. For monthly schedules, the selected day is
+retained and dates such as the 31st clamp to the last day of shorter months.
+Each series/date pair is unique in the database, so repeated requests cannot
+create duplicate tasks.
+
+The **Stałe zadania** section shows active series and lets household members
+stop them. Stopping a series leaves its existing task occurrences in place and
+prevents later ones from being generated. Editing an occurrence changes only
+that occurrence. This first version stores a title, cadence, first due date,
+and optional assignee. Bills are separate records because each cycle tracks a
+payment or skip and, when paid, its date and amount; reminders remain a
+separate backlog feature.
+
+## Bill tracking
+
+From **Rachunki**, add a bill with its next due date, a monthly or two-month
+schedule, optional estimated amount, and currency code. The estimate is
+only a suggested amount and may be left blank or changed when the bill varies.
+You can edit the next due date when an invoice arrives; after a payment or a
+skipped cycle, Family Hub advances from that date using the selected interval,
+clamping dates such as the 31st to the final day in a shorter target month.
+Today shows overdue bills and all bills due in the current calendar month.
+Record one payment per cycle with the actual date and amount, or skip a cycle
+to advance the reminder without marking it paid. Open a bill's history to see
+paid and skipped cycles, including the due date, payment date, and actual
+amount for paid cycles. The actual amount is stored only when the payment form
+is submitted; it is kept separately from the estimate. Pausing a bill keeps
+its history available.
+Amounts are stored as integer hundredths of the selected currency, so `100.23`
+is stored as `10023` and formatted as `100.23` in the app.
+
+The bill tables and payment operations are defined in
+`supabase/migrations/20261010150000_bills_and_payment_history.sql`. Monthly or
+two-month cycles and skip history are added by
+`supabase/migrations/20261010160000_bill_cycles_and_skips.sql`. Apply migrations
+in order; `supabase/migrations/20261010170000_grant_bill_table_select.sql`
+adds the table-level read grant required by PostgREST. If the first bill
+migration is already applied, apply the pending follow-up migrations before
+using the updated **Rachunki** flows.
+
 New items default to private. Household members can read, edit, and delete
 shared items; private items are accessible only to their creator. Only the
 creator can change visibility. RLS and column grants enforce these rules in

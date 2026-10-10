@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthGate, useAuth } from './auth/AuthGate'
 import { AnnualDatesPage } from './annualDates/AnnualDatesPage'
+import { BillsPage } from './bills/BillsPage'
 import { CalendarPage } from './calendar/CalendarPage'
 import { DashboardPage } from './dashboard/DashboardPage'
 import { GoogleCalendarSettingsPage } from './googleCalendar/GoogleCalendarSettingsPage'
@@ -28,6 +29,7 @@ function AuthenticatedApp() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/bills" element={<BillsPage />} />
         <Route path="/shopping" element={<ShoppingPage />} />
         <Route path="/household" element={<HouseholdPage />} />
         <Route path="/calendar" element={<CalendarRoute />} />

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { groupTasks, localDate, formatDueDate } from '../src/tasks/tasks.ts'
 import { createTasksApi } from '../src/tasks/api.ts'
 
-const task = (id, overrides = {}) => ({ id, title: id, dueDate: null, completed: false, assignedTo: null, createdAt: '2026-09-01T12:00:00Z', ...overrides })
+const task = (id, overrides = {}) => ({ id, title: id, dueDate: null, completed: false, assignedTo: null, recurringRuleId: null, recurringActive: false, createdAt: '2026-09-01T12:00:00Z', ...overrides })
 
 test('groups all active tasks without dropping overdue or undated completed tasks', () => {
   const groups = groupTasks([
@@ -34,6 +34,7 @@ const row = (id = 'task-1', overrides = {}) => ({
   due_date: '2026-09-20',
   completed: false,
   assigned_to: 'member-2',
+  recurring_rule_id: null,
   created_at: '2026-09-01T12:00:00Z',
   ...overrides,
 })

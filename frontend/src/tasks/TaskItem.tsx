@@ -82,14 +82,15 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
         </label>
         <div className="item-actions">
           <button className="text-button" type="button" disabled={busy} onClick={openEditor} aria-label={`Edytuj: ${task.title}`}>Edytuj</button>
-          {showArchive && <button className="button-quiet task-archive" type="button" disabled={busy} onClick={() => mutation.mutate('archive')} aria-label={`Archiwizuj: ${task.title}`}>Archiwizuj</button>}
-          <button className="text-button item-remove-button" type="button" disabled={busy} onClick={() => { update.reset(); remove.reset(); setEditing(false); setConfirmingDelete(true) }} aria-label={`Usuń: ${task.title}`}>Usuń</button>
+          {showArchive && <button className="button-quiet task-archive" type="button" disabled={busy} onClick={() => mutation.mutate('archive')} aria-label={`${task.recurringActive ? 'Pomiń termin' : 'Archiwizuj'}: ${task.title}`}>{task.recurringActive ? 'Pomiń termin' : 'Archiwizuj'}</button>}
+          {!task.recurringActive && <button className="text-button item-remove-button" type="button" disabled={busy} onClick={() => { update.reset(); remove.reset(); setEditing(false); setConfirmingDelete(true) }} aria-label={`Usuń: ${task.title}`}>Usuń</button>}
         </div>
       </div>
       {editing && <form className="item-edit-form task-item-edit" onSubmit={submit} aria-label={`Edytuj zadanie: ${task.title}`}>
+        {task.recurringActive && <p className="task-repeat-note">Zmiany dotyczą tylko tego wystąpienia. Serią zarządzasz w sekcji „Stałe zadania”.</p>}
         <label>Tytuł<input required value={title} disabled={update.isPending} onChange={event => setTitle(event.target.value)} /></label>
         <div className="item-edit-fields task-edit-fields">
-          <label>Termin <span className="optional">(opcjonalnie)</span><input type="date" value={dueDate} disabled={update.isPending} onChange={event => setDueDate(event.target.value)} /></label>
+          <label>Termin {!task.recurringActive && <span className="optional">(opcjonalnie)</span>}<input type="date" required={task.recurringActive} value={dueDate} disabled={update.isPending} onChange={event => setDueDate(event.target.value)} /></label>
           <label>Przypisz do<select value={assignedTo} disabled={update.isPending} onChange={event => setAssignedTo(event.target.value)}>
             <option value="">Wspólne</option>
             {members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}
