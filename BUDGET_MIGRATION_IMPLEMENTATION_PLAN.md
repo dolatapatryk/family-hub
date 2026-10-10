@@ -75,9 +75,10 @@ Important qualifications:
   accounts; active account balance cards exclude archived trees.
 - Editing a displayed goal/tree balance recalculates the account's opening
   balance after subtracting its transactions and active child balances.
-- `calculateMonthSummary` treats saving rows named `Patryk swoje`, `Paulina swoje`,
-  or `Paula swoje` as personal allowances: they reduce available income and are
-  excluded from the savings-rate numerator. This rule currently depends on names.
+- Personal allowances are budget lines with `allocation_role = 'personal_allowance'`
+  and a saving category. They reduce income available for the month and are excluded
+  from savings and the savings-rate numerator. Treat the role as explicit finance
+  data; new flows should not infer it from a line's label.
 - `loadIdealPlan` matches plans to accounts by fuzzy name matching. Replace this
   with explicit links, using name matching only as a migration suggestion.
 - Legacy IDs are arbitrary strings, including `2026-05`, `emergency-fund`, and
@@ -208,9 +209,10 @@ referenced category between roots in the first release. This avoids rewriting
 historical classifications. Names/colors can still change.
 
 `allocation_role` is an independent classification, not another category type.
-It replaces the legacy name-based allowance rule. Assign it during import using
-the exact old name rule and expose it as an explicit form field thereafter.
-Renaming an allowance must not change its effect on income or savings rate.
+It replaces the legacy label-based allowance classification. Translate the
+source classification into this explicit role during import, then expose the
+role as a form field. In the new app, changing an item's label must not change
+its effect on income or savings rate.
 
 ### Savings: six tables
 
@@ -432,7 +434,7 @@ through this mode. Automatic multi-user merging is outside the first release.
 | `selectedMonthId` | Restore the importing user's UI selection if valid; no shared selected-month column. |
 | `BudgetItem.type`, category type | Map camelCase names to snake_case category types; validate agreement before dropping repeated item type. |
 | `categoryId`, `subcategoryId` | Validate both references/type/ancestry; persist the leaf. Report inconsistent records for explicit repair. |
-| Named personal-transfer saving rows | Set `allocation_role = 'personal_allowance'` using the exact old name rule; preserve category and label. This is independent from savings-account transfer pairs. |
+| Legacy saving rows representing a household member's personal spending allocation | Import with `allocation_role = 'personal_allowance'`; preserve the category and original label. This role is independent from savings-account transfer pairs. |
 | `parentId` | Remap after allocating all IDs; detect dangling parents, self-links, and cycles; enforce privacy consistently per tree. |
 | `initialBalance` | Convert exactly to integer minor units in `opening_balance`; do not create another opening transaction that would count it twice. |
 | Signed transaction amount / date | Convert signed money exactly to integer minor units; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |
