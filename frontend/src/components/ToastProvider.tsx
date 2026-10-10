@@ -37,9 +37,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   return <ToastContext.Provider value={showToast}>
     {children}
-    <div className="toast-viewport" role="region" aria-label="Powiadomienia">
+    {toasts.length > 0 && <div className="toast-viewport" role="region" aria-label="Powiadomienia">
       {toasts.map(toast => <ToastCard key={toast.id} toast={toast} onDismiss={dismissToast} />)}
-    </div>
+    </div>}
   </ToastContext.Provider>
 }
 
