@@ -6,4 +6,5 @@ export const gymKeys = {
   activePlan: (userId: string) => ['gym', userId, 'activePlan'] as const,
   plan: (userId: string, planId: string) => ['gym', userId, 'plan', planId] as const,
   workouts: (userId: string, planId: string) => ['gym', userId, 'plan', planId, 'workouts'] as const,
+  workout: (userId: string, workoutId: string) => ['gym', userId, 'workout', workoutId] as const,
 }

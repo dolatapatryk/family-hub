@@ -1,7 +1,9 @@
 # Siłownia — MVP implementation plan
 
-Status: MVP decisions are confirmed. Template management and plan lifecycle
-are implemented; workout entry is the next feature step.
+Status: MVP decisions are confirmed. Template management, plan lifecycle, and
+workout entry/history are implemented. The frontend production build passes;
+gym-specific automated tests, local database migration checks, and manual
+mobile/desktop acceptance checks remain outstanding.
 Prepared on 2026-10-10; updated on 2026-10-11.
 
 ## 1. Goal and scope

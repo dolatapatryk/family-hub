@@ -9,6 +9,8 @@ import type {
   GymWorkout,
 } from './types'
 
+const maxStoredInteger = 2_147_483_647
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function newGymId() {
@@ -42,6 +44,35 @@ export function exercisePrescription(exercise: GymExercise) {
     : `${exercise.target_min}–${exercise.target_max}`
   const unit = exercise.mode === 'reps' ? '' : 's'
   return `${exercise.sets}×${target}${unit}${exercise.unilateral ? '/stronę' : ''}`
+}
+
+export function parseGymIntegerInput(value: string): number | null {
+  const normalized = value.trim()
+  if (!normalized) return null
+  if (!/^\d+$/.test(normalized)) return Number.NaN
+  const parsed = Number(normalized)
+  return Number.isSafeInteger(parsed) && parsed <= maxStoredInteger ? parsed : Number.NaN
+}
+
+export function parseGymWeightInput(value: string): number | null {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return null
+  if (!/^\d+(?:\.\d{0,3})?$/.test(normalized)) return Number.NaN
+  const kilograms = Number(normalized)
+  const grams = Math.round(kilograms * 1000)
+  return Number.isFinite(kilograms) && Number.isSafeInteger(grams) && grams <= maxStoredInteger
+    ? grams
+    : Number.NaN
+}
+
+export function formatGymWeight(weightGrams: number | null): string {
+  if (weightGrams === null) return '—'
+  return `${new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 3 }).format(weightGrams / 1000)} kg`
+}
+
+export function gymWeightInputValue(weightGrams: number | null): string {
+  if (weightGrams === null) return ''
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3, useGrouping: false }).format(weightGrams / 1000)
 }
 
 export function validateGymTemplate(
