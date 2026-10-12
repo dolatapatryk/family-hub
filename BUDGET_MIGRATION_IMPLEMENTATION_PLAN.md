@@ -1,18 +1,20 @@
 # Home Budget → Family Hub: schema and implementation plan
 
-Prepared: 2026-10-10. Status: phase-one contracts and phase-two schema,
-integrity, grants, RLS, and pgTAP source are implemented but have not yet been
-applied to a local database. Phase 3 is in progress: versioned account,
-ordinary transaction, and savings draft writes; atomic idempotent transfer
-creation/deletion; and atomic, idempotent savings draft acceptance with a
-selected-month preview/results flow are implemented. Account lifecycle previews,
-archive/restore, balance corrections, and owner-controlled tree visibility are
-implemented in source, together with plan/reserve management, audience-separated
-actual savings summaries, and shared project/expense tracking. Database
-verification source is present but the database tests have not been run. Amounts are stored
-as bounded bigint minor units. No finance data has been changed.
+Prepared: 2026-10-10. Updated: 2026-10-12. Finance contracts, schema,
+integrity, grants, RLS and the budget/savings/project flows are implemented.
+The local database contains the Finance migrations through
+`20261012220000_finance_category_sections.sql`. Categories now select all six
+budget sections; budget and forecast positions use a category, amount and an
+optional description. Historical duplicate labels are normalized and mixed
+saving/personal categories split without changing amounts or section totals.
 
-## Current in-app work (2026-10-11)
+Verification for this change: 63 frontend tests, the production build and 64
+category/Finance RLS database assertions pass. A rollback-only migration trial
+also verified preservation of historical identities, attribution, amounts,
+notes, flags and sections. Import, export/restore and production cutover remain
+outside this work. Amounts are stored as bounded bigint minor units.
+
+## Historical in-app work (2026-10-11)
 
 Continue from `27b55dd` in Family Hub only. Home Budget is unchanged. Data
 import, export/restore, migration review, and cutover are excluded from this
@@ -121,7 +123,7 @@ Important qualifications:
 - Personal allowances are budget lines with `allocation_role = 'personal_allowance'`
   and a saving category. They reduce income available for the month and are excluded
   from savings and the savings-rate numerator. Treat the role as explicit finance
-  data; new flows should not infer it from a line's label.
+  data determined by the category; new flows should not infer it from a line's label.
 - `loadIdealPlan` matches plans to accounts by fuzzy name matching. Replace this
   with explicit links, using name matching only as a migration suggestion.
 - Legacy IDs are arbitrary strings, including `2026-05`, `emergency-fund`, and
@@ -242,8 +244,8 @@ No separate family/household table or generic JSON state table is needed.
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
 | `finance_months` | `month_start date`, `display_name text null` | First day of month; unique `(household_id, month_start)`. Derive year/month/localized label; preserve a legacy custom label when necessary. |
-| `finance_categories` | `name text`, `budget_type text`, `parent_id uuid null`, `color text null`, `sort_order integer` | `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
-| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Role `standard` or `personal_allowance`; allowance requires a saving category. Month/category composite FKs. |
+| `finance_categories` | `name text`, `budget_type text`, `allocation_role text`, `parent_id uuid null`, `color text null`, `sort_order integer` | The type and role select one of six UI sections. `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
+| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Item role must match its category (`standard` or `personal_allowance`); personal allowances require a saving category. `name` is an optional description, stored as an empty string when absent. Month/category composite FKs. |
 | `finance_scenarios` | `name text`, `description text null`, `sort_order integer` | Scenario definition; separate from real months. |
 | `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Same line semantics as budget items; scenario/category composite FKs. |
 
@@ -255,11 +257,16 @@ Treat category budget type as immutable once referenced, and disallow moving a
 referenced category between roots in the first release. This avoids rewriting
 historical classifications. Names/colors can still change.
 
-`allocation_role` is an independent classification, not another category type.
-It replaces the legacy label-based allowance classification. Translate the
-source classification into this explicit role during import, then expose the
-role as a form field. In the new app, changing an item's label must not change
-its effect on income or savings rate.
+Categories determine the six sections exposed to users: income, individual
+accounts, fixed expenses, variable expenses, saving at the start of the month,
+and investments. The individual-account section persists as a saving category
+with `allocation_role = 'personal_allowance'`. Items copy their category's role;
+the database rejects mismatches. Users select a category and amount, with an
+optional description, without a separate role selector. Labels are rendered as
+`category` or `category — description`; renaming a category updates displayed
+labels without changing calculations. Migration `20261012220000` normalizes
+repeated labels, reclassifies exclusively personal categories and splits mixed
+legacy categories while preserving historical amounts and sections.
 
 ### Savings: six tables
 
@@ -483,7 +490,7 @@ through this mode. Automatic multi-user merging is outside the first release.
 | `selectedMonthId` | Restore the importing user's UI selection if valid; no shared selected-month column. |
 | `BudgetItem.type`, category type | Map camelCase names to snake_case category types; validate agreement before dropping repeated item type. |
 | `categoryId`, `subcategoryId` | Validate both references/type/ancestry; persist the leaf. Report inconsistent records for explicit repair. |
-| Legacy saving rows representing a household member's personal spending allocation | Import with `allocation_role = 'personal_allowance'`; preserve the category and original label. This role is independent from savings-account transfer pairs. |
+| Legacy saving rows representing a household member's personal spending allocation | Import into a category with `allocation_role = 'personal_allowance'` and give the item the same role; split mixed legacy categories. Preserve distinct labels as optional descriptions. This role is independent from savings-account transfer pairs. |
 | `parentId` | Remap after allocating all IDs; detect dangling parents, self-links, and cycles; enforce privacy consistently per tree. |
 | `initialBalance` | Convert exactly to integer minor units in `opening_balance`; do not create another opening transaction that would count it twice. |
 | Signed transaction amount / date | Convert signed money exactly to integer minor units; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |

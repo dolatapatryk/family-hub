@@ -1,0 +1,126 @@
+import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
+import { FinanceVersionConflictError } from './api'
+import { budgetItemDescription, budgetItemTitle, categorySection, financeSections } from './categories'
+import { financeMinorUnitsToMoney, formatPln, sumMoney } from './money'
+import { financeActionError } from './useFinanceAction'
+import type { FinanceAllocationRole, FinanceBudgetType, FinanceCategory, FinanceSectionId } from './types'
+
+interface BudgetItem {
+  id: string
+  version: number
+  category_id: string
+  name: string
+  amount: string
+  allocation_role: FinanceAllocationRole
+}
+
+export interface BudgetItemInput {
+  category_id: string
+  category_type: FinanceBudgetType
+  name: string
+  amount: string
+  allocation_role: FinanceAllocationRole
+}
+
+function ItemForm({ item, categories, sectionId, pending, onSave, onCancel }: {
+  item?: BudgetItem
+  categories: FinanceCategory[]
+  sectionId: FinanceSectionId
+  pending: boolean
+  onSave: (input: BudgetItemInput) => Promise<unknown>
+  onCancel: () => void
+}) {
+  const available = item ? categories : categories.filter(category => categorySection(category) === sectionId)
+  const [categoryId, setCategoryId] = useState(item?.category_id ?? available[0]?.id ?? '')
+  const [amount, setAmount] = useState(item ? financeMinorUnitsToMoney(item.amount) : '')
+  const [description, setDescription] = useState(item ? budgetItemDescription(item.name, categories.find(category => category.id === item.category_id)) : '')
+  const category = available.find(candidate => candidate.id === categoryId)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!category || pending) return
+    try {
+      await onSave({ category_id: category.id, category_type: category.budget_type,
+        allocation_role: category.allocation_role, name: description.trim(), amount })
+    } catch {
+      // Mutation errors are displayed by the containing panel; retain form input.
+    }
+  }
+
+  return <form className="finance-item-edit-form finance-budget-item-form" onSubmit={submit}>
+    <label>Kategoria
+      <select required value={categoryId} onChange={event => setCategoryId(event.target.value)} disabled={pending}>
+        <option value="" disabled>Wybierz kategorię</option>
+        {item ? financeSections.map(section => <optgroup label={section.label} key={section.id}>
+          {available.filter(candidate => categorySection(candidate) === section.id).map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+        </optgroup>) : available.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}
+      </select>
+    </label>
+    <label>Kwota<input required inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0,00" disabled={pending} /></label>
+    <label>Opis (opcjonalnie)<input maxLength={160} value={description} onChange={event => setDescription(event.target.value)} placeholder="Np. Czynsz" disabled={pending} /></label>
+    <div className="finance-edit-actions">
+      <button className="primary-button" type="submit" disabled={pending || !category}>{pending ? 'Zapisuję…' : item ? 'Zapisz' : 'Dodaj pozycję'}</button>
+      <button className="button-quiet" type="button" onClick={onCancel} disabled={pending}>Anuluj</button>
+    </div>
+  </form>
+}
+
+export function BudgetItemsPanel({ items, categories, pending, unavailable, createError, updateError, showZeroItems = true, onCreate, onUpdate, onResetErrors }: {
+  items: BudgetItem[]
+  categories: FinanceCategory[]
+  pending: boolean
+  unavailable: boolean
+  createError: unknown
+  updateError: unknown
+  showZeroItems?: boolean
+  onCreate: (input: BudgetItemInput) => Promise<unknown>
+  onUpdate: (input: BudgetItemInput & { id: string; expected_version: number }) => Promise<unknown>
+  onResetErrors: () => void
+}) {
+  const [addingSection, setAddingSection] = useState<FinanceSectionId | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const sections = [
+    ...financeSections,
+    ...(items.some(item => !categories.some(category => category.id === item.category_id)) ? [{ id: 'unavailable' as const, label: 'Kategoria niedostępna' }] : []),
+  ]
+  return <div className="finance-budget-grid">
+    {[createError, updateError].filter(Boolean).map((error, index) => <p className="error-message" role="alert" key={index}>{financeActionError(error)}</p>)}
+    {sections.map(section => {
+      const sectionItems = items.filter(item => {
+        const category = categories.find(candidate => candidate.id === item.category_id)
+        return category ? categorySection(category) === section.id : section.id === 'unavailable'
+      })
+      const sectionCategories = categories.filter(category => categorySection(category) === section.id)
+      return <section className="panel finance-budget-section" key={section.id}>
+        <div className="panel-head">
+          <h3 className="panel-title">{section.label}</h3>
+          <div className="finance-section-actions">
+            <strong>{formatPln(sumMoney(sectionItems.map(item => financeMinorUnitsToMoney(item.amount))))}</strong>
+            {section.id !== 'unavailable' && <button className="button-quiet" type="button" disabled={pending || unavailable} aria-label={`Dodaj pozycję: ${section.label}`} onClick={() => {
+              onResetErrors(); setEditingId(null); setAddingSection(section.id as FinanceSectionId)
+            }}>Dodaj pozycję</button>}
+          </div>
+        </div>
+        {addingSection === section.id && (sectionCategories.length ? <ItemForm key={`new:${section.id}`} categories={categories} sectionId={addingSection} pending={pending} onCancel={() => setAddingSection(null)} onSave={async input => {
+          await onCreate(input); setAddingSection(null)
+        }} /> : <p className="panel-message">Dodaj kategorię dla tej sekcji, aby utworzyć pozycję. <Link to={`/finance/categories?section=${section.id}`}>Dodaj kategorię</Link></p>)}
+        {sectionItems.filter(item => showZeroItems || BigInt(item.amount) !== 0n).map(item => {
+          const category = categories.find(candidate => candidate.id === item.category_id)
+          const title = budgetItemTitle(item.name, category)
+          return editingId === item.id ? <ItemForm key={`${item.id}:${item.version}`} item={item} categories={categories} sectionId={category ? categorySection(category) : 'variable_expense'} pending={pending} onCancel={() => setEditingId(null)} onSave={async input => {
+            try { await onUpdate({ ...input, id: item.id, expected_version: item.version }); setEditingId(null) }
+            catch (error) { if (error instanceof FinanceVersionConflictError) setEditingId(null); throw error }
+          }} /> : <div className="finance-item-row finance-budget-item-row" key={item.id}>
+            <div className="finance-item-copy"><strong>{title}</strong>{!category && <span>Kategoria niedostępna</span>}</div>
+            <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
+            <button className="button-quiet finance-edit-button" type="button" aria-label={`Edytuj: ${title}`} disabled={pending || unavailable} onClick={() => {
+              onResetErrors(); setAddingSection(null); setEditingId(item.id)
+            }}>Edytuj</button>
+          </div>
+        })}
+        {!sectionItems.length && <p className="panel-message">Brak pozycji.</p>}
+      </section>
+    })}
+  </div>
+}

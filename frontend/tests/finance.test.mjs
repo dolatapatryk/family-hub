@@ -38,6 +38,11 @@ class QueryBuilder {
   }
 
   select(columns) { this.operations.push(['select', columns]); return this }
+  insert(values) { this.operations.push(['insert', values]); return this }
+  update(values) { this.operations.push(['update', values]); return this }
+  delete() { this.operations.push(['delete']); return this }
+  single() { this.operations.push(['single']); return this }
+  maybeSingle() { this.operations.push(['maybeSingle']); return this }
   eq(column, value) { this.operations.push(['eq', column, value]); return this }
   not(column, operator, value) { this.operations.push(['not', column, operator, value]); return this }
   order(column, options) { this.operations.push(['order', column, options]); return this }
@@ -47,9 +52,10 @@ class QueryBuilder {
   then(resolve, reject) {
     this.calls.push({ table: this.table, operations: this.operations })
     const range = this.operations.find(([name]) => name === 'range')
-    const result = range && Array.isArray(this.result.data)
-      ? { ...this.result, data: this.result.data.slice(range[1], range[2] + 1) }
-      : this.result
+    const response = typeof this.result === 'function' ? this.result(this.operations) : this.result
+    const result = range && Array.isArray(response.data)
+      ? { ...response, data: response.data.slice(range[1], range[2] + 1) }
+      : response
     return Promise.resolve(result).then(resolve, reject)
   }
 }
@@ -69,6 +75,95 @@ function fakeClient({ rpcResult, tableResults = {} } = {}) {
     },
   }
 }
+
+test('category creation trims the name and binds scope and attribution to the signed-in household member', async () => {
+  const category = { id: 'category-1', name: 'Zakupy spożywcze', budget_type: 'variable_expense' }
+  const client = fakeClient({ tableResults: { finance_categories: { data: category, error: null } } })
+  const result = await createFinanceApi(household, owner, client).createCategory({
+    name: '  Zakupy spożywcze  ', section: 'variable_expense', sort_order: 3,
+    household_id: 'another-household', created_by: 'another-member', version: 999,
+  })
+  assert.deepEqual(result, category)
+  assert.equal(client.calls[0].table, 'finance_categories')
+  assert.deepEqual(client.calls[0].operations.find(([op]) => op === 'insert')[1], {
+    household_id: household, created_by: owner, name: 'Zakupy spożywcze', budget_type: 'variable_expense', allocation_role: 'standard', sort_order: 3,
+  })
+})
+
+test('invalid category names and classifications are rejected before a database write', async () => {
+  const client = fakeClient()
+  const api = createFinanceApi(household, owner, client)
+  await assert.rejects(api.createCategory({ name: '   ', section: 'income', sort_order: 0 }), /Podaj nazwę/)
+  await assert.rejects(api.renameCategory({ id: 'category-1', expected_version: 1, name: 'x'.repeat(161) }), /160/)
+  await assert.rejects(api.createCategory({ name: 'Zakupy', section: 'unknown', sort_order: 0 }), /sekcję budżetu/)
+  assert.equal(client.calls.length, 0)
+})
+
+test('individual-account category creation persists the classification without a separate item role choice', async () => {
+  const client = fakeClient({ tableResults: { finance_categories: { data: { id: 'personal-category' }, error: null } } })
+  await createFinanceApi(household, owner, client).createCategory({ name: 'Patryk — środki osobiste', section: 'personal', sort_order: 0 })
+  const values = client.calls[0].operations.find(([op]) => op === 'insert')[1]
+  assert.equal(values.budget_type, 'saving')
+  assert.equal(values.allocation_role, 'personal_allowance')
+})
+
+test('budgets and forecasts save a category and amount with an optional description', async () => {
+  for (const [method, table, scope] of [
+    ['createBudgetItem', 'finance_budget_items', { month_id: 'month-1' }],
+    ['createScenarioItem', 'finance_scenario_items', { scenario_id: 'scenario-1' }],
+  ]) {
+    const client = fakeClient({ tableResults: { [table]: { data: { id: 'line-1', name: '', amount_minor: '150000' }, error: null } } })
+    await createFinanceApi(household, owner, client)[method]({ ...scope, category_id: 'category-1', category_type: 'saving',
+      allocation_role: 'personal_allowance', name: '', amount: '1500.00', sort_order: 0 })
+    const values = client.calls[0].operations.find(([op]) => op === 'insert')[1]
+    assert.equal(values.name, '')
+    assert.equal(values.amount, '150000')
+    assert.equal(values.category_id, 'category-1')
+    assert.equal(values.allocation_role, 'personal_allowance')
+  }
+})
+
+test('renaming a category preserves its classification and protects household scope and row version', async () => {
+  const client = fakeClient({ tableResults: { finance_categories: { data: { id: 'category-1' }, error: null } } })
+  await createFinanceApi(household, owner, client).renameCategory({
+    id: 'category-1', expected_version: 4, name: '  Jedzenie  ', budget_type: 'income', parent_id: 'other',
+  })
+  const operations = client.calls[0].operations
+  assert.deepEqual(operations.find(([op]) => op === 'update'), ['update', { name: 'Jedzenie' }])
+  assert.deepEqual(operations.filter(([op]) => op === 'eq'), [
+    ['eq', 'household_id', household], ['eq', 'id', 'category-1'], ['eq', 'version', 4],
+  ])
+})
+
+test('stale category edits and deletes surface conflicts instead of overwriting another member', async () => {
+  for (const operation of ['renameCategory', 'deleteCategory']) {
+    const client = fakeClient({ tableResults: { finance_categories: operations => ({
+      data: operations.some(([op, columns]) => op === 'select' && columns === 'version') ? { version: 5 } : null,
+      error: null,
+    }) } })
+    await assert.rejects(createFinanceApi(household, owner, client)[operation]({
+      id: 'category-1', expected_version: 4, name: 'Jedzenie',
+    }), error => error instanceof FinanceVersionConflictError && error.current_version === 5)
+    assert.deepEqual(client.calls[0].operations.filter(([op]) => op === 'eq'), [
+      ['eq', 'household_id', household], ['eq', 'id', 'category-1'], ['eq', 'version', 4],
+    ])
+    assert.deepEqual(client.calls[1].operations.filter(([op]) => op === 'eq'), [
+      ['eq', 'household_id', household], ['eq', 'id', 'category-1'],
+    ])
+  }
+})
+
+test('removing a referenced category explains the restriction and never removes its budget history', async () => {
+  const client = fakeClient({ tableResults: { finance_categories: {
+    data: null, error: { code: '23503', message: 'foreign key constraint' },
+  } } })
+  await assert.rejects(createFinanceApi(household, owner, client).deleteCategory({
+    id: 'category-1', expected_version: 4,
+  }), /Nie można usunąć kategorii używanej/)
+  assert.equal(client.calls.length, 1)
+  assert.equal(client.calls[0].table, 'finance_categories')
+  assert.ok(client.calls[0].operations.some(([op]) => op === 'delete'))
+})
 
 test('active tree balance excludes archived descendants without double counting', () => {
   const root = { id: 'root', opening_balance: '100.00' }

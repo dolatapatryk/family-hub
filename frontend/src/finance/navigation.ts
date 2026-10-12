@@ -1,6 +1,7 @@
 export const financeNavigation = [
   { id: 'dashboard', label: 'Dashboard', to: '/finance/dashboard' },
   { id: 'budget', label: 'Budżet', to: '/finance/budget' },
+  { id: 'categories', label: 'Kategorie transakcji', to: '/finance/categories' },
   { id: 'savings', label: 'Oszczędności', to: '/finance/savings/summary' },
   { id: 'forecast', label: 'Prognozy', to: '/finance/forecast' },
   { id: 'projects', label: 'Projekty', to: '/finance/projects' },

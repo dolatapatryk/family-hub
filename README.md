@@ -292,14 +292,22 @@ Reset the local Supabase database when testing migration changes:
 The Finance feature, normalized database schema, shared/private savings
 account rules, and the historical Home Budget data migration sequence are documented in
 [BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md](BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md).
+Categories select one of six budget sections, including individual accounts.
+Budget and forecast lines require a category and amount, with an optional
+description. Each section offers its own add action. Migration
+`20261012220000_finance_category_sections.sql` normalizes repeated labels and
+preserves historical amounts and sections, splitting mixed saving/personal
+categories when necessary. This migration was applied to local Supabase and
+verified with frontend tests/build, category SQL tests and Finance RLS tests.
+
 The in-app source includes budgets/scenarios, savings accounts and their
 lifecycle, transfers, draft acceptance, linked savings plans, shared annual
 reserves, separate household/personal savings summaries, and shared project
 expenses. Savings plan loading creates month drafts without changing the
 budget; each plan/account is loaded at most once per month even after its draft
 is accepted or deleted. Projects likewise keep their own totals. Frontend tests
-and build pass; finance migrations and database verification source remain
-intentionally unapplied/unrun. Import, export/restore, migration review, and
+and build pass. Finance schema and category-section migrations are applied
+to local Supabase; category and Finance RLS checks pass (64 assertions). Import, export/restore, migration review, and
 cutover are outside this work.
 
 Today shows today's tasks and visible calendar events, including annual

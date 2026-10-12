@@ -5,31 +5,25 @@ import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
-import { financeMinorUnitsToMoney, formatPln, sumMoney } from './money'
+import { financeMinorUnitsToMoney, formatPln } from './money'
 import { SavingsAccountsPanel } from './SavingsAccountsPanel'
 import { SavingsPlansPanel } from './SavingsPlansPanel'
 import { FinanceDashboard, MonthKpis } from './FinanceCharts'
 import { ForecastOverview } from './ForecastOverview'
 import { financeNavigation, savingsNavigation, resolveFinanceRoute } from './navigation'
 import { ProjectsPanel } from './ProjectsPanel'
+import { CategoriesPanel } from './CategoriesPanel'
+import { budgetItemTitle } from './categories'
+import { BudgetItemsPanel, type BudgetItemInput } from './BudgetItemsPanel'
 import type {
   FinanceAllocationRole,
   FinanceBudgetLine,
-  FinanceBudgetType,
   FinanceCategory,
   FinanceCreateMonthInput,
   FinanceMonth,
   FinanceScenario,
 } from './types'
 
-
-const budgetTypeNames: Record<FinanceBudgetType, string> = {
-  income: 'Przychód',
-  fixed_expense: 'Wydatek stały',
-  variable_expense: 'Wydatek zmienny',
-  saving: 'Oszczędności',
-  investment: 'Inwestycje',
-}
 
 function displayMonth(month: FinanceMonth) {
   if (month.display_name) return month.display_name
@@ -58,110 +52,6 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : 'Nie udało się zapisać zmian.'
 }
 
-function AllocationRoleSelect({
-  role,
-  categoryType,
-  disabled,
-  label,
-  onChange,
-}: {
-  role: FinanceAllocationRole
-  categoryType: FinanceBudgetType | undefined
-  disabled?: boolean
-  label: string
-  onChange: (role: FinanceAllocationRole) => void
-}) {
-  return (
-    <select
-      aria-label={label}
-      value={role}
-      disabled={disabled || categoryType !== 'saving'}
-      onChange={event => onChange(event.target.value as FinanceAllocationRole)}
-    >
-      <option value="standard">Standard</option>
-      {categoryType === 'saving' && <option value="personal_allowance">Osobista alokacja</option>}
-    </select>
-  )
-}
-
-interface EditableFinanceItem {
-  id: string
-  version: number
-  name: string
-  amount: string
-  category_id: string
-  allocation_role: FinanceAllocationRole
-}
-
-function FinanceItemEditForm({
-  item,
-  categories,
-  disabled,
-  onCancel,
-  onSave,
-}: {
-  item: EditableFinanceItem
-  categories: FinanceCategory[]
-  disabled: boolean
-  onCancel: () => void
-  onSave: (input: {
-    id: string
-    expected_version: number
-    category_id: string
-    category_type: FinanceBudgetType
-    name: string
-    amount: string
-    allocation_role: FinanceAllocationRole
-  }) => void
-}) {
-  const [name, setName] = useState(item.name)
-  const [amount, setAmount] = useState(financeMinorUnitsToMoney(item.amount))
-  const [categoryId, setCategoryId] = useState(item.category_id)
-  const [role, setRole] = useState(item.allocation_role)
-  const category = categories.find(candidate => candidate.id === categoryId)
-
-  function changeCategory(nextId: string) {
-    setCategoryId(nextId)
-    if (categories.find(candidate => candidate.id === nextId)?.budget_type !== 'saving') setRole('standard')
-  }
-
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!category) return
-    onSave({
-      id: item.id,
-      expected_version: item.version,
-      category_id: category.id,
-      category_type: category.budget_type,
-      name: name.trim(),
-      amount,
-      allocation_role: role,
-    })
-  }
-
-  return (
-    <form className="finance-item-edit-form" onSubmit={submit}>
-      <label>Pozycja<input required maxLength={160} value={name} onChange={event => setName(event.target.value)} /></label>
-      <label>Kwota<input required inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} /></label>
-      <label>Kategoria
-        <select required value={categoryId} onChange={event => changeCategory(event.target.value)}>
-          {categories.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.name} · {budgetTypeNames[candidate.budget_type]}</option>)}
-        </select>
-      </label>
-      <label>Rola
-        <select value={role} disabled={category?.budget_type !== 'saving'} onChange={event => setRole(event.target.value as FinanceAllocationRole)}>
-          <option value="standard">Standard</option>
-          {category?.budget_type === 'saving' && <option value="personal_allowance">Osobista alokacja</option>}
-        </select>
-      </label>
-      <div className="finance-edit-actions">
-        <button className="primary-button" type="submit" disabled={disabled || !category}>Zapisz</button>
-        <button className="button-quiet" type="button" onClick={onCancel} disabled={disabled}>Anuluj</button>
-      </div>
-    </form>
-  )
-}
-
 function SummaryCards({ lines }: { lines: FinanceBudgetLine[] }) {
   return <MonthKpis summary={calculateMonthSummary(lines)} />
 }
@@ -175,7 +65,7 @@ function makeLines(
     if (!category) return []
     return [{
       id: item.id,
-      name: item.name,
+      name: budgetItemTitle(item.name, category),
       amount: financeMinorUnitsToMoney(item.amount),
       budget_type: category.budget_type,
       allocation_role: item.allocation_role,
@@ -200,18 +90,8 @@ export function FinancePage() {
   const [monthSource, setMonthSource] = useState('empty')
   const [selectedMonthId, setSelectedMonthId] = useState('')
   const [selectedScenarioId, setSelectedScenarioId] = useState('')
-  const [editingBudgetItemId, setEditingBudgetItemId] = useState('')
-  const [editingScenarioItemId, setEditingScenarioItemId] = useState('')
-  const [budgetName, setBudgetName] = useState('')
-  const [budgetAmount, setBudgetAmount] = useState('')
-  const [budgetCategoryId, setBudgetCategoryId] = useState('')
-  const [budgetRole, setBudgetRole] = useState<FinanceAllocationRole>('standard')
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioDescription, setScenarioDescription] = useState('')
-  const [scenarioItemName, setScenarioItemName] = useState('')
-  const [scenarioItemAmount, setScenarioItemAmount] = useState('')
-  const [scenarioCategoryId, setScenarioCategoryId] = useState('')
-  const [scenarioItemRole, setScenarioItemRole] = useState<FinanceAllocationRole>('standard')
   const createMonthRequest = useRef<{ signature: string; request_id: string } | null>(null)
 
   useEffect(() => {
@@ -292,36 +172,13 @@ export function FinancePage() {
   const createBudgetItem = useMutation({
     mutationFn: (input: Parameters<typeof api.createBudgetItem>[0]) => api.createBudgetItem(input),
     onSuccess: async (_data, input) => {
-      setBudgetName('')
-      setBudgetAmount('')
-      setBudgetRole('standard')
       await queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id, input.month_id] })
     },
   })
   const createScenarioItem = useMutation({
     mutationFn: (input: Parameters<typeof api.createScenarioItem>[0]) => api.createScenarioItem(input),
     onSuccess: async (_data, input) => {
-      setScenarioItemName('')
-      setScenarioItemAmount('')
-      setScenarioItemRole('standard')
       await queryClient.invalidateQueries({ queryKey: ['financeScenarioItems', profile.household_id, input.scenario_id] })
-    },
-  })
-  const updateAllocationRole = useMutation({
-    mutationFn: async (input: {
-      kind: 'budget' | 'scenario'
-      id: string
-      expectedVersion: number
-      role: FinanceAllocationRole
-      categoryType: FinanceBudgetType
-    }) => input.kind === 'budget'
-      ? api.updateBudgetItemAllocationRole(input.id, input.expectedVersion, input.role, input.categoryType)
-      : api.updateScenarioItemAllocationRole(input.id, input.expectedVersion, input.role, input.categoryType),
-    onSettled: async (_data, _error, input) => {
-      const queryKey = input.kind === 'budget'
-        ? ['financeBudgetItems', profile.household_id]
-        : ['financeScenarioItems', profile.household_id]
-      await queryClient.invalidateQueries({ queryKey })
     },
   })
   const updateFinanceItem = useMutation({
@@ -331,17 +188,13 @@ export function FinancePage() {
     },
     onSuccess: async (_data, input) => {
       if (input.kind === 'budget') {
-        setEditingBudgetItemId('')
         await queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id] })
       } else {
-        setEditingScenarioItemId('')
         await queryClient.invalidateQueries({ queryKey: ['financeScenarioItems', profile.household_id] })
       }
     },
     onError: async (error, input) => {
       if (!(error instanceof FinanceVersionConflictError)) return
-      if (input.kind === 'budget') setEditingBudgetItemId('')
-      else setEditingScenarioItemId('')
       const queryKey = input.kind === 'budget'
         ? ['financeBudgetItems', profile.household_id]
         : ['financeScenarioItems', profile.household_id]
@@ -352,8 +205,6 @@ export function FinancePage() {
   const monthList = months.data ?? []
   const categoryList = categories.data ?? []
   const scenarioList = scenarios.data ?? []
-  const selectedBudgetCategory = categoryList.find(category => category.id === budgetCategoryId)
-  const selectedScenarioCategory = categoryList.find(category => category.id === scenarioCategoryId)
   const budgetLines = makeLines(budgetItems.data ?? [], categoryList)
   const scenarioLines = makeLines(scenarioItems.data ?? [], categoryList)
   const activeMonth = monthList.find(month => month.id === selectedMonthId)
@@ -381,42 +232,20 @@ export function FinancePage() {
     if (request) createMonth.mutate({ ...inputWithoutRequest, request_id: request.request_id })
   }
 
-  function chooseBudgetCategory(categoryId: string) {
-    setBudgetCategoryId(categoryId)
-    if (categoryList.find(category => category.id === categoryId)?.budget_type !== 'saving') setBudgetRole('standard')
+  function resetItemErrors() {
+    createBudgetItem.reset()
+    createScenarioItem.reset()
+    updateFinanceItem.reset()
   }
 
-  function chooseScenarioCategory(categoryId: string) {
-    setScenarioCategoryId(categoryId)
-    if (categoryList.find(category => category.id === categoryId)?.budget_type !== 'saving') setScenarioItemRole('standard')
+  function addBudgetItem(input: BudgetItemInput) {
+    if (!activeMonth) return Promise.reject(new Error('Wybierz miesiąc budżetu.'))
+    return createBudgetItem.mutateAsync({ ...input, month_id: activeMonth.id, sort_order: budgetItems.data?.length ?? 0 })
   }
 
-  function submitBudgetItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!activeMonth || !selectedBudgetCategory) return
-    createBudgetItem.mutate({
-      month_id: activeMonth.id,
-      category_id: selectedBudgetCategory.id,
-      category_type: selectedBudgetCategory.budget_type,
-      name: budgetName.trim(),
-      amount: budgetAmount,
-      allocation_role: budgetRole,
-      sort_order: budgetItems.data?.length ?? 0,
-    })
-  }
-
-  function submitScenarioItem(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!activeScenario || !selectedScenarioCategory) return
-    createScenarioItem.mutate({
-      scenario_id: activeScenario.id,
-      category_id: selectedScenarioCategory.id,
-      category_type: selectedScenarioCategory.budget_type,
-      name: scenarioItemName.trim(),
-      amount: scenarioItemAmount,
-      allocation_role: scenarioItemRole,
-      sort_order: scenarioItems.data?.length ?? 0,
-    })
+  function addScenarioItem(input: BudgetItemInput) {
+    if (!activeScenario) return Promise.reject(new Error('Wybierz scenariusz.'))
+    return createScenarioItem.mutateAsync({ ...input, scenario_id: activeScenario.id, sort_order: scenarioItems.data?.length ?? 0 })
   }
 
   function submitScenario(event: FormEvent<HTMLFormElement>) {
@@ -438,7 +267,7 @@ export function FinancePage() {
       <PageHeader
         eyebrow="Finanse"
         title={financeNavigation.find(item => item.id === view)?.label ?? 'Dashboard'}
-        description="Budżet, cele i prognozy bez pracy na arkuszach miesięcznych."
+        description={view === 'categories' ? 'Zdefiniuj nazwy kategorii i przypisz je do sekcji budżetu.' : 'Budżet, cele i prognozy bez pracy na arkuszach miesięcznych.'}
         action={['dashboard', 'budget'].includes(view) && monthList.length > 0 ? (
           <label className="finance-month-select">Miesiąc
             <select value={selectedMonthId} onChange={event => setSelectedMonthId(event.target.value)}>
@@ -453,10 +282,6 @@ export function FinancePage() {
       </nav>}
 
       {pageErrors.map((error, index) => <p className="error-message" role="alert" key={index}>{errorText(error)}</p>)}
-      {updateFinanceItem.error instanceof FinanceVersionConflictError && (
-        <p className="error-message" role="alert">{errorText(updateFinanceItem.error)}</p>
-      )}
-
       {view === 'dashboard' ? (
         months.isPending || (selectedMonthId && budgetItems.isPending) ? <p className="panel-message" role="status">Ładuję dashboard…</p> : budgetItems.isError ? <p className="error-message" role="alert">{errorText(budgetItems.error)}</p> : activeMonth ? <FinanceDashboard lines={budgetLines} monthName={displayMonth(activeMonth)} /> : <section className="panel finance-chart-panel"><h2 className="panel-title">Twój budżet domowy</h2><p>Utwórz pierwszy miesiąc, aby zobaczyć podsumowanie finansów.</p><Link className="primary-button" to="/finance/budget">Przejdź do budżetu</Link></section>
       ) : view === 'budget' ? (
@@ -488,89 +313,13 @@ export function FinancePage() {
               {budgetItems.isError && <p className="error-message finance-error" role="alert">{errorText(budgetItems.error)}</p>}
               {budgetItems.data && <SummaryCards lines={budgetLines} />}
               {budgetItems.data && budgetItems.data.length === 0 && <p className="panel-message">Ten miesiąc nie ma jeszcze pozycji.</p>}
-              <form className="finance-item-form" onSubmit={submitBudgetItem}>
-                <label>Pozycja
-                  <input required maxLength={160} value={budgetName} onChange={event => setBudgetName(event.target.value)} placeholder="Nazwa pozycji" />
-                </label>
-                <label>Kwota
-                  <input required inputMode="decimal" value={budgetAmount} onChange={event => setBudgetAmount(event.target.value)} placeholder="0,00" />
-                </label>
-                <label>Kategoria
-                  <select required value={budgetCategoryId} onChange={event => chooseBudgetCategory(event.target.value)}>
-                    <option value="" disabled>Wybierz kategorię</option>
-                    {categoryList.map(category => <option key={category.id} value={category.id}>{category.name} · {budgetTypeNames[category.budget_type]}</option>)}
-                  </select>
-                </label>
-                <label>Rola
-                  <select value={budgetRole} disabled={selectedBudgetCategory?.budget_type !== 'saving'} onChange={event => setBudgetRole(event.target.value as FinanceAllocationRole)}>
-                    <option value="standard">Standard</option>
-                    {selectedBudgetCategory?.budget_type === 'saving' && <option value="personal_allowance">Osobista alokacja</option>}
-                  </select>
-                </label>
-                <button className="primary-button" type="submit" disabled={!selectedBudgetCategory || createBudgetItem.isPending}>
-                  {createBudgetItem.isPending ? 'Zapisuję…' : 'Dodaj pozycję'}
-                </button>
-              </form>
               <label className="finance-zero-toggle"><input type="checkbox" checked={showZeroItems} onChange={event => setShowZeroItems(event.target.checked)} /> Pokaż pozycje zerowe</label>
-              <div className="finance-budget-grid">
-                {[
-                  { id: 'income', title: 'Przychody' },
-                  { id: 'personal', title: 'Na indywidualne konta' },
-                  { id: 'fixed_expense', title: 'Wydatki stałe' },
-                  { id: 'variable_expense', title: 'Wydatki zmienne' },
-                  { id: 'saving', title: 'Odkładanie na początku miesiąca' },
-                  { id: 'investment', title: 'Inwestycje' },
-                  ...((budgetItems.data ?? []).some(item => !categoryList.some(category => category.id === item.category_id)) ? [{ id: 'unavailable', title: 'Kategoria niedostępna' }] : []),
-                ].map(section => {
-                  const sectionItems = (budgetItems.data ?? []).filter(item => {
-                    const type = categoryList.find(category => category.id === item.category_id)?.budget_type
-                    if (section.id === 'unavailable') return !type
-                    return section.id === 'personal' ? type === 'saving' && item.allocation_role === 'personal_allowance' : type === section.id && (type !== 'saving' || item.allocation_role !== 'personal_allowance')
-                  })
-                  return <section className="panel finance-budget-section" key={section.id}>
-                    <div className="panel-head"><h3 className="panel-title">{section.title}</h3><strong>{formatPln(sumMoney(sectionItems.map(item => financeMinorUnitsToMoney(item.amount))))}</strong></div>
-                    {sectionItems.filter(item => showZeroItems || BigInt(item.amount) !== 0n).map(item => {
-                      const category = categoryList.find(candidate => candidate.id === item.category_id)
-                      if (editingBudgetItemId === item.id) {
-                        return (
-                          <div key={item.id}>
-                            <FinanceItemEditForm
-                              item={item}
-                              categories={categoryList}
-                              disabled={updateFinanceItem.isPending}
-                              onCancel={() => setEditingBudgetItemId('')}
-                              onSave={changes => updateFinanceItem.mutate({ ...changes, kind: 'budget' })}
-                            />
-                            {updateFinanceItem.isError && <p className="error-message finance-error" role="alert">{errorText(updateFinanceItem.error)}</p>}
-                          </div>
-                        )
-                      }
-                      return (
-                        <div className="finance-item-row" key={item.id}>
-                          <div className="finance-item-copy">
-                            <strong>{item.name}</strong>
-                            <span>{category ? `${category.name} · ${budgetTypeNames[category.budget_type]}` : 'Kategoria niedostępna'}</span>
-                          </div>
-                          <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
-                          <AllocationRoleSelect
-                            role={item.allocation_role}
-                            categoryType={category?.budget_type}
-                            disabled={updateAllocationRole.isPending}
-                            label={`Rola alokacji: ${item.name}`}
-                            onChange={role => updateAllocationRole.mutate({ kind: 'budget', id: item.id, expectedVersion: item.version, role, categoryType: category?.budget_type ?? 'variable_expense' })}
-                          />
-                          <button className="button-quiet finance-edit-button" type="button" onClick={() => setEditingBudgetItemId(item.id)} disabled={updateAllocationRole.isPending || updateFinanceItem.isPending}>Edytuj</button>
-                        </div>
-                      )
-                    })}
-                    {!sectionItems.length && <p className="panel-message">Brak pozycji.</p>}
-                  </section>
-                })}
-              </div>
-
-              {!categories.isPending && categoryList.length === 0 && <p className="panel-message">Najpierw zaimportuj lub dodaj kategorie, aby tworzyć pozycje budżetu.</p>}
-              {createBudgetItem.isError && <p className="error-message finance-error" role="alert">{errorText(createBudgetItem.error)}</p>}
-              {updateAllocationRole.isError && <p className="error-message finance-error" role="alert">{errorText(updateAllocationRole.error)}</p>}
+              <BudgetItemsPanel key={activeMonth.id} items={budgetItems.data ?? []} categories={categoryList}
+                pending={createBudgetItem.isPending || updateFinanceItem.isPending}
+                unavailable={categories.isPending || categories.isError || budgetItems.isPending || budgetItems.isError}
+                createError={createBudgetItem.error} updateError={updateFinanceItem.error} showZeroItems={showZeroItems}
+                onCreate={addBudgetItem} onUpdate={input => updateFinanceItem.mutateAsync({ ...input, kind: 'budget' })}
+                onResetErrors={resetItemErrors} />
             </>
           )}
           {createMonth.isError && <p className="error-message finance-error" role="alert">{errorText(createMonth.error)}</p>}
@@ -618,67 +367,12 @@ export function FinancePage() {
                 {scenarioItems.isError && <p className="error-message finance-error" role="alert">{errorText(scenarioItems.error)}</p>}
                 {scenarioLines.length > 0 && <SummaryCards lines={scenarioLines} />}
                 {scenarioItems.data && scenarioItems.data.length === 0 && <p className="panel-message">Ten scenariusz nie ma jeszcze pozycji.</p>}
-                {(scenarioItems.data ?? []).map(item => {
-                  const category = categoryList.find(candidate => candidate.id === item.category_id)
-                  if (editingScenarioItemId === item.id) {
-                    return (
-                      <div key={item.id}>
-                        <FinanceItemEditForm
-                          item={item}
-                          categories={categoryList}
-                          disabled={updateFinanceItem.isPending}
-                          onCancel={() => setEditingScenarioItemId('')}
-                          onSave={changes => updateFinanceItem.mutate({ ...changes, kind: 'scenario' })}
-                        />
-                        {updateFinanceItem.isError && <p className="error-message finance-error" role="alert">{errorText(updateFinanceItem.error)}</p>}
-                      </div>
-                    )
-                  }
-                  return (
-                    <div className="finance-item-row" key={item.id}>
-                      <div className="finance-item-copy">
-                        <strong>{item.name}</strong>
-                        <span>{category ? `${category.name} · ${budgetTypeNames[category.budget_type]}` : 'Kategoria niedostępna'}</span>
-                      </div>
-                      <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
-                      <AllocationRoleSelect
-                        role={item.allocation_role}
-                        categoryType={category?.budget_type}
-                        disabled={updateAllocationRole.isPending}
-                        label={`Rola alokacji: ${item.name}`}
-                        onChange={role => updateAllocationRole.mutate({ kind: 'scenario', id: item.id, expectedVersion: item.version, role, categoryType: category?.budget_type ?? 'variable_expense' })}
-                      />
-                      <button className="button-quiet finance-edit-button" type="button" onClick={() => setEditingScenarioItemId(item.id)} disabled={updateAllocationRole.isPending || updateFinanceItem.isPending}>Edytuj</button>
-                    </div>
-                  )
-                })}
-
-                <form className="finance-item-form" onSubmit={submitScenarioItem}>
-                  <label>Pozycja
-                    <input required maxLength={160} value={scenarioItemName} onChange={event => setScenarioItemName(event.target.value)} placeholder="Nazwa pozycji" />
-                  </label>
-                  <label>Kwota
-                    <input required inputMode="decimal" value={scenarioItemAmount} onChange={event => setScenarioItemAmount(event.target.value)} placeholder="0,00" />
-                  </label>
-                  <label>Kategoria
-                    <select required value={scenarioCategoryId} onChange={event => chooseScenarioCategory(event.target.value)}>
-                      <option value="" disabled>Wybierz kategorię</option>
-                      {categoryList.map(category => <option key={category.id} value={category.id}>{category.name} · {budgetTypeNames[category.budget_type]}</option>)}
-                    </select>
-                  </label>
-                  <label>Rola
-                    <select value={scenarioItemRole} disabled={selectedScenarioCategory?.budget_type !== 'saving'} onChange={event => setScenarioItemRole(event.target.value as FinanceAllocationRole)}>
-                      <option value="standard">Standard</option>
-                      {selectedScenarioCategory?.budget_type === 'saving' && <option value="personal_allowance">Osobista alokacja</option>}
-                    </select>
-                  </label>
-                  <button className="primary-button" type="submit" disabled={!selectedScenarioCategory || createScenarioItem.isPending}>
-                    {createScenarioItem.isPending ? 'Zapisuję…' : 'Dodaj pozycję'}
-                  </button>
-                </form>
-                {!categories.isPending && categoryList.length === 0 && <p className="panel-message">Najpierw zaimportuj lub dodaj kategorie, aby tworzyć pozycje scenariusza.</p>}
-                {createScenarioItem.isError && <p className="error-message finance-error" role="alert">{errorText(createScenarioItem.error)}</p>}
-                {updateAllocationRole.isError && <p className="error-message finance-error" role="alert">{errorText(updateAllocationRole.error)}</p>}
+                <BudgetItemsPanel key={activeScenario.id} items={scenarioItems.data ?? []} categories={categoryList}
+                  pending={createScenarioItem.isPending || updateFinanceItem.isPending}
+                  unavailable={categories.isPending || categories.isError || scenarioItems.isPending || scenarioItems.isError}
+                  createError={createScenarioItem.error} updateError={updateFinanceItem.error}
+                  onCreate={addScenarioItem} onUpdate={input => updateFinanceItem.mutateAsync({ ...input, kind: 'scenario' })}
+                  onResetErrors={resetItemErrors} />
               </>
             )}
             {scenarioList.length === 0 && !scenarios.isPending && <p className="panel-message">Dodaj scenariusz, aby wprowadzać jego pozycje.</p>}
@@ -689,6 +383,8 @@ export function FinancePage() {
           {savingsView === 'planner' && <SavingsPlansPanel mode="planner" api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />}
           <SavingsAccountsPanel key={`${profile.household_id}:${profile.id}`} mode={savingsView} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
         </div>
+      ) : view === 'categories' ? (
+        <CategoriesPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} categories={categoryList} loading={categories.isPending} loadFailed={categories.isError} />
       ) : (
         <ProjectsPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} />
       )}

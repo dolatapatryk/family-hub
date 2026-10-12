@@ -5,7 +5,7 @@ import { financeNavigation, savingsNavigation, resolveFinanceRoute } from '../sr
 test('Finanse opens Dashboard and every sidebar destination resolves to its own page', () => {
   assert.equal(resolveFinanceRoute('/finance').view, 'dashboard')
   assert.equal(resolveFinanceRoute('/finance/').view, 'dashboard')
-  assert.deepEqual(financeNavigation.map(item => item.label), ['Dashboard', 'Budżet', 'Oszczędności', 'Prognozy', 'Projekty'])
+  assert.deepEqual(financeNavigation.map(item => item.label), ['Dashboard', 'Budżet', 'Kategorie transakcji', 'Oszczędności', 'Prognozy', 'Projekty'])
   for (const item of financeNavigation) {
     assert.equal(resolveFinanceRoute(item.to).view, item.id)
     assert.equal(resolveFinanceRoute(`${item.to}/`).view, item.id)

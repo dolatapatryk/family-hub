@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '../auth/supabase.ts'
 import { moneyToFinanceMinorUnits } from './money.ts'
+import { financeSections } from './categories.ts'
 import type {
   FinanceAllocationRole,
   FinanceAccountLifecycleInput,
@@ -8,6 +9,8 @@ import type {
   FinanceBudgetItem,
   FinanceBudgetType,
   FinanceCategory,
+  FinanceCreateCategoryInput,
+  FinanceRenameCategoryInput,
   FinanceCreateMonthInput,
   FinanceDeleteTransferInput,
   FinanceId,
@@ -71,7 +74,7 @@ const projectColumns = `${commonColumns}, name, description, target_budget_minor
 const projectExpenseColumns = `${commonColumns}, project_id, expense_date, name, amount_minor:amount::text, notes, sort_order`
 
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
-const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, parent_id, color, sort_order'
+const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, allocation_role, parent_id, color, sort_order'
 const scenarioColumns = 'id, household_id, created_by, created_at, updated_at, version, name, description, sort_order'
 const budgetItemColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, category_id, name, amount_minor:amount::text, allocation_role, is_planned, is_recurring, notes, sort_order'
 const scenarioItemColumns = 'id, household_id, created_by, created_at, updated_at, version, scenario_id, category_id, name, amount_minor:amount::text, allocation_role, is_planned, is_recurring, notes, sort_order'
@@ -328,6 +331,57 @@ export function createFinanceApi(
       if (signal) query = query.abortSignal(signal)
       return query
     })
+  }
+
+  function categoryName(name: string): string {
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('Podaj nazwę kategorii.')
+    if (trimmed.length > 160) throw new Error('Nazwa kategorii może mieć maksymalnie 160 znaków.')
+    return trimmed
+  }
+
+  async function createCategory(input: FinanceCreateCategoryInput): Promise<FinanceCategory> {
+    const name = categoryName(input.name)
+    const section = financeSections.find(candidate => candidate.id === input.section)
+    if (!section) throw new Error('Wybierz prawidłową sekcję budżetu.')
+    return resolve<FinanceCategory>(() => requireSupabase(client).from('finance_categories')
+      .insert({ household_id: householdId, created_by: userId, name,
+        budget_type: section.budget_type, allocation_role: section.allocation_role, sort_order: input.sort_order })
+      .select(categoryColumns)
+      .single())
+  }
+
+  async function renameCategory(input: FinanceRenameCategoryInput): Promise<void> {
+    const name = categoryName(input.name)
+    const supabaseClient = requireSupabase(client)
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_categories').update({ name })
+        .eq('household_id', householdId).eq('id', input.id).eq('version', input.expected_version)
+        .select('id').maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_categories').select('version')
+        .eq('household_id', householdId).eq('id', input.id)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      input.expected_version,
+    )
+  }
+
+  async function deleteCategory(input: { id: FinanceId; expected_version: number }): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    await resolveVersionedUpdate(
+      async () => {
+        const result = await supabaseClient.from('finance_categories').delete()
+          .eq('household_id', householdId).eq('id', input.id).eq('version', input.expected_version)
+          .select('id').maybeSingle()
+        if (result.error?.code === '23503') {
+          throw new Error('Nie można usunąć kategorii używanej w budżecie, prognozach lub mającej podkategorie.')
+        }
+        return result as VersionedUpdateResponse
+      },
+      () => supabaseClient.from('finance_categories').select('version')
+        .eq('household_id', householdId).eq('id', input.id)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      input.expected_version,
+    )
   }
 
   async function listBudgetItems(monthId: FinanceId, signal?: AbortSignal): Promise<FinanceBudgetItem[]> {
@@ -766,56 +820,6 @@ export function createFinanceApi(
     return toScenarioItem(row)
   }
 
-  async function updateBudgetItemAllocationRole(
-    id: FinanceId,
-    expectedVersion: number,
-    allocationRole: FinanceAllocationRole,
-    categoryType: FinanceBudgetType,
-  ): Promise<void> {
-    assertRoleMatchesCategory(allocationRole, categoryType)
-    const supabaseClient = requireSupabase(client)
-    await resolveVersionedUpdate(
-      () => supabaseClient.from('finance_budget_items')
-        .update({ allocation_role: allocationRole })
-        .eq('id', id)
-        .eq('household_id', householdId)
-        .eq('version', expectedVersion)
-        .select('id')
-        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
-      () => supabaseClient.from('finance_budget_items')
-        .select('version')
-        .eq('id', id)
-        .eq('household_id', householdId)
-        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
-      expectedVersion,
-    )
-  }
-
-  async function updateScenarioItemAllocationRole(
-    id: FinanceId,
-    expectedVersion: number,
-    allocationRole: FinanceAllocationRole,
-    categoryType: FinanceBudgetType,
-  ): Promise<void> {
-    assertRoleMatchesCategory(allocationRole, categoryType)
-    const supabaseClient = requireSupabase(client)
-    await resolveVersionedUpdate(
-      () => supabaseClient.from('finance_scenario_items')
-        .update({ allocation_role: allocationRole })
-        .eq('id', id)
-        .eq('household_id', householdId)
-        .eq('version', expectedVersion)
-        .select('id')
-        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
-      () => supabaseClient.from('finance_scenario_items')
-        .select('version')
-        .eq('id', id)
-        .eq('household_id', householdId)
-        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
-      expectedVersion,
-    )
-  }
-
   async function updateBudgetItem(input: UpdateFinanceItemInput): Promise<void> {
     assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
@@ -872,6 +876,9 @@ export function createFinanceApi(
     saveProject, deleteProject, saveProjectExpense, deleteProjectExpense, loadSavingsPlans,
     listMonths,
     listCategories,
+    createCategory,
+    renameCategory,
+    deleteCategory,
     listBudgetItems,
     listSavingsAccounts,
     listSavingsTransactions,
@@ -893,8 +900,6 @@ export function createFinanceApi(
     createScenario,
     createBudgetItem,
     createScenarioItem,
-    updateBudgetItemAllocationRole,
-    updateScenarioItemAllocationRole,
     updateBudgetItem,
     updateScenarioItem,
   }

@@ -4,6 +4,7 @@ import { calculateMonthSummary } from './calculations'
 import { MonthKpis, ScenarioComparison } from './FinanceCharts'
 import { financeMinorUnitsToMoney, formatPln } from './money'
 import { financeActionError } from './useFinanceAction'
+import { budgetItemTitle, categorySection, financeSections } from './categories'
 import type { FinanceCategory, FinanceScenario } from './types'
 
 export function ForecastOverview({ api, householdId, scenarios, categories, pending, onEdit, onCreateMonth }: {
@@ -32,7 +33,11 @@ export function ForecastOverview({ api, householdId, scenarios, categories, pend
         <div className="finance-edit-actions"><button className="button-quiet" onClick={() => onEdit(row.id)}>Edytuj scenariusz</button><button className="primary-button" disabled={pending} onClick={() => onCreateMonth(row.id)}>Utwórz miesiąc</button></div>
       </div>
       <MonthKpis summary={row.summary} dashboard />
-      {row.items.map(item => <div className="finance-scenario-line" key={item.id}><span>{item.name}</span><span>{categories.find(category => category.id === item.category_id)?.name ?? 'Kategoria niedostępna'}</span><strong>{formatPln(financeMinorUnitsToMoney(item.amount))}</strong></div>)}
+      {row.items.map(item => {
+        const category = categories.find(candidate => candidate.id === item.category_id)
+        const section = category ? financeSections.find(candidate => candidate.id === categorySection(category)) : undefined
+        return <div className="finance-scenario-line" key={item.id}><span>{budgetItemTitle(item.name, category)}</span><span>{section?.label ?? 'Kategoria niedostępna'}</span><strong>{formatPln(financeMinorUnitsToMoney(item.amount))}</strong></div>
+      })}
       {!row.items.length && <p className="panel-message">Ten scenariusz nie ma jeszcze pozycji.</p>}
     </section>)}
   </div>

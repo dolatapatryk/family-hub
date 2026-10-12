@@ -69,6 +69,44 @@
   font-size: 12px;
 }
 
+.finance-category-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.finance-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.finance-workspace .finance-budget-item-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.finance-workspace .finance-budget-section .finance-budget-item-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.finance-budget-item-form .finance-edit-actions {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 620px) {
+  .finance-workspace .finance-budget-section .finance-budget-item-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .finance-workspace .finance-budget-item-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .finance-budget-item-row .finance-edit-button {
+    grid-column: 1 / -1;
+  }
+}
+
 .finance-account-lifecycle .finance-edit-actions {
   flex-wrap: wrap;
 }

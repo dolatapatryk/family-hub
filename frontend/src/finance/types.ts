@@ -40,14 +40,30 @@ export interface FinanceMonth extends FinanceRow {
 export interface FinanceCategory extends FinanceRow {
   name: string
   budget_type: FinanceBudgetType
+  allocation_role: FinanceAllocationRole
   parent_id: FinanceId | null
   color: string | null
   sort_order: number
 }
 
+export interface FinanceCreateCategoryInput {
+  name: string
+  section: FinanceSectionId
+  sort_order: number
+}
+
+export type FinanceSectionId = FinanceBudgetType | 'personal'
+
+export interface FinanceRenameCategoryInput {
+  id: FinanceId
+  expected_version: number
+  name: string
+}
+
 export interface FinanceBudgetItem extends FinanceRow {
   month_id: FinanceId
   category_id: FinanceId
+  /** Optional description; an empty string displays only the category name. */
   name: string
   amount: FinanceMinorUnits
   allocation_role: FinanceAllocationRole
@@ -66,6 +82,7 @@ export interface FinanceScenario extends FinanceRow {
 export interface FinanceScenarioItem extends FinanceRow {
   scenario_id: FinanceId
   category_id: FinanceId
+  /** Optional description; an empty string displays only the category name. */
   name: string
   amount: FinanceMinorUnits
   allocation_role: FinanceAllocationRole

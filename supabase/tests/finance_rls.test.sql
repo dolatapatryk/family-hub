@@ -32,6 +32,9 @@ insert into public.finance_categories (id, household_id, created_by, name, budge
     ('32000000-0000-4000-8000-000000000005', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'Fixed costs', 'fixed_expense', null),
     ('32000000-0000-4000-8000-000000000006', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', 'Other income', 'income', null);
 
+update public.finance_categories set allocation_role = 'personal_allowance'
+where id = '32000000-0000-4000-8000-000000000004';
+
 insert into public.finance_budget_items (
     id, household_id, created_by, month_id, category_id, name, amount, allocation_role
 ) values
@@ -44,7 +47,7 @@ insert into public.finance_scenarios (id, household_id, created_by, name) values
     ('34000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', 'Other scenario');
 
 insert into public.finance_scenario_items (
-    id, household_id, created_by, scenario_id, category_id, name, amount
+    id, household_id, created_by, scenario_id, category_id, name, amount, allocation_role
 ) values
     ('35000000-0000-4000-8000-000000000001', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', '34000000-0000-4000-8000-000000000001', '32000000-0000-4000-8000-000000000003', 'Scenario salary', 710000, 'standard'),
     ('35000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', '34000000-0000-4000-8000-000000000002', '32000000-0000-4000-8000-000000000006', 'Other scenario salary', 20000, 'standard');
