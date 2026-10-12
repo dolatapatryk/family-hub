@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
-import { financeMinorUnitsToMoney, formatPln } from './money'
-import { SavingsTransfersPanel } from './SavingsTransfersPanel'
+import { financeMinorUnitsToMoney, formatPln, sumMoney } from './money'
 import { SavingsAccountsPanel } from './SavingsAccountsPanel'
 import { SavingsPlansPanel } from './SavingsPlansPanel'
-import { FinanceSummariesPanel } from './FinanceSummariesPanel'
+import { FinanceDashboard, MonthKpis } from './FinanceCharts'
+import { ForecastOverview } from './ForecastOverview'
+import { financeNavigation, savingsNavigation, resolveFinanceRoute } from './navigation'
 import { ProjectsPanel } from './ProjectsPanel'
 import type {
   FinanceAllocationRole,
@@ -20,7 +22,6 @@ import type {
   FinanceScenario,
 } from './types'
 
-type FinanceView = 'budget' | 'scenarios' | 'savings' | 'transfers' | 'plans' | 'summaries' | 'projects'
 
 const budgetTypeNames: Record<FinanceBudgetType, string> = {
   income: 'Przychód',
@@ -162,24 +163,7 @@ function FinanceItemEditForm({
 }
 
 function SummaryCards({ lines }: { lines: FinanceBudgetLine[] }) {
-  const summary = calculateMonthSummary(lines)
-  const values = [
-    { label: 'Po osobistych alokacjach', amount: summary.income_after_personal_allowances },
-    { label: 'Osobiste alokacje', amount: summary.personal_allowances },
-    { label: 'Oszczędności', amount: summary.savings },
-    { label: 'Saldo', amount: summary.cashflow },
-  ]
-
-  return (
-    <div className="finance-summary-grid">
-      {values.map(value => (
-        <div className="finance-summary-card" key={value.label}>
-          <span>{value.label}</span>
-          <strong>{formatPln(value.amount)}</strong>
-        </div>
-      ))}
-    </div>
-  )
+  return <MonthKpis summary={calculateMonthSummary(lines)} />
 }
 
 function makeLines(
@@ -205,7 +189,14 @@ export function FinancePage() {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const api = useMemo(() => createFinanceApi(profile.household_id, profile.id), [profile.household_id, profile.id])
-  const [view, setView] = useState<FinanceView>('budget')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const route = resolveFinanceRoute(location.pathname)
+  const view = route?.view ?? 'dashboard'
+  const savingsView = route?.savingsView ?? 'summary'
+  const [editingForecast, setEditingForecast] = useState(false)
+  const forecastEditor = useRef<HTMLElement>(null)
+  const [showZeroItems, setShowZeroItems] = useState(true)
   const [monthSource, setMonthSource] = useState('empty')
   const [selectedMonthId, setSelectedMonthId] = useState('')
   const [selectedScenarioId, setSelectedScenarioId] = useState('')
@@ -222,6 +213,13 @@ export function FinancePage() {
   const [scenarioCategoryId, setScenarioCategoryId] = useState('')
   const [scenarioItemRole, setScenarioItemRole] = useState<FinanceAllocationRole>('standard')
   const createMonthRequest = useRef<{ signature: string; request_id: string } | null>(null)
+
+  useEffect(() => {
+    if (view === 'forecast' && editingForecast) {
+      forecastEditor.current?.focus({ preventScroll: true })
+      forecastEditor.current?.scrollIntoView({ block: 'start' })
+    }
+  }, [editingForecast, selectedScenarioId, view])
 
   const months = useQuery({
     queryKey: ['financeMonths', profile.household_id],
@@ -262,7 +260,7 @@ export function FinancePage() {
   const scenarioItems = useQuery({
     queryKey: ['financeScenarioItems', profile.household_id, selectedScenarioId],
     queryFn: ({ signal }) => api.listScenarioItems(selectedScenarioId, signal),
-    enabled: Boolean(selectedScenarioId),
+    enabled: view === 'forecast' && editingForecast && Boolean(selectedScenarioId),
   })
 
   const createMonth = useMutation({
@@ -273,6 +271,7 @@ export function FinancePage() {
         [month, ...(current ?? []).filter(candidate => candidate.id !== month.id)]
           .sort((left, right) => right.month_start.localeCompare(left.month_start)))
       setSelectedMonthId(month.id)
+      if (view === 'forecast') navigate('/finance/budget')
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['financeMonths', profile.household_id] }),
         queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id, month.id] }),
@@ -284,6 +283,7 @@ export function FinancePage() {
     onSuccess: async scenario => {
       queryClient.setQueryData<FinanceScenario[]>(['financeScenarios', profile.household_id], current => [...(current ?? []), scenario])
       setSelectedScenarioId(scenario.id)
+      setEditingForecast(true)
       setScenarioName('')
       setScenarioDescription('')
       await queryClient.invalidateQueries({ queryKey: ['financeScenarios', profile.household_id] })
@@ -366,8 +366,8 @@ export function FinancePage() {
       ? 'recurring'
       : 'empty'
 
-  function submitNewMonth() {
-    const source: FinanceCreateMonthInput['source'] = effectiveMonthSource === 'recurring' && latestMonth
+  function submitNewMonth(scenarioId?: string) {
+    const source: FinanceCreateMonthInput['source'] = scenarioId ? { kind: 'scenario', scenario_id: scenarioId } : effectiveMonthSource === 'recurring' && latestMonth
       ? { kind: 'recurring', source_month_id: latestMonth.id }
       : effectiveMonthSource.startsWith('scenario:')
         ? { kind: 'scenario', scenario_id: effectiveMonthSource.slice('scenario:'.length) }
@@ -430,65 +430,52 @@ export function FinancePage() {
 
   const pageErrors = [months.error, categories.error, scenarios.error].filter(Boolean)
 
+  if (!route) return <Navigate to="/finance/dashboard" replace />
+  if (location.pathname === '/finance' || location.pathname === '/finance/') return <Navigate to="/finance/dashboard" replace />
+
   return (
-    <>
+    <div className="finance-workspace">
       <PageHeader
         eyebrow="Finanse"
-        title="Budżet domowy"
-        description="Planuj budżet, porównuj scenariusze i zarządzaj oszczędnościami domowymi oraz prywatnymi."
-        action={view === 'budget' ? (
-          <div className="finance-month-actions">
-            <label className="finance-month-select">Początkowe pozycje
-              <select value={effectiveMonthSource} onChange={event => setMonthSource(event.target.value)} disabled={createMonth.isPending || months.isPending}>
-                <option value="empty">Pusty miesiąc</option>
-                {latestMonth && <option value="recurring">Powtarzalne z {displayMonth(latestMonth)}</option>}
-                {scenarioList.map(scenario => <option key={scenario.id} value={`scenario:${scenario.id}`}>Scenariusz: {scenario.name}</option>)}
-              </select>
-            </label>
-            <button className="primary-button" type="button" onClick={submitNewMonth} disabled={createMonth.isPending || months.isPending}>
-              {createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz następny miesiąc' : 'Utwórz bieżący miesiąc'}
-            </button>
-          </div>
+        title={financeNavigation.find(item => item.id === view)?.label ?? 'Dashboard'}
+        description="Budżet, cele i prognozy bez pracy na arkuszach miesięcznych."
+        action={['dashboard', 'budget'].includes(view) && monthList.length > 0 ? (
+          <label className="finance-month-select">Miesiąc
+            <select value={selectedMonthId} onChange={event => setSelectedMonthId(event.target.value)}>
+              {monthList.map(month => <option key={month.id} value={month.id}>{displayMonth(month)}</option>)}
+            </select>
+          </label>
         ) : undefined}
       />
 
-      <div className="finance-tabs" aria-label="Widoki finansów">
-        <button type="button" aria-pressed={view === 'budget'} className={view === 'budget' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('budget')}>
-          Budżet miesięczny
-        </button>
-        <button type="button" aria-pressed={view === 'scenarios'} className={view === 'scenarios' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('scenarios')}>
-          Scenariusze
-        </button>
-        <button type="button" aria-pressed={view === 'savings'} className={view === 'savings' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('savings')}>
-          Oszczędności
-        </button>
-        <button type="button" aria-pressed={view === 'transfers'} className={view === 'transfers' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('transfers')}>
-          Przelewy
-        </button>
-        <button type="button" aria-pressed={view === 'plans'} className={view === 'plans' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('plans')}>Plany i rezerwy</button>
-        <button type="button" aria-pressed={view === 'summaries'} className={view === 'summaries' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('summaries')}>Podsumowanie</button>
-        <button type="button" aria-pressed={view === 'projects'} className={view === 'projects' ? 'finance-tab active' : 'finance-tab'} onClick={() => setView('projects')}>Projekty</button>
-      </div>
+      {view === 'savings' && <nav className="finance-tabs" aria-label="Zakładki oszczędności">
+        {savingsNavigation.map(tab => <Link className={`finance-tab${savingsView === tab.id ? ' active' : ''}`} aria-current={savingsView === tab.id ? 'page' : undefined} key={tab.id} to={tab.to}>{tab.label}</Link>)}
+      </nav>}
 
       {pageErrors.map((error, index) => <p className="error-message" role="alert" key={index}>{errorText(error)}</p>)}
       {updateFinanceItem.error instanceof FinanceVersionConflictError && (
         <p className="error-message" role="alert">{errorText(updateFinanceItem.error)}</p>
       )}
 
-      {view === 'budget' ? (
+      {view === 'dashboard' ? (
+        months.isPending || (selectedMonthId && budgetItems.isPending) ? <p className="panel-message" role="status">Ładuję dashboard…</p> : budgetItems.isError ? <p className="error-message" role="alert">{errorText(budgetItems.error)}</p> : activeMonth ? <FinanceDashboard lines={budgetLines} monthName={displayMonth(activeMonth)} /> : <section className="panel finance-chart-panel"><h2 className="panel-title">Twój budżet domowy</h2><p>Utwórz pierwszy miesiąc, aby zobaczyć podsumowanie finansów.</p><Link className="primary-button" to="/finance/budget">Przejdź do budżetu</Link></section>
+      ) : view === 'budget' ? (
         <section className="panel finance-panel">
           <div className="panel-head">
             <div>
-              <h2 className="panel-title">Budżet miesięczny</h2>
-              <p className="panel-kicker">Rola osobistej alokacji działa tylko dla kategorii oszczędności.</p>
+              <h2 className="panel-title">{activeMonth ? displayMonth(activeMonth) : 'Budżet miesięczny'}</h2>
+              <p className="panel-kicker">Saldo po wydatkach, oszczędnościach i inwestycjach: <strong>{formatPln(calculateMonthSummary(budgetLines).cashflow)}</strong></p>
             </div>
-            {monthList.length > 0 && (
-              <label className="finance-month-select">Miesiąc
-                <select value={selectedMonthId} onChange={event => setSelectedMonthId(event.target.value)}>
-                  {monthList.map(month => <option value={month.id} key={month.id}>{displayMonth(month)}</option>)}
+            <div className="finance-month-actions">
+              <label className="finance-month-select">Początkowe pozycje
+                <select value={effectiveMonthSource} onChange={event => setMonthSource(event.target.value)} disabled={createMonth.isPending || months.isPending}>
+                  <option value="empty">Pusty miesiąc</option>
+                  {latestMonth && <option value="recurring">Powtarzalne z {displayMonth(latestMonth)}</option>}
+                  {scenarioList.map(scenario => <option key={scenario.id} value={`scenario:${scenario.id}`}>{scenario.name}</option>)}
                 </select>
               </label>
-            )}
+              <button className="primary-button" onClick={() => submitNewMonth()} disabled={createMonth.isPending || months.isPending}>{createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz kolejny miesiąc' : 'Utwórz bieżący miesiąc'}</button>
+            </div>
           </div>
 
           {months.isPending && <p className="panel-message" role="status">Ładuję miesiące…</p>}
@@ -499,43 +486,8 @@ export function FinancePage() {
             <>
               {budgetItems.isPending && <p className="panel-message" role="status">Ładuję pozycje…</p>}
               {budgetItems.isError && <p className="error-message finance-error" role="alert">{errorText(budgetItems.error)}</p>}
-              {budgetLines.length > 0 && <SummaryCards lines={budgetLines} />}
+              {budgetItems.data && <SummaryCards lines={budgetLines} />}
               {budgetItems.data && budgetItems.data.length === 0 && <p className="panel-message">Ten miesiąc nie ma jeszcze pozycji.</p>}
-              {(budgetItems.data ?? []).map(item => {
-                const category = categoryList.find(candidate => candidate.id === item.category_id)
-                if (editingBudgetItemId === item.id) {
-                  return (
-                    <div key={item.id}>
-                      <FinanceItemEditForm
-                        item={item}
-                        categories={categoryList}
-                        disabled={updateFinanceItem.isPending}
-                        onCancel={() => setEditingBudgetItemId('')}
-                        onSave={changes => updateFinanceItem.mutate({ ...changes, kind: 'budget' })}
-                      />
-                      {updateFinanceItem.isError && <p className="error-message finance-error" role="alert">{errorText(updateFinanceItem.error)}</p>}
-                    </div>
-                  )
-                }
-                return (
-                  <div className="finance-item-row" key={item.id}>
-                    <div className="finance-item-copy">
-                      <strong>{item.name}</strong>
-                      <span>{category ? `${category.name} · ${budgetTypeNames[category.budget_type]}` : 'Kategoria niedostępna'}</span>
-                    </div>
-                    <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
-                    <AllocationRoleSelect
-                      role={item.allocation_role}
-                      categoryType={category?.budget_type}
-                      disabled={updateAllocationRole.isPending}
-                      label={`Rola alokacji: ${item.name}`}
-                      onChange={role => updateAllocationRole.mutate({ kind: 'budget', id: item.id, expectedVersion: item.version, role, categoryType: category?.budget_type ?? 'variable_expense' })}
-                    />
-                    <button className="button-quiet finance-edit-button" type="button" onClick={() => setEditingBudgetItemId(item.id)} disabled={updateAllocationRole.isPending || updateFinanceItem.isPending}>Edytuj</button>
-                  </div>
-                )
-              })}
-
               <form className="finance-item-form" onSubmit={submitBudgetItem}>
                 <label>Pozycja
                   <input required maxLength={160} value={budgetName} onChange={event => setBudgetName(event.target.value)} placeholder="Nazwa pozycji" />
@@ -559,6 +511,63 @@ export function FinancePage() {
                   {createBudgetItem.isPending ? 'Zapisuję…' : 'Dodaj pozycję'}
                 </button>
               </form>
+              <label className="finance-zero-toggle"><input type="checkbox" checked={showZeroItems} onChange={event => setShowZeroItems(event.target.checked)} /> Pokaż pozycje zerowe</label>
+              <div className="finance-budget-grid">
+                {[
+                  { id: 'income', title: 'Przychody' },
+                  { id: 'personal', title: 'Na indywidualne konta' },
+                  { id: 'fixed_expense', title: 'Wydatki stałe' },
+                  { id: 'variable_expense', title: 'Wydatki zmienne' },
+                  { id: 'saving', title: 'Odkładanie na początku miesiąca' },
+                  { id: 'investment', title: 'Inwestycje' },
+                  ...((budgetItems.data ?? []).some(item => !categoryList.some(category => category.id === item.category_id)) ? [{ id: 'unavailable', title: 'Kategoria niedostępna' }] : []),
+                ].map(section => {
+                  const sectionItems = (budgetItems.data ?? []).filter(item => {
+                    const type = categoryList.find(category => category.id === item.category_id)?.budget_type
+                    if (section.id === 'unavailable') return !type
+                    return section.id === 'personal' ? type === 'saving' && item.allocation_role === 'personal_allowance' : type === section.id && (type !== 'saving' || item.allocation_role !== 'personal_allowance')
+                  })
+                  return <section className="panel finance-budget-section" key={section.id}>
+                    <div className="panel-head"><h3 className="panel-title">{section.title}</h3><strong>{formatPln(sumMoney(sectionItems.map(item => financeMinorUnitsToMoney(item.amount))))}</strong></div>
+                    {sectionItems.filter(item => showZeroItems || BigInt(item.amount) !== 0n).map(item => {
+                      const category = categoryList.find(candidate => candidate.id === item.category_id)
+                      if (editingBudgetItemId === item.id) {
+                        return (
+                          <div key={item.id}>
+                            <FinanceItemEditForm
+                              item={item}
+                              categories={categoryList}
+                              disabled={updateFinanceItem.isPending}
+                              onCancel={() => setEditingBudgetItemId('')}
+                              onSave={changes => updateFinanceItem.mutate({ ...changes, kind: 'budget' })}
+                            />
+                            {updateFinanceItem.isError && <p className="error-message finance-error" role="alert">{errorText(updateFinanceItem.error)}</p>}
+                          </div>
+                        )
+                      }
+                      return (
+                        <div className="finance-item-row" key={item.id}>
+                          <div className="finance-item-copy">
+                            <strong>{item.name}</strong>
+                            <span>{category ? `${category.name} · ${budgetTypeNames[category.budget_type]}` : 'Kategoria niedostępna'}</span>
+                          </div>
+                          <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
+                          <AllocationRoleSelect
+                            role={item.allocation_role}
+                            categoryType={category?.budget_type}
+                            disabled={updateAllocationRole.isPending}
+                            label={`Rola alokacji: ${item.name}`}
+                            onChange={role => updateAllocationRole.mutate({ kind: 'budget', id: item.id, expectedVersion: item.version, role, categoryType: category?.budget_type ?? 'variable_expense' })}
+                          />
+                          <button className="button-quiet finance-edit-button" type="button" onClick={() => setEditingBudgetItemId(item.id)} disabled={updateAllocationRole.isPending || updateFinanceItem.isPending}>Edytuj</button>
+                        </div>
+                      )
+                    })}
+                    {!sectionItems.length && <p className="panel-message">Brak pozycji.</p>}
+                  </section>
+                })}
+              </div>
+
               {!categories.isPending && categoryList.length === 0 && <p className="panel-message">Najpierw zaimportuj lub dodaj kategorie, aby tworzyć pozycje budżetu.</p>}
               {createBudgetItem.isError && <p className="error-message finance-error" role="alert">{errorText(createBudgetItem.error)}</p>}
               {updateAllocationRole.isError && <p className="error-message finance-error" role="alert">{errorText(updateAllocationRole.error)}</p>}
@@ -566,15 +575,18 @@ export function FinancePage() {
           )}
           {createMonth.isError && <p className="error-message finance-error" role="alert">{errorText(createMonth.error)}</p>}
         </section>
-      ) : view === 'scenarios' ? (
+      ) : view === 'forecast' ? (
         <div className="finance-scenarios-layout">
-          <section className="panel finance-panel">
+          <ForecastOverview api={api} householdId={profile.household_id} scenarios={scenarioList} categories={categoryList} pending={createMonth.isPending || months.isPending} onEdit={id => { setSelectedScenarioId(id); setEditingForecast(true) }} onCreateMonth={submitNewMonth} />
+          {createMonth.isError && <p className="error-message" role="alert">{errorText(createMonth.error)}</p>}
+
+          <section className="panel finance-panel" ref={forecastEditor} tabIndex={-1}>
             <div className="panel-head">
               <div>
-                <h2 className="panel-title">Scenariusze</h2>
-                <p className="panel-kicker">Pozycje scenariusza zapisują tę samą rolę co pozycje budżetowe.</p>
+                <h2 className="panel-title">{editingForecast ? 'Scenariusze — edycja i dodawanie' : 'Nowy scenariusz'}</h2>
+                <p className="panel-kicker">Zaplanuj alternatywny budżet i porównaj jego wynik.</p>
               </div>
-              {scenarioList.length > 0 && (
+              {editingForecast && scenarioList.length > 0 && (
                 <label className="finance-month-select">Scenariusz
                   <select value={selectedScenarioId} onChange={event => setSelectedScenarioId(event.target.value)}>
                     {scenarioList.map(scenario => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
@@ -597,7 +609,8 @@ export function FinancePage() {
             {createScenario.isError && <p className="error-message finance-error" role="alert">{errorText(createScenario.error)}</p>}
             {scenarios.isPending && <p className="panel-message" role="status">Ładuję scenariusze…</p>}
 
-            {activeScenario && (
+            {editingForecast && <button className="button-quiet finance-close-editor" onClick={() => setEditingForecast(false)}>Zamknij edycję</button>}
+            {activeScenario && editingForecast && (
               <>
                 <h3 className="finance-subheading">{activeScenario.name}</h3>
                 {activeScenario.description && <p className="finance-description">{activeScenario.description}</p>}
@@ -672,29 +685,13 @@ export function FinancePage() {
           </section>
         </div>
       ) : view === 'savings' ? (
-        <SavingsAccountsPanel
-          key={`${profile.household_id}:${profile.id}`}
-          api={api}
-          householdId={profile.household_id}
-          userId={profile.id}
-          months={monthList}
-          selectedMonthId={selectedMonthId}
-          onSelectMonth={setSelectedMonthId}
-        />
-      ) : view === 'plans' ? (
-        <SavingsPlansPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
-      ) : view === 'summaries' ? (
-        <FinanceSummariesPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
-      ) : view === 'projects' ? (
-        <ProjectsPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} />
+        savingsView === 'reserves' ? <SavingsPlansPanel mode="reserves" api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} /> : <div className="finance-page-stack">
+          {savingsView === 'planner' && <SavingsPlansPanel mode="planner" api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />}
+          <SavingsAccountsPanel key={`${profile.household_id}:${profile.id}`} mode={savingsView} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
+        </div>
       ) : (
-        <SavingsTransfersPanel
-          key={`${profile.household_id}:${profile.id}`}
-          api={api}
-          householdId={profile.household_id}
-          userId={profile.id}
-        />
+        <ProjectsPanel key={`${profile.household_id}:${profile.id}`} api={api} householdId={profile.household_id} />
       )}
-    </>
+    </div>
   )
 }

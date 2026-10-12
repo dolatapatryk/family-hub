@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
-import { NavLink, Link } from 'react-router-dom'
+import { useState, type ReactNode } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
+import { financeNavigation, resolveFinanceRoute } from '../finance/navigation'
 import { createShoppingApi } from '../shopping/api'
 import { createTasksApi } from '../tasks/api'
 import { createBillsApi } from '../bills/api'
@@ -47,6 +48,12 @@ function SignOutIcon() {
 }
 
 export function AppShell({ householdId, userId, profileName, onSignOut, children }: AppShellProps) {
+  const location = useLocation()
+  const financeRoute = resolveFinanceRoute(location.pathname)
+  const financeActive = Boolean(financeRoute)
+  const financeSection = financeRoute?.view
+  const [financeExpansion, setFinanceExpansion] = useState<{ path: string; open: boolean } | null>(null)
+  const financeExpanded = financeExpansion?.path === location.pathname ? financeExpansion.open : financeActive
   const tasksApi = createTasksApi(householdId, userId)
   const shoppingApi = createShoppingApi(householdId, userId)
   const billsApi = createBillsApi(householdId)
@@ -87,6 +94,19 @@ export function AppShell({ householdId, userId, profileName, onSignOut, children
         <nav className="navigation" aria-label="Główna nawigacja">
           {navigation.map(item => {
             const count = item.icon === 'tasks' ? openTaskCount : item.icon === 'shopping' ? openShoppingCount : item.icon === 'bills' ? dueBillsCount : undefined
+            if (item.icon === 'finance') return <div className="finance-nav-group" key={item.to}>
+              <div className="finance-nav-parent">
+                <NavLink className="nav-link" to="/finance" onClick={() => setFinanceExpansion(null)}>
+                  <NavigationIcon name="finance" /><span>Finanse</span>
+                </NavLink>
+                <button className="finance-nav-toggle" type="button" aria-label={financeExpanded ? 'Zwiń menu Finanse' : 'Rozwiń menu Finanse'} aria-expanded={financeExpanded} aria-controls="finance-subnavigation finance-mobile-subnavigation" onClick={() => setFinanceExpansion({ path: location.pathname, open: !financeExpanded })}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d={financeExpanded ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
+                </button>
+              </div>
+              {financeExpanded && <nav className="finance-subnavigation" id="finance-subnavigation" aria-label="Sekcje finansów">
+                {financeNavigation.map(section => <Link className={`finance-subnav-link${financeSection === section.id ? ' active' : ''}`} aria-current={financeSection === section.id ? 'page' : undefined} key={section.id} to={section.to}>{section.label}</Link>)}
+              </nav>}
+            </div>
             return (
               <NavLink className="nav-link" key={item.to} to={item.to} end={item.end}>
                 <NavigationIcon name={item.icon} />
@@ -96,6 +116,9 @@ export function AppShell({ householdId, userId, profileName, onSignOut, children
             )
           })}
         </nav>
+        {financeExpanded && <nav className="finance-mobile-navigation" id="finance-mobile-subnavigation" aria-label="Sekcje finansów na telefonie">
+          {financeNavigation.map(section => <Link className={`finance-subnav-link${financeSection === section.id ? ' active' : ''}`} aria-current={financeSection === section.id ? 'page' : undefined} key={section.id} to={section.to}>{section.label}</Link>)}
+        </nav>}
 
         <div className="sidebar-bottom">
           <div className="sidebar-note">

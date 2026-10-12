@@ -2,7 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createFinanceApi } from './api'
 import { calculateIrregularMonthlyReserve, calculateSavingsPlanAnnualAmount, isSavingsAccountArchived } from './calculations'
-import { financeMinorUnitsToMoney, formatPln, sumMoney } from './money'
+import { financeMinorUnitsToMoney, formatPln, sumMoney, addMoney } from './money'
+import { FinanceKpis } from './FinanceCharts'
 import { financeActionError, useFinanceAction } from './useFinanceAction'
 import type { FinanceSavingsPlan, FinanceSavingsAccount, FinanceSaveSavingsPlanInput, FinanceMonth, FinanceVisibility, FinanceSavingsPlanType, FinanceIrregularExpensePlan, FinanceSaveIrregularReserveInput, FinanceLoadSavingsPlanResult } from './types'
 
@@ -57,7 +58,8 @@ function ReserveForm({ reserve, pending, onSave, onCancel }: { reserve: FinanceI
   </form>
 }
 
-export function SavingsPlansPanel({ api, householdId, userId, months, selectedMonthId, onSelectMonth }: {
+export function SavingsPlansPanel({ api, householdId, userId, months, selectedMonthId, onSelectMonth, mode }: {
+  mode: 'planner' | 'reserves'
   api: ReturnType<typeof createFinanceApi>; householdId: string; userId: string; months: FinanceMonth[]; selectedMonthId: string; onSelectMonth: (id: string) => void
 }) {
   const [editingPlan, setEditingPlan] = useState<string | null>(null)
@@ -76,10 +78,21 @@ export function SavingsPlansPanel({ api, householdId, userId, months, selectedMo
   const deleteReserve = useFinanceAction((reserve: FinanceIrregularExpensePlan, request_id) => api.deleteIrregularReserve({ request_id, id: reserve.id, expected_version: reserve.version }), [reservesKey])
   const loadPlans = useFinanceAction((month_id: string, request_id) => api.loadSavingsPlans({ month_id, request_id }), [['financeSavingsDrafts', householdId, userId]], result => setLoadResult(result))
   const errors = [plans.error, accounts.error, reserves.error, savePlan.error, deletePlan.error, saveReserve.error, deleteReserve.error, loadPlans.error].filter(Boolean)
-  return <div className="finance-management-stack">
+  const monthly = sumMoney(planList.map(plan => financeMinorUnitsToMoney(plan.monthly_amount)))
+  const annualReserve = sumMoney(reserveList.map(reserve => financeMinorUnitsToMoney(reserve.annual_amount)))
+  const monthlyReserve = sumMoney(reserveList.map(reserve => calculateIrregularMonthlyReserve(reserve.annual_amount)))
+  return <div className="finance-page-stack">
+    {mode === 'reserves' && !plans.isPending && !reserves.isPending && !plans.isError && !reserves.isError && <FinanceKpis values={[
+      { label: 'Idealny plan miesięczny', value: formatPln(monthly) },
+      { label: 'Rezerwy rocznie', value: formatPln(annualReserve) },
+      { label: 'Rezerwy miesięcznie', value: formatPln(monthlyReserve) },
+      { label: 'Razem miesięcznie', value: formatPln(addMoney(monthly, monthlyReserve)) },
+    ]} />}
+    <div className={mode === 'reserves' ? 'finance-reserves-layout' : 'finance-management-stack'}>
     {errors.map((error, i) => <p className="error-message" role="alert" key={i}>{financeActionError(error)}</p>)}
     <section className="panel finance-management-panel">
-      <div className="panel-head"><div><h2 className="panel-title">Plany oszczędnościowe</h2><p className="panel-kicker">Definicje planów są oddzielne od budżetu i rzeczywistych wpłat.</p></div><button className="primary-button" type="button" onClick={() => { savePlan.reset(); setEditingPlan('new') }} disabled={savePlan.isPending}>Dodaj plan</button></div>
+      {mode === 'reserves' && <>
+      <div className="panel-head"><div><h2 className="panel-title">Idealne oszczędności</h2><p className="panel-kicker">Definicje planów są oddzielne od budżetu i rzeczywistych wpłat.</p></div><button className="primary-button" type="button" onClick={() => { savePlan.reset(); setEditingPlan('new') }} disabled={savePlan.isPending}>Dodaj plan</button></div>
       {plans.isPending && <p role="status">Ładuję plany…</p>}
       {editingPlan !== null && <PlanForm key={editingPlan} plan={planList.find(p => p.id === editingPlan) ?? null} accounts={accounts.data ?? []} userId={userId} pending={savePlan.isPending} onSave={input => savePlan.mutate(input)} onCancel={() => setEditingPlan(null)} />}
       {planList.length === 0 && !plans.isPending && <p>Brak dostępnych planów. Dodaj plan i powiąż go z kontem.</p>}
@@ -88,20 +101,21 @@ export function SavingsPlansPanel({ api, householdId, userId, months, selectedMo
         <div>{formatPln(financeMinorUnitsToMoney(plan.monthly_amount))} / miesiąc<br />{formatPln(calculateSavingsPlanAnnualAmount(plan))} / rok</div>
         <div className="finance-edit-actions"><button className="button-quiet" type="button" disabled={savePlan.isPending || deletePlan.isPending} onClick={() => { savePlan.reset(); setEditingPlan(plan.id) }}>Edytuj</button><button className="button-quiet" type="button" disabled={savePlan.isPending || deletePlan.isPending} onClick={() => deletePlan.mutate(plan)}>Usuń</button></div>
       </div>)}
-      <div className="finance-management-form">
+      </>}
+      {mode === 'planner' && <div className="finance-management-form">
         <label>Miesiąc<select value={selectedMonthId} onChange={e => { onSelectMonth(e.target.value); setLoadResult(null) }} disabled={loadPlans.isPending}>{months.map(m => <option value={m.id} key={m.id}>{m.display_name ?? m.month_start.slice(0, 7)}</option>)}</select></label>
-        <button className="primary-button" type="button" disabled={!selectedMonthId || loadPlans.isPending || plans.isPending || plans.isError} onClick={() => loadPlans.mutate(selectedMonthId)}>{loadPlans.isPending ? 'Wczytuję…' : 'Wczytaj plany do szkiców miesiąca'}</button>
-        <p>Wczytywanie używa powiązanych aktywnych kont. Pomija konta z istniejącym szkicem lub wcześniej wczytanym planem w tym miesiącu. Każdy plan można wczytać raz w miesiącu, również po przyjęciu lub usunięciu jego szkicu. Ruchy przyjmiesz w zakładce Oszczędności.</p>
-      </div>
+        <button className="primary-button" type="button" disabled={!selectedMonthId || loadPlans.isPending || plans.isPending || plans.isError} onClick={() => loadPlans.mutate(selectedMonthId)}>{loadPlans.isPending ? 'Wczytuję…' : 'Wczytaj idealny plan'}</button>
+        <p>Wczytaj idealny plan z zakładki Plany i rezerwy. Konta z już zaplanowaną wpłatą zostaną pominięte; każdy plan można wczytać raz w miesiącu.</p>
+      </div>}
       {loadResult?.month_id === selectedMonthId && <div aria-live="polite"><p>Dodano szkice: {loadResult.generated.length}. Pominięto: {loadResult.skipped.length}.</p>{loadResult.skipped.map(entry => <p key={entry.plan_id}>{planList.find(p => p.id === entry.plan_id)?.name ?? 'Plan'}: {skipLabels[entry.reason]}</p>)}</div>}
     </section>
-    <section className="panel finance-management-panel">
-      <div className="panel-head"><div><h2 className="panel-title">Rezerwy nieregularne · domowe</h2><p className="panel-kicker">Miesięczna rezerwa to kwota roczna / 12, zaokrąglona w górę do grosza.</p></div><button className="primary-button" type="button" onClick={() => { saveReserve.reset(); setEditingReserve('new') }} disabled={saveReserve.isPending}>Dodaj rezerwę</button></div>
+    {mode === 'reserves' && <section className="panel finance-management-panel">
+      <div className="panel-head"><div><h2 className="panel-title">Wydatki nieregularne · domowe</h2><p className="panel-kicker">Miesięczna rezerwa to kwota roczna / 12, zaokrąglona w górę do grosza.</p></div><button className="primary-button" type="button" onClick={() => { saveReserve.reset(); setEditingReserve('new') }} disabled={saveReserve.isPending}>Dodaj rezerwę</button></div>
       {reserves.isPending && <p role="status">Ładuję rezerwy…</p>}
       {editingReserve !== null && <ReserveForm key={editingReserve} reserve={reserveList.find(r => r.id === editingReserve) ?? null} pending={saveReserve.isPending} onSave={input => saveReserve.mutate(input)} onCancel={() => setEditingReserve(null)} />}
       {reserveList.length === 0 && !reserves.isPending && <p>Brak rezerw nieregularnych.</p>}
       {reserveList.map(reserve => <div className="finance-management-row" key={reserve.id}><strong>{reserve.name}</strong><div>{formatPln(financeMinorUnitsToMoney(reserve.annual_amount))} / rok<br />{formatPln(calculateIrregularMonthlyReserve(reserve.annual_amount))} / miesiąc</div><div className="finance-edit-actions"><button className="button-quiet" type="button" disabled={saveReserve.isPending || deleteReserve.isPending} onClick={() => { saveReserve.reset(); setEditingReserve(reserve.id) }}>Edytuj</button><button className="button-quiet" type="button" disabled={saveReserve.isPending || deleteReserve.isPending} onClick={() => deleteReserve.mutate(reserve)}>Usuń</button></div></div>)}
       {!reserves.isPending && !reserves.isError && <p>Łącznie domowe: {formatPln(sumMoney(reserveList.map(r => financeMinorUnitsToMoney(r.annual_amount))))} rocznie · {formatPln(sumMoney(reserveList.map(r => calculateIrregularMonthlyReserve(r.annual_amount))))} miesięcznie. Rezerwy nie tworzą automatycznie pozycji budżetu.</p>}
-    </section>
-  </div>
+    </section>}
+  </div></div>
 }

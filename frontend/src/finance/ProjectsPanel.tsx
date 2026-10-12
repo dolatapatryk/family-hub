@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { createFinanceApi } from './api'
 import { calculateProjectTotals } from './calculations'
-import { financeMinorUnitsToMoney, formatPln } from './money'
+import { financeMinorUnitsToMoney, formatPln, moneyRatio } from './money'
 import { financeActionError, useFinanceAction } from './useFinanceAction'
 import type { FinanceProject, FinanceProjectExpense, FinanceSaveProjectInput, FinanceSaveProjectExpenseInput } from './types'
 
@@ -42,42 +42,40 @@ export function ProjectsPanel({ api, householdId }: { api: ReturnType<typeof cre
   const expenses = useQuery({ queryKey: expensesKey, queryFn: ({ signal }) => api.listProjectExpenses(signal) })
   const projectList = projects.data ?? []
   const expenseList = expenses.data ?? []
-  const selected = projectList.find(p => p.id === selectedId)
-  useEffect(() => {
-    if (!projectList.some(p => p.id === selectedId)) setSelectedId(projectList[0]?.id ?? '')
-  }, [projectList, selectedId])
   const saveProject = useFinanceAction((input: Omit<FinanceSaveProjectInput, 'request_id'>, request_id) => api.saveProject({ ...input, request_id }), [projectsKey], () => setEditingProject(null), () => setEditingProject(null))
   const deleteProject = useFinanceAction((project: FinanceProject, request_id) => api.deleteProject({ request_id, id: project.id, expected_version: project.version }), [projectsKey])
   const saveExpense = useFinanceAction((input: Omit<FinanceSaveProjectExpenseInput, 'request_id'>, request_id) => api.saveProjectExpense({ ...input, request_id }), [expensesKey], () => setEditingExpense(null), () => setEditingExpense(null))
   const deleteExpense = useFinanceAction((expense: FinanceProjectExpense, request_id) => api.deleteProjectExpense({ request_id, id: expense.id, expected_version: expense.version }), [expensesKey])
   const errors = [projects.error, expenses.error, saveProject.error, deleteProject.error, saveExpense.error, deleteExpense.error].filter(Boolean)
-  return <div className="finance-management-stack">
+  return <div className="finance-page-stack">
     {errors.map((error, i) => <p className="error-message" role="alert" key={i}>{financeActionError(error)}</p>)}
     <section className="panel finance-management-panel">
-      <div className="panel-head"><div><h2 className="panel-title">Projekty domowe</h2><p className="panel-kicker">Wydatki projektu są osobną ewidencją i nie zmieniają budżetu miesięcznego.</p></div><button className="primary-button" type="button" disabled={saveProject.isPending} onClick={() => { saveProject.reset(); setEditingProject('new') }}>Dodaj projekt</button></div>
-      {projects.isPending && <p role="status">Ładuję projekty…</p>}
-      {editingProject !== null && <ProjectForm key={editingProject} project={projectList.find(p => p.id === editingProject) ?? null} pending={saveProject.isPending} onSave={input => saveProject.mutate(input)} onCancel={() => setEditingProject(null)} />}
-      {projectList.length === 0 && !projects.isPending && <p>Brak projektów. Dodaj projekt, aby śledzić jego wydatki.</p>}
-      {projectList.map(project => {
-        const totals = !expenses.isPending && !expenses.isError ? calculateProjectTotals(project, expenseList) : null
-        return <div className="finance-management-row" key={project.id}>
-          <button className="button-quiet" type="button" aria-pressed={selectedId === project.id} onClick={() => { setSelectedId(project.id); setEditingExpense(null) }}><strong>{project.name}{project.is_archived ? ' · archiwalny' : ''}</strong></button>
-          {totals ? <div>Wydano: {formatPln(totals.spent)}<br />{totals.remaining !== null ? `Pozostało: ${formatPln(totals.remaining)}` : 'Bez budżetu docelowego'}</div> : <span>Ładuję sumę wydatków…</span>}
-          <div className="finance-edit-actions">
-            <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => { saveProject.reset(); setEditingProject(project.id) }}>Edytuj</button>
-            <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => saveProject.mutate({ id: project.id, expected_version: project.version, name: project.name, description: project.description, target_budget: project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget), is_archived: !project.is_archived, sort_order: project.sort_order })}>{project.is_archived ? 'Przywróć' : 'Archiwizuj'}</button>
-            {!expenses.isPending && !expenses.isError && !expenseList.some(e => e.project_id === project.id) && <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => deleteProject.mutate(project)}>Usuń pusty projekt</button>}
-          </div>
-        </div>
-      })}
+      <div className="panel-head"><div><h2 className="panel-title">Nowy projekt</h2><p className="panel-kicker">Zaplanuj remont, podróż lub większy zakup.</p></div><button className="primary-button" type="button" disabled={saveProject.isPending} onClick={() => { saveProject.reset(); setEditingProject('new') }}>Dodaj projekt</button></div>
+      {editingProject === 'new' && <ProjectForm project={null} pending={saveProject.isPending} onSave={input => saveProject.mutate(input)} onCancel={() => setEditingProject(null)} />}
     </section>
-    {selected && <section className="panel finance-management-panel">
-      <div className="panel-head"><div><h2 className="panel-title">Wydatki · {selected.name}</h2><p className="panel-kicker">{selected.description}</p>{selected.target_budget && <p>Budżet docelowy: {formatPln(financeMinorUnitsToMoney(selected.target_budget))}</p>}</div>{!selected.is_archived && <button className="primary-button" type="button" disabled={saveExpense.isPending} onClick={() => { saveExpense.reset(); setEditingExpense('new') }}>Dodaj wydatek</button>}</div>
-      {selected.is_archived && <p>Projekt jest archiwalny. Historia pozostaje dostępna; przywróć go przed dodaniem lub edycją wydatków.</p>}
-      {expenses.isPending && <p role="status">Ładuję wydatki…</p>}
-      {editingExpense !== null && !selected.is_archived && <ExpenseForm key={`${selected.id}:${editingExpense}`} expense={expenseList.find(e => e.id === editingExpense) ?? null} projectId={selected.id} pending={saveExpense.isPending} onSave={input => saveExpense.mutate(input)} onCancel={() => setEditingExpense(null)} />}
-      {expenseList.filter(e => e.project_id === selected.id).map(expense => <div className="finance-management-row" key={expense.id}><div><strong>{expense.name}</strong><p>{expense.expense_date ?? 'Bez daty'}{expense.notes ? ` · ${expense.notes}` : ''}</p></div><strong>{formatPln(financeMinorUnitsToMoney(expense.amount))}</strong><div className="finance-edit-actions"><button className="button-quiet" type="button" disabled={selected.is_archived || saveExpense.isPending || deleteExpense.isPending} onClick={() => { saveExpense.reset(); setEditingExpense(expense.id) }}>Edytuj</button><button className="button-quiet" type="button" disabled={selected.is_archived || saveExpense.isPending || deleteExpense.isPending} onClick={() => deleteExpense.mutate(expense)}>Usuń</button></div></div>)}
-      {!expenses.isPending && !expenses.isError && !expenseList.some(e => e.project_id === selected.id) && <p>Brak wydatków w tym projekcie.</p>}
-    </section>}
+    {projects.isPending && <p role="status">Ładuję projekty…</p>}
+    {projectList.length === 0 && !projects.isPending && <p className="panel-message">Brak projektów. Dodaj projekt, aby śledzić jego wydatki.</p>}
+    {projectList.map(project => {
+      const totals = !expenses.isPending && !expenses.isError ? calculateProjectTotals(project, expenseList) : null
+      const projectExpenses = expenseList.filter(expense => expense.project_id === project.id)
+      return <section className="panel finance-management-panel finance-project-card" key={project.id}>
+        <div className="panel-head"><div><h2 className="panel-title">{project.name}{project.is_archived ? ' · archiwalny' : ''}</h2><p className="panel-kicker">{project.description}</p></div>
+          {totals && <div className="finance-project-totals"><strong>Wydano: {formatPln(totals.spent)}</strong>{totals.target !== null && <span>Budżet: {formatPln(totals.target)} · zostało: {formatPln(totals.remaining!)}</span>}</div>}
+        </div>
+        {totals?.target && BigInt(project.target_budget ?? '0') > 0n && <progress className="finance-goal-progress" max={100} value={Math.min(100, Math.max(0, moneyRatio(totals.spent, totals.target) * 100))} aria-label={`Wykorzystanie budżetu: ${project.name}`} />}
+        <div className="finance-edit-actions finance-project-actions">
+          <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => { saveProject.reset(); setEditingProject(project.id) }}>Edytuj projekt</button>
+          <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => saveProject.mutate({ id: project.id, expected_version: project.version, name: project.name, description: project.description, target_budget: project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget), is_archived: !project.is_archived, sort_order: project.sort_order })}>{project.is_archived ? 'Przywróć' : 'Archiwizuj'}</button>
+          {totals && !projectExpenses.length && <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => deleteProject.mutate(project)}>Usuń pusty projekt</button>}
+          {!project.is_archived && <button className="primary-button" type="button" disabled={saveExpense.isPending} onClick={() => { saveExpense.reset(); setSelectedId(project.id); setEditingExpense('new') }}>Dodaj wydatek</button>}
+        </div>
+        {editingProject === project.id && <ProjectForm key={project.id} project={project} pending={saveProject.isPending} onSave={input => saveProject.mutate(input)} onCancel={() => setEditingProject(null)} />}
+        {project.is_archived && <p className="panel-kicker">Projekt jest archiwalny. Przywróć go, aby dodawać i edytować wydatki.</p>}
+        {expenses.isPending && <p role="status">Ładuję wydatki…</p>}
+        {selectedId === project.id && editingExpense !== null && !project.is_archived && <ExpenseForm key={`${project.id}:${editingExpense}`} expense={expenseList.find(e => e.id === editingExpense) ?? null} projectId={project.id} pending={saveExpense.isPending} onSave={input => saveExpense.mutate(input)} onCancel={() => setEditingExpense(null)} />}
+        {projectExpenses.map(expense => <div className="finance-management-row" key={expense.id}><div><strong>{expense.name}</strong><p>{expense.expense_date ?? 'Bez daty'}{expense.notes ? ` · ${expense.notes}` : ''}</p></div><strong>{formatPln(financeMinorUnitsToMoney(expense.amount))}</strong><div className="finance-edit-actions"><button className="button-quiet" type="button" disabled={project.is_archived || saveExpense.isPending || deleteExpense.isPending} onClick={() => { saveExpense.reset(); setSelectedId(project.id); setEditingExpense(expense.id) }}>Edytuj</button><button className="button-quiet" type="button" disabled={project.is_archived || saveExpense.isPending || deleteExpense.isPending} onClick={() => deleteExpense.mutate(expense)}>Usuń</button></div></div>)}
+        {totals && !projectExpenses.length && <p className="panel-kicker">Brak wydatków w tym projekcie.</p>}
+      </section>
+    })}
   </div>
 }

@@ -33,7 +33,7 @@ function AuthenticatedApp() {
     <AppShell householdId={profile.household_id} userId={profile.id} profileName={profile.name} onSignOut={() => void signOut()}>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/finance" element={<FinancePage />} />
+        <Route path="/finance/*" element={<FinancePage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/bills" element={<BillsPage />} />
         <Route path="/shopping" element={<ShoppingPage />} />
