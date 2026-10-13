@@ -88,14 +88,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setProfileLoading(false)
   }, [])
 
+  const sessionUserId = session?.user.id
+
   useEffect(() => {
-    if (!session) {
+    if (!sessionUserId) {
       setProfile(null)
       setProfileLoading(false)
       return
     }
-    void loadProfile(session.user.id)
-  }, [loadProfile, session])
+    void loadProfile(sessionUserId)
+  }, [loadProfile, sessionUserId])
 
   async function signOut() {
     if (!supabase) return

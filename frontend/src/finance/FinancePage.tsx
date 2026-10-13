@@ -80,6 +80,8 @@ export function FinancePage() {
   const api = useMemo(() => createFinanceApi(profile.household_id, profile.id), [profile.household_id, profile.id])
   const location = useLocation()
   const navigate = useNavigate()
+  const selectedMonthStorageKey = `family-hub:finance:selectedMonth:${profile.id}`
+  const legacySelectedMonthStorageKey = `family-hub:finance:selectedMonth:${profile.household_id}:${profile.id}`
   const route = resolveFinanceRoute(location.pathname)
   const view = route?.view ?? 'dashboard'
   const savingsView = route?.savingsView ?? 'summary'
@@ -87,7 +89,21 @@ export function FinancePage() {
   const forecastEditor = useRef<HTMLElement>(null)
   const [showZeroItems, setShowZeroItems] = useState(true)
   const [monthSource, setMonthSource] = useState('empty')
-  const [selectedMonthId, setSelectedMonthId] = useState('')
+  const [selectedMonthId, setSelectedMonthId] = useState(() => {
+    try {
+      const savedMonthId = window.localStorage.getItem(selectedMonthStorageKey)
+      if (savedMonthId) return savedMonthId
+
+      const legacyMonthId = window.localStorage.getItem(legacySelectedMonthStorageKey)
+      if (!legacyMonthId) return ''
+
+      window.localStorage.setItem(selectedMonthStorageKey, legacyMonthId)
+      window.localStorage.removeItem(legacySelectedMonthStorageKey)
+      return legacyMonthId
+    } catch {
+      return ''
+    }
+  })
   const [selectedScenarioId, setSelectedScenarioId] = useState('')
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioDescription, setScenarioDescription] = useState('')
@@ -114,13 +130,27 @@ export function FinancePage() {
   })
 
   useEffect(() => {
-    const availableMonths = months.data ?? []
+    if (!months.isSuccess) return
+    const availableMonths = months.data
     if (availableMonths.length === 0) {
       setSelectedMonthId('')
     } else if (!availableMonths.some(month => month.id === selectedMonthId)) {
       setSelectedMonthId(availableMonths[0].id)
     }
-  }, [months.data, selectedMonthId])
+  }, [months.data, months.isSuccess, selectedMonthId])
+
+  useEffect(() => {
+    try {
+      if (selectedMonthId) {
+        window.localStorage.setItem(selectedMonthStorageKey, selectedMonthId)
+      } else {
+        window.localStorage.removeItem(selectedMonthStorageKey)
+      }
+      window.localStorage.removeItem(legacySelectedMonthStorageKey)
+    } catch {
+      // Keep the finance view usable if browser storage is unavailable.
+    }
+  }, [legacySelectedMonthStorageKey, selectedMonthId, selectedMonthStorageKey])
 
   useEffect(() => {
     const availableScenarios = scenarios.data ?? []
