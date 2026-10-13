@@ -48,6 +48,7 @@ export interface FinanceCategory extends FinanceRow {
 export interface FinanceCreateCategoryInput {
   name: string
   section: FinanceSectionId
+  parent_id?: FinanceId | null
 }
 
 export type FinanceSectionId = FinanceBudgetType | 'personal'

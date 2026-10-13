@@ -321,7 +321,8 @@ export function createFinanceApi(
     if (!section) throw new Error('Wybierz prawidłową sekcję budżetu.')
     return resolve<FinanceCategory>(() => requireSupabase(client).from('finance_categories')
       .insert({ household_id: householdId, created_by: userId, name,
-        budget_type: section.budget_type, allocation_role: section.allocation_role })
+        budget_type: section.budget_type, allocation_role: section.allocation_role,
+        ...(input.parent_id ? { parent_id: input.parent_id } : {}) })
       .select(categoryColumns)
       .single())
   }

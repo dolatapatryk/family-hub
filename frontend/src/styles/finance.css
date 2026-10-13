@@ -28,6 +28,10 @@
   padding-block: 14px;
 }
 
+.finance-category-create-form {
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+
 .finance-management-form label {
   display: grid;
   min-width: 0;
@@ -71,6 +75,46 @@
 
 .finance-category-row {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.finance-category-name {
+  min-width: 0;
+}
+
+.finance-category-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.finance-category-toggle:hover {
+  color: #285d52;
+}
+
+.finance-category-toggle > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.finance-category-children {
+  margin-left: 18px;
+  padding-left: 10px;
+  border-left: 2px solid var(--color-line);
+}
+
+.finance-category-row .finance-budget-edit-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
 .finance-section-actions {
@@ -265,6 +309,12 @@
   }
 
   .finance-workspace .finance-budget-item-row .finance-budget-edit-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+  }
+
+  .finance-category-row .finance-budget-edit-button {
     width: 34px;
     min-width: 34px;
     height: 34px;
