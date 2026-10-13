@@ -1051,6 +1051,17 @@
 .finance-project-totals span { font-size: 12px; color: var(--color-muted); }
 .finance-project-actions { flex-wrap: wrap; margin-block: 14px; }
 .finance-project-actions .primary-button { margin-left: auto; }
+.finance-project-accordion { padding: 0 19px 18px; }
+.finance-project-accordion > summary { display: flex; align-items: center; gap: 14px; margin-inline: -19px; padding: 18px 19px; cursor: pointer; list-style: none; }
+.finance-project-accordion > summary::-webkit-details-marker { display: none; }
+.finance-project-accordion > summary::before { content: '⌄'; flex-shrink: 0; color: var(--color-muted); }
+.finance-project-accordion[open] > summary::before { transform: rotate(180deg); }
+.finance-project-heading { display: grid; flex: 1; min-width: 0; gap: 5px; }
+.finance-project-heading strong { font-size: 15px; }
+.finance-project-heading small { color: var(--color-muted); font-size: 12px; overflow-wrap: anywhere; }
+.finance-project-accordion .finance-goal-progress { margin-top: 0; }
+.finance-project-expense-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--color-line); padding-top: 12px; color: var(--color-muted); font-size: 12px; }
+.finance-project-expense-pagination > div { display: flex; align-items: center; gap: 10px; }
 
 @media (max-width: 1100px) {
   .finance-savings-layout, .finance-reserves-layout { grid-template-columns: minmax(0, 1fr); }
@@ -1085,6 +1096,11 @@
   .finance-workspace .finance-savings-transaction-form .finance-checkbox-label { grid-column: 1; }
   .finance-workspace .finance-savings-account-select { flex-wrap: wrap; }
   .finance-project-totals { text-align: left; }
+  .finance-project-accordion > summary { align-items: flex-start; flex-wrap: wrap; }
+  .finance-project-heading { flex-basis: calc(100% - 28px); }
+  .finance-project-accordion .finance-project-totals { margin-left: 28px; }
+  .finance-project-expense-pagination { align-items: flex-start; flex-direction: column; }
+  .finance-project-expense-pagination > div { flex-wrap: wrap; }
   .finance-scenario-line { grid-template-columns: minmax(0, 1fr) auto; }
   .finance-scenario-line > span:nth-child(2) { grid-row: 2; }
   .finance-comparison-row { grid-template-columns: 90px minmax(0, 1fr); }

@@ -2,6 +2,7 @@ import type {
   FinanceBudgetLine,
   FinanceBudgetType,
   FinanceMoney,
+  FinanceMinorUnits,
   FinanceMonthSummary,
   FinanceSavingsAccount,
   FinanceSavingsTransaction,
@@ -183,6 +184,14 @@ export function calculateSavingsAudienceSummary(
 export function calculateProjectTotals(project: FinanceProject, expenses: FinanceProjectExpense[]) {
   const spent = sumMoney(expenses.filter(e => e.household_id === project.household_id && e.project_id === project.id)
     .map(e => financeMinorUnitsToMoney(e.amount)))
+  return calculateProjectTotalsFromMoney(project, spent)
+}
+
+export function calculateProjectTotalsFromMinorUnits(project: FinanceProject, spentMinor: FinanceMinorUnits) {
+  return calculateProjectTotalsFromMoney(project, financeMinorUnitsToMoney(spentMinor))
+}
+
+function calculateProjectTotalsFromMoney(project: FinanceProject, spent: FinanceMoney) {
   const target = project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget)
   return { spent, target, remaining: target == null ? null : subtractMoney(target, spent) }
 }

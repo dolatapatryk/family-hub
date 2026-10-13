@@ -29,6 +29,8 @@ import type {
   FinanceIrregularExpensePlan,
   FinanceProject,
   FinanceProjectExpense,
+  FinanceProjectExpensePage,
+  FinanceProjectExpenseSummary,
   FinanceSaveSavingsPlanInput,
   FinanceSaveIrregularReserveInput,
   FinanceSaveProjectInput,
@@ -57,6 +59,7 @@ const savingsAccountColumns = 'id, household_id, created_by, created_at, updated
 const savingsTransferColumns = 'id, household_id, created_by, created_at, updated_at, version'
 const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, excluded_from_monthly_savings, transfer_id'
 const financePageSize = 500
+export const financeProjectExpensePageSize = 15
 const commonColumns = 'id, household_id, created_by, created_at, updated_at, version'
 const savingsPlanColumns = `${commonColumns}, name, plan_type, account_id, monthly_amount_minor:monthly_amount::text, annual_amount_override_minor:annual_amount_override::text, visibility, owner_user_id`
 const reserveColumns = `${commonColumns}, name, annual_amount_minor:annual_amount::text`
@@ -245,9 +248,35 @@ export function createFinanceApi(
     return rows.map(({ target_budget_minor, ...row }) => ({ ...row, target_budget: target_budget_minor }))
   }
 
+  async function listProjectExpenseSummaries(signal?: AbortSignal): Promise<FinanceProjectExpenseSummary[]> {
+    return resolve<FinanceProjectExpenseSummary[]>(() => {
+      let query = requireSupabase(client).rpc('finance_project_expense_summaries', { p_household_id: householdId })
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: FinanceProjectExpenseSummary[] | null; error: { message: string } | null }>
+    })
+  }
+
   async function listProjectExpenses(signal?: AbortSignal): Promise<FinanceProjectExpense[]> {
     const rows = await listManagedRecords<Omit<FinanceProjectExpense, 'amount'> & { amount_minor: string }>('finance_project_expenses', projectExpenseColumns, signal)
     return rows.map(({ amount_minor, ...row }) => ({ ...row, amount: amount_minor }))
+  }
+
+  async function listProjectExpensePage(projectId: string, page: number, signal?: AbortSignal): Promise<FinanceProjectExpensePage> {
+    const pageIndex = Math.max(0, Math.floor(page))
+    const firstRow = pageIndex * financeProjectExpensePageSize
+    const rows = await resolve<(Omit<FinanceProjectExpense, 'amount'> & { amount_minor: string })[]>(() => {
+      let query = requireSupabase(client).from('finance_project_expenses').select(projectExpenseColumns)
+        .eq('household_id', householdId).eq('project_id', projectId)
+        .order('expense_date', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false }).order('id', { ascending: false })
+        .range(firstRow, firstRow + financeProjectExpensePageSize)
+      if (signal) query = query.abortSignal(signal)
+      return query as unknown as PromiseLike<{ data: (Omit<FinanceProjectExpense, 'amount'> & { amount_minor: string })[] | null; error: { message: string } | null }>
+    })
+    return {
+      items: rows.slice(0, financeProjectExpensePageSize).map(({ amount_minor, ...row }) => ({ ...row, amount: amount_minor })),
+      hasMore: rows.length > financeProjectExpensePageSize,
+    }
   }
 
   async function mutateManagedRecord(input: FinanceRecordMutationInput, details: Record<string, unknown> | null, entity: 'plan' | 'reserve' | 'project' | 'expense'): Promise<void> {
@@ -765,6 +794,7 @@ export function createFinanceApi(
 
   return {
     listSavingsPlans, listIrregularReserves, listProjects, listProjectExpenses,
+    listProjectExpenseSummaries, listProjectExpensePage,
     saveSavingsPlan, deleteSavingsPlan, saveIrregularReserve, deleteIrregularReserve,
     saveProject, deleteProject, saveProjectExpense, deleteProjectExpense,
     listMonths,

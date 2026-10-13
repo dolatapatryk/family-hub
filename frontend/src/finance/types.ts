@@ -197,6 +197,16 @@ export interface FinanceProjectExpense extends FinanceRow {
   notes: string | null
 }
 
+export interface FinanceProjectExpenseSummary {
+  project_id: FinanceId
+  spent_minor: FinanceMinorUnits
+}
+
+export interface FinanceProjectExpensePage {
+  items: FinanceProjectExpense[]
+  hasMore: boolean
+}
+
 export interface FinanceRecordMutationInput {
   request_id: FinanceId
   id?: FinanceId | null
