@@ -91,14 +91,6 @@ insert into public.finance_savings_transactions (
     ('39000000-0000-4000-8000-000000000007', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000002', '36000000-0000-4000-8000-000000000006', '2026-10-06', 1500, 'Member private movement', false, null),
     ('39000000-0000-4000-8000-000000000008', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', '36000000-0000-4000-8000-000000000007', '2026-10-07', 500, 'Other household movement', false, null);
 
-insert into public.finance_planned_savings_transactions (
-    id, household_id, created_by, month_id, account_id, amount, description, source_savings_plan_id
-) values
-    ('40000000-0000-4000-8000-000000000001', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001', '36000000-0000-4000-8000-000000000001', 10000, 'Shared draft', '37000000-0000-4000-8000-000000000001'),
-    ('40000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', '31000000-0000-4000-8000-000000000001', '36000000-0000-4000-8000-000000000004', 5000, 'Owner private draft', '37000000-0000-4000-8000-000000000002'),
-    ('40000000-0000-4000-8000-000000000003', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000002', '31000000-0000-4000-8000-000000000001', '36000000-0000-4000-8000-000000000006', 2500, 'Member private draft', '37000000-0000-4000-8000-000000000003'),
-    ('40000000-0000-4000-8000-000000000004', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', '31000000-0000-4000-8000-000000000002', '36000000-0000-4000-8000-000000000007', 1000, 'Other household draft', '37000000-0000-4000-8000-000000000006');
-
 insert into public.finance_irregular_expense_plans (id, household_id, created_by, name, annual_amount) values
     ('41000000-0000-4000-8000-000000000001', '21000000-0000-4000-8000-000000000001', '11000000-0000-4000-8000-000000000001', 'Household insurance', 120000),
     ('41000000-0000-4000-8000-000000000002', '21000000-0000-4000-8000-000000000002', '11000000-0000-4000-8000-000000000003', 'Other insurance', 90000);
@@ -122,7 +114,6 @@ select ok(has_table_privilege('authenticated', 'public.finance_months', 'SELECT'
 select ok(not has_table_privilege('authenticated', 'public.finance_savings_accounts', 'INSERT'), 'clients cannot directly insert savings accounts');
 select ok(not has_table_privilege('authenticated', 'public.finance_savings_transactions', 'UPDATE'), 'clients cannot directly edit savings movements');
 select ok(not has_table_privilege('authenticated', 'public.finance_savings_transfers', 'DELETE'), 'clients cannot directly delete transfer headers');
-select ok(not has_table_privilege('authenticated', 'private.finance_import_runs', 'SELECT'), 'import receipts are not directly readable');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-4000-8000-000000000001', true);
@@ -138,7 +129,6 @@ select is((select visibility from public.finance_savings_accounts where name = '
 select is((select owner_user_id from public.finance_savings_accounts where name = 'Shared child'), '11000000-0000-4000-8000-000000000001'::uuid, 'a child inherits its parent owner');
 select ok(not exists(select 1 from public.finance_savings_accounts where name = 'Member private account'), 'owner cannot read another member private account');
 select is((select count(*)::integer from public.finance_savings_transactions), 6, 'owner reads shared and own-private movements');
-select is((select count(*)::integer from public.finance_planned_savings_transactions), 2, 'owner reads shared and own-private drafts');
 select is((select count(*)::integer from public.finance_savings_plans), 4, 'owner reads shared and own-private plans');
 select is((select count(*)::integer from public.finance_savings_transfers), 2, 'owner reads transfers only when both legs are accessible');
 select is((select count(*)::integer from public.finance_irregular_expense_plans), 1, 'owner reads the shared irregular reserves');
@@ -225,7 +215,6 @@ select set_config('request.jwt.claims', '{"sub":"11000000-0000-4000-8000-0000000
 select is((select count(*)::integer from public.finance_savings_accounts), 4, 'another member reads shared accounts and only their private account');
 select ok(not exists(select 1 from public.finance_savings_accounts where name = 'Owner private goal'), 'another member cannot read the owner private tree');
 select is((select count(*)::integer from public.finance_savings_transactions), 4, 'another member reads shared and own-private movements only');
-select is((select count(*)::integer from public.finance_planned_savings_transactions), 2, 'another member reads shared and own-private drafts only');
 select is((select count(*)::integer from public.finance_savings_plans), 3, 'another member reads shared and own-private plans only');
 select is((select count(*)::integer from public.finance_savings_transfers), 1, 'another member cannot read a transfer with inaccessible legs');
 select is((select count(*)::integer from public.finance_months), 1, 'another member reads the household month');
@@ -237,7 +226,6 @@ select is((select count(*)::integer from public.finance_months), 1, 'outsider re
 select is((select count(*)::integer from public.finance_budget_items), 1, 'outsider reads only their household budget');
 select is((select count(*)::integer from public.finance_savings_accounts), 1, 'outsider reads only their household account');
 select is((select count(*)::integer from public.finance_savings_transactions), 1, 'outsider reads only their household movements');
-select is((select count(*)::integer from public.finance_planned_savings_transactions), 1, 'outsider reads only their household drafts');
 select is((select count(*)::integer from public.finance_savings_plans), 1, 'outsider reads only their household savings plan');
 select is((select count(*)::integer from public.finance_savings_transfers), 0, 'outsider cannot read transfers from another household');
 select is((select count(*)::integer from public.finance_projects), 1, 'outsider reads only their household projects');

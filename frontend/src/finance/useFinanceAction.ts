@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FinanceVersionConflictError } from './api'
+import { createUuid } from '../utils/uuid'
 
 /** Keep the request ID on transport failure; a reviewed conflict starts anew. */
 export function useFinanceAction<T, R>(
@@ -17,7 +18,7 @@ export function useFinanceAction<T, R>(
       const signature = JSON.stringify(input)
       let requestId = requests.current.get(signature)
       if (!requestId) {
-        requestId = crypto.randomUUID()
+        requestId = createUuid()
         requests.current.set(signature, requestId)
       }
       const result = await action(input, requestId)

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { financeMinorUnitsToMoney, formatPln } from './money'
 import type { FinanceAccountLifecycleAction, FinanceAccountLifecycleInput, FinanceSavingsAccount } from './types'
+import { createUuid } from '../utils/uuid'
 
 const actionNames: Record<FinanceAccountLifecycleAction, string> = {
   archive: 'Archiwizuj', restore: 'Przywróć', balance: 'Skoryguj saldo', visibility: 'Zmień widoczność',
@@ -26,7 +27,7 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
     const signature = JSON.stringify(input)
     let requestId = requests.current.get(signature)
     if (!requestId) {
-      requestId = crypto.randomUUID()
+      requestId = createUuid()
       requests.current.set(signature, requestId)
     }
     await api.applyAccountLifecycle({ ...input, request_id: requestId })
@@ -43,7 +44,7 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
   } })
 
   function refresh() {
-    return Promise.all(['financeSavingsAccounts', 'financeSavingsTransactions', 'financeSavingsDrafts', 'financeSavingsPlans', 'financeSavingsTransfers']
+    return Promise.all(['financeSavingsAccounts', 'financeSavingsTransactions', 'financeSavingsPlans', 'financeSavingsTransfers']
       .map(key => queryClient.invalidateQueries({ queryKey: [key, account.household_id] })))
   }
 
@@ -83,7 +84,7 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
           {preview.isPending && <p role="status">Ładuję podgląd…</p>}
           {preview.isError && <p className="error-message" role="alert">{String(preview.error.message)}</p>}
           {data && <>
-            {action === 'archive' && <p>Archiwizacja wyłączy konto i jego podkonta ({data.account_count}) z aktywnych sald oraz nowych ruchów. Historia i szkice pozostaną zachowane.</p>}
+            {action === 'archive' && <p>Archiwizacja wyłączy konto i jego podkonta ({data.account_count}) z aktywnych sald oraz nowych ruchów. Historia pozostanie zachowana.</p>}
             {action === 'restore' && <p>Przywrócenie włączy konto i podkonta, które nie zostały zarchiwizowane osobno.</p>}
             {restoreBlocked && <p role="alert">Najpierw przywróć zarchiwizowane konto nadrzędne.</p>}
             {action === 'balance' && <>
@@ -94,8 +95,8 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
             </>}
             {action === 'visibility' && <>
               <p>{nextVisibility === 'household'
-                ? 'Całe drzewo kont oraz jego dotychczasowa historia, salda, cele, szkice i powiązane plany staną się dostępne dla domowników.'
-                : 'Całe drzewo kont oraz jego historia, salda, cele, szkice i powiązane plany będą dostępne tylko dla właściciela. Domownicy utracą do nich dostęp.'}</p>
+                ? 'Całe drzewo kont oraz jego dotychczasowa historia, salda, cele i powiązane szablony planów staną się dostępne dla domowników.'
+                : 'Całe drzewo kont oraz jego historia, salda, cele i powiązane szablony planów będą dostępne tylko dla właściciela. Domownicy utracą do nich dostęp.'}</p>
               <p>Zmiana obejmie {data.account_count} kont i {data.linked_plan_count} powiązanych planów.</p>
               {data.external_transfer_count > 0 && <p role="alert">Przelewy do kont poza tym drzewem blokują zmianę widoczności. Liczba powiązań: {data.external_transfer_count}.</p>}
               <label className="finance-checkbox-label"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={apply.isPending} /> Rozumiem wpływ zmiany na dostęp do całej historii.</label>

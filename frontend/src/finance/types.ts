@@ -32,7 +32,7 @@ export interface FinanceRow {
   version: number
 }
 
-export interface FinanceMonth extends FinanceRow {
+export interface FinanceMonth extends Omit<FinanceRow, 'version'> {
   month_start: string
   display_name: string | null
 }
@@ -43,13 +43,11 @@ export interface FinanceCategory extends FinanceRow {
   allocation_role: FinanceAllocationRole
   parent_id: FinanceId | null
   color: string | null
-  sort_order: number
 }
 
 export interface FinanceCreateCategoryInput {
   name: string
   section: FinanceSectionId
-  sort_order: number
 }
 
 export type FinanceSectionId = FinanceBudgetType | 'personal'
@@ -69,13 +67,11 @@ export interface FinanceBudgetItem extends FinanceRow {
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
-  sort_order: number
 }
 
 export interface FinanceScenario extends FinanceRow {
   name: string
   description: string | null
-  sort_order: number
 }
 
 export interface FinanceScenarioItem extends FinanceRow {
@@ -87,7 +83,6 @@ export interface FinanceScenarioItem extends FinanceRow {
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
-  sort_order: number
 }
 
 export interface FinanceSavingsAccount extends FinanceRow {
@@ -96,11 +91,9 @@ export interface FinanceSavingsAccount extends FinanceRow {
   parent_id: FinanceId | null
   opening_balance: FinanceMinorUnits
   target_amount: FinanceMinorUnits | null
-  color: string | null
   is_archived: boolean
   visibility: FinanceVisibility
   owner_user_id: FinanceId
-  sort_order: number
 }
 
 export interface FinanceSavingsTransfer extends FinanceRow {}
@@ -110,10 +103,8 @@ export interface FinanceSavingsTransaction extends FinanceRow {
   transaction_date: string
   amount: FinanceMinorUnits
   description: string | null
-  budget_month_id: FinanceId | null
   excluded_from_monthly_savings: boolean
   transfer_id: FinanceId | null
-  source_planned_transaction_id: FinanceId | null
 }
 
 export interface FinanceSaveSavingsAccountInput {
@@ -126,9 +117,7 @@ export interface FinanceSaveSavingsAccountInput {
   /** Required for creation; account balance corrections use a separate contract. */
   opening_balance?: FinanceMoney | null
   target_amount: FinanceMoney | null
-  color: string | null
   visibility: FinanceVisibility
-  sort_order: number
 }
 
 export type FinanceAccountLifecycleAction = 'archive' | 'restore' | 'balance' | 'visibility'
@@ -168,7 +157,6 @@ export interface FinanceSaveSavingsTransactionInput {
   /** Signed amount: positive deposits, negative withdrawals. */
   amount: FinanceMoney
   description: string | null
-  budget_month_id: FinanceId | null
   excluded_from_monthly_savings: boolean
 }
 
@@ -176,69 +164,6 @@ export interface FinanceDeleteSavingsTransactionInput {
   request_id: FinanceId
   transaction_id: FinanceId
   expected_version: number
-}
-
-export interface FinancePlannedSavingsTransaction extends FinanceRow {
-  month_id: FinanceId
-  account_id: FinanceId
-  amount: FinanceMinorUnits
-  description: string | null
-  source_savings_plan_id: FinanceId | null
-}
-
-export interface FinanceSaveSavingsDraftInput {
-  request_id: FinanceId
-  draft_id?: FinanceId | null
-  expected_version?: number | null
-  month_id: FinanceId
-  account_id: FinanceId
-  /** Signed decimal major-unit input, converted exactly to integer minor units. */
-  amount: FinanceMoney
-  description: string | null
-  source_savings_plan_id?: FinanceId | null
-}
-
-export interface FinanceDeleteSavingsDraftInput {
-  request_id: FinanceId
-  draft_id: FinanceId
-  expected_version: number
-}
-
-export type FinanceSavingsDraftSkipReason =
-  | 'zero_amount'
-  | 'archived_account'
-  | 'already_posted'
-
-export interface FinanceSavingsDraftAcceptanceEntry {
-  draft_id: FinanceId
-  account_id: FinanceId
-  amount_minor: FinanceMinorUnits
-  description: string | null
-  source_savings_plan_id: FinanceId | null
-}
-
-export interface FinanceSavingsDraftAcceptancePosted extends FinanceSavingsDraftAcceptanceEntry {
-  transaction_id: FinanceId
-}
-
-export interface FinanceSavingsDraftAcceptanceSkipped extends FinanceSavingsDraftAcceptanceEntry {
-  reasons: FinanceSavingsDraftSkipReason[]
-}
-
-export interface FinanceSavingsDraftAcceptanceResult {
-  month_id: FinanceId
-  month_start: string
-  posted: FinanceSavingsDraftAcceptancePosted[]
-  skipped: FinanceSavingsDraftAcceptanceSkipped[]
-  posted_count: number
-  skipped_count: number
-  inaccessible_draft_policy: 'remain_pending'
-}
-
-export interface FinanceSavingsDraftPreviewItem {
-  draft: FinancePlannedSavingsTransaction
-  state: 'ready' | 'skipped'
-  reasons: Array<FinanceSavingsDraftSkipReason | 'account_inaccessible'>
 }
 
 export interface FinanceSavingsPlan extends FinanceRow {
@@ -249,13 +174,11 @@ export interface FinanceSavingsPlan extends FinanceRow {
   annual_amount_override: FinanceMinorUnits | null
   visibility: FinanceVisibility
   owner_user_id: FinanceId
-  sort_order: number
 }
 
 export interface FinanceIrregularExpensePlan extends FinanceRow {
   name: string
   annual_amount: FinanceMinorUnits
-  sort_order: number
 }
 
 export interface FinanceProject extends FinanceRow {
@@ -263,7 +186,6 @@ export interface FinanceProject extends FinanceRow {
   description: string | null
   target_budget: FinanceMinorUnits | null
   is_archived: boolean
-  sort_order: number
 }
 
 export interface FinanceProjectExpense extends FinanceRow {
@@ -272,7 +194,6 @@ export interface FinanceProjectExpense extends FinanceRow {
   name: string
   amount: FinanceMinorUnits
   notes: string | null
-  sort_order: number
 }
 
 export interface FinanceRecordMutationInput {
@@ -288,13 +209,11 @@ export interface FinanceSaveSavingsPlanInput extends FinanceRecordMutationInput 
   monthly_amount: FinanceMoney
   annual_amount_override: FinanceMoney | null
   visibility: FinanceVisibility
-  sort_order: number
 }
 
 export interface FinanceSaveIrregularReserveInput extends FinanceRecordMutationInput {
   name: string
   annual_amount: FinanceMoney
-  sort_order: number
 }
 
 export interface FinanceSaveProjectInput extends FinanceRecordMutationInput {
@@ -302,7 +221,6 @@ export interface FinanceSaveProjectInput extends FinanceRecordMutationInput {
   description: string | null
   target_budget: FinanceMoney | null
   is_archived: boolean
-  sort_order: number
 }
 
 export interface FinanceSaveProjectExpenseInput extends FinanceRecordMutationInput {
@@ -311,19 +229,12 @@ export interface FinanceSaveProjectExpenseInput extends FinanceRecordMutationInp
   name: string
   amount: FinanceMoney
   notes: string | null
-  sort_order: number
 }
 
 export interface FinanceDeleteRecordInput {
   request_id: FinanceId
   id: FinanceId
   expected_version: number
-}
-
-export interface FinanceLoadSavingsPlanResult {
-  month_id: FinanceId
-  generated: Array<{ plan_id: FinanceId; draft_id: FinanceId; account_id: FinanceId }>
-  skipped: Array<{ plan_id: FinanceId; reason: 'irregular_plan' | 'unlinked_plan' | 'zero_amount' | 'archived_account' | 'already_loaded' | 'account_already_planned' }>
 }
 
 /** A budget item with its normalized category classification joined for reads. */
@@ -382,7 +293,6 @@ export interface FinanceBudgetItemChanges {
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
-  sort_order: number
 }
 
 export type FinanceBudgetItemMutation =
@@ -398,7 +308,6 @@ export interface FinanceScenarioItemChanges {
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
-  sort_order: number
 }
 
 export type FinanceScenarioItemMutation =

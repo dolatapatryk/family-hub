@@ -39,8 +39,8 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 
-select ok(not has_function_privilege('anon', 'public.finance_save_account(uuid,uuid,uuid,bigint,text,text,uuid,bigint,bigint,text,text,integer)', 'EXECUTE'), 'anonymous callers cannot save savings accounts');
-select ok(not has_function_privilege('anon', 'public.finance_save_transaction(uuid,uuid,uuid,bigint,uuid,date,bigint,text,uuid,boolean)', 'EXECUTE'), 'anonymous callers cannot save savings transactions');
+select ok(not has_function_privilege('anon', 'public.finance_save_account(uuid,uuid,uuid,bigint,text,text,uuid,bigint,bigint,text)', 'EXECUTE'), 'anonymous callers cannot save savings accounts');
+select ok(not has_function_privilege('anon', 'public.finance_save_transaction(uuid,uuid,uuid,bigint,uuid,date,bigint,text,boolean)', 'EXECUTE'), 'anonymous callers cannot save savings transactions');
 select ok(not has_function_privilege('anon', 'public.finance_delete_transaction(uuid,uuid,uuid,bigint)', 'EXECUTE'), 'anonymous callers cannot delete savings transactions');
 select ok(not has_table_privilege('authenticated', 'public.finance_savings_accounts', 'INSERT'), 'clients cannot bypass account privacy checks with direct inserts');
 select ok(not has_table_privilege('authenticated', 'public.finance_savings_transactions', 'UPDATE'), 'clients cannot bypass transaction version and transfer checks');
@@ -48,7 +48,7 @@ select ok(not has_table_privilege('authenticated', 'public.finance_savings_trans
 insert into pg_temp.finance_savings_mutation_values (key, result)
 select 'created_account', public.finance_save_account(
     '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001',
-    null, null, 'New private account', 'cash', null, 12345, 50000, null, 'private', 10
+    null, null, 'New private account', 'cash', null, 12345, 50000, 'private'
 );
 select ok(
     (select result ? 'account_id' from pg_temp.finance_savings_mutation_values where key = 'created_account'),
@@ -62,7 +62,7 @@ select is(
 select is(
     (select public.finance_save_account(
         '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001',
-        null, null, 'New private account', 'cash', null, 12345, 50000, null, 'private', 10
+        null, null, 'New private account', 'cash', null, 12345, 50000, 'private'
     )),
     (select result from pg_temp.finance_savings_mutation_values where key = 'created_account'),
     'an account create retry returns the original receipt'
@@ -70,7 +70,7 @@ select is(
 select throws_ok(
     $$select public.finance_save_account(
         '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000001',
-        null, null, 'Changed private account', 'cash', null, 12345, 50000, null, 'private', 10
+        null, null, 'Changed private account', 'cash', null, 12345, 50000, 'private'
     )$$,
     'P0001', null,
     'reusing an account request ID with different input is rejected'
@@ -80,7 +80,7 @@ insert into pg_temp.finance_savings_mutation_values (key, result)
 select 'updated_account', public.finance_save_account(
     '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000002',
     (select (result->>'account_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_account'),
-    1, 'Renamed private account', 'goal', null, null, 60000, null, 'private', 10
+    1, 'Renamed private account', 'goal', null, null, 60000, 'private'
 );
 select is(
     (select (result->>'version')::bigint from pg_temp.finance_savings_mutation_values where key = 'updated_account'),
@@ -91,7 +91,7 @@ select is(
     public.finance_save_account(
         '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000003',
         (select (result->>'account_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_account'),
-        1, 'Stale name', 'goal', null, null, 60000, null, 'private', 10
+        1, 'Stale name', 'goal', null, null, 60000, 'private'
     )->>'conflict',
     'true',
     'stale account versions return a conflict'
@@ -106,7 +106,7 @@ insert into pg_temp.finance_savings_mutation_values (key, result)
 select 'created_transaction', public.finance_save_transaction(
     '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001',
     null, null, '93000000-0000-4000-8000-000000000001', '2026-10-09',
-    2500, 'Ordinary deposit', null, false
+    2500, 'Ordinary deposit', false
 );
 select is(
     (select count(*)::integer from public.finance_savings_transactions where description = 'Ordinary deposit'),
@@ -117,7 +117,7 @@ select is(
     (select public.finance_save_transaction(
         '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001',
         null, null, '93000000-0000-4000-8000-000000000001', '2026-10-09',
-        2500, 'Ordinary deposit', null, false
+        2500, 'Ordinary deposit', false
     )),
     (select result from pg_temp.finance_savings_mutation_values where key = 'created_transaction'),
     'the same transaction create request reuses the original movement'
@@ -133,7 +133,7 @@ select is(
         '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000002',
         (select (result->>'transaction_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_transaction'),
         1, '93000000-0000-4000-8000-000000000001', '2026-10-10',
-        -1250, 'Edited withdrawal', null, true
+        -1250, 'Edited withdrawal', true
     )->>'version',
     '2',
     'transaction updates advance their optimistic version'
@@ -143,7 +143,7 @@ select is(
         '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000003',
         (select (result->>'transaction_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_transaction'),
         1, '93000000-0000-4000-8000-000000000001', '2026-10-11',
-        1, 'Stale edit', null, false
+        1, 'Stale edit', false
     )->>'conflict',
     'true',
     'stale transaction versions return a conflict'
@@ -154,11 +154,13 @@ select is(
     'a stale transaction update does not overwrite the latest movement'
 );
 
+select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-000000000002","role":"authenticated"}', true);
 select throws_ok(
     $$select public.finance_save_transaction(
         '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000004',
         null, null, '93000000-0000-4000-8000-000000000002', '2026-10-09',
-        1, 'Privacy violation', null, false
+        1, 'Privacy violation', false
     )$$,
     '42501', null,
     'a household member cannot create a movement in another member private account'
@@ -167,16 +169,18 @@ select throws_ok(
     $$select public.finance_save_transaction(
         '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000005',
         null, null, '93000000-0000-4000-8000-000000000004', '2026-10-09',
-        1, 'Archived account movement', null, false
+        1, 'Archived account movement', false
     )$$,
     '22023', null,
     'archived accounts cannot receive ordinary transactions'
 );
+select set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-000000000001","role":"authenticated"}', true);
 insert into pg_temp.finance_savings_mutation_values (key, result)
 select 'private_transaction', public.finance_save_transaction(
     '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000007',
     null, null, '93000000-0000-4000-8000-000000000002', '2026-10-09',
-    700, 'Owner private movement', null, false
+    700, 'Owner private movement', false
 );
 
 insert into pg_temp.finance_savings_mutation_values (key, result)
@@ -191,7 +195,7 @@ select throws_ok(
         $$select public.finance_save_transaction(
             '92000000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000006',
             '%s'::uuid, 1, '93000000-0000-4000-8000-000000000001', '2026-10-10',
-            -500, 'Edited transfer leg', null, true
+            -500, 'Edited transfer leg', true
         )$$,
         (select result->'transaction_ids'->>0 from pg_temp.finance_savings_mutation_values where key = 'transfer')
     ),
@@ -204,7 +208,7 @@ select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-0000000
 select throws_ok(
     $$select public.finance_save_account(
         '92000000-0000-4000-8000-000000000001', '94000000-0000-4000-8000-000000000004',
-        '93000000-0000-4000-8000-000000000002', 1, 'Stolen private name', 'goal', null, null, 70000, null, 'private', 10
+        '93000000-0000-4000-8000-000000000002', 1, 'Stolen private name', 'goal', null, null, 70000, 'private'
     )$$,
     '42501', null,
     'another household member cannot update an owner private account'
@@ -233,7 +237,7 @@ select set_config('request.jwt.claims', '{"sub":"91000000-0000-4000-8000-0000000
 select is(
     public.finance_delete_transaction(
         '92000000-0000-4000-8000-000000000001', '97000000-0000-4000-8000-000000000002',
-        (select (result->>'transaction_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_transaction'), 2
+        (select (result->>'transaction_id')::uuid from pg_temp.finance_savings_mutation_values where key = 'created_transaction'), 1
     )->>'conflict',
     'true',
     'a stale transaction deletion returns a conflict'

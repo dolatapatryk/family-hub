@@ -10,7 +10,7 @@ function ProjectForm({ project, pending, onSave, onCancel }: { project: FinanceP
   const [name, setName] = useState(project?.name ?? '')
   const [description, setDescription] = useState(project?.description ?? '')
   const [target, setTarget] = useState(project?.target_budget == null ? '' : financeMinorUnitsToMoney(project.target_budget))
-  return <form className="finance-management-form" onSubmit={e => { e.preventDefault(); onSave({ id: project?.id, expected_version: project?.version, name, description: description.trim() || null, target_budget: target.trim() || null, is_archived: project?.is_archived ?? false, sort_order: project?.sort_order ?? 0 }) }}>
+  return <form className="finance-management-form" onSubmit={e => { e.preventDefault(); onSave({ id: project?.id, expected_version: project?.version, name, description: description.trim() || null, target_budget: target.trim() || null, is_archived: project?.is_archived ?? false }) }}>
     <label>Nazwa projektu<input required maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={pending} /></label>
     <label>Budżet docelowy (opcjonalnie)<input inputMode="decimal" value={target} onChange={e => setTarget(e.target.value)} disabled={pending} /></label>
     <label>Opis<input maxLength={2000} value={description} onChange={e => setDescription(e.target.value)} disabled={pending} /></label>
@@ -23,7 +23,7 @@ function ExpenseForm({ expense, projectId, pending, onSave, onCancel }: { expens
   const [amount, setAmount] = useState(expense ? financeMinorUnitsToMoney(expense.amount) : '')
   const [date, setDate] = useState(expense?.expense_date ?? '')
   const [notes, setNotes] = useState(expense?.notes ?? '')
-  return <form className="finance-management-form" onSubmit={e => { e.preventDefault(); onSave({ id: expense?.id, expected_version: expense?.version, project_id: projectId, expense_date: date || null, name, amount, notes: notes.trim() || null, sort_order: expense?.sort_order ?? 0 }) }}>
+  return <form className="finance-management-form" onSubmit={e => { e.preventDefault(); onSave({ id: expense?.id, expected_version: expense?.version, project_id: projectId, expense_date: date || null, name, amount, notes: notes.trim() || null }) }}>
     <label>Nazwa wydatku<input required maxLength={160} value={name} onChange={e => setName(e.target.value)} disabled={pending} /></label>
     <label>Kwota (ujemna dla zwrotu)<input required inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} disabled={pending} /></label>
     <label>Data (opcjonalnie)<input type="date" value={date} onChange={e => setDate(e.target.value)} disabled={pending} /></label>
@@ -65,7 +65,7 @@ export function ProjectsPanel({ api, householdId }: { api: ReturnType<typeof cre
         {totals?.target && BigInt(project.target_budget ?? '0') > 0n && <progress className="finance-goal-progress" max={100} value={Math.min(100, Math.max(0, moneyRatio(totals.spent, totals.target) * 100))} aria-label={`Wykorzystanie budżetu: ${project.name}`} />}
         <div className="finance-edit-actions finance-project-actions">
           <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => { saveProject.reset(); setEditingProject(project.id) }}>Edytuj projekt</button>
-          <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => saveProject.mutate({ id: project.id, expected_version: project.version, name: project.name, description: project.description, target_budget: project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget), is_archived: !project.is_archived, sort_order: project.sort_order })}>{project.is_archived ? 'Przywróć' : 'Archiwizuj'}</button>
+          <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => saveProject.mutate({ id: project.id, expected_version: project.version, name: project.name, description: project.description, target_budget: project.target_budget == null ? null : financeMinorUnitsToMoney(project.target_budget), is_archived: !project.is_archived })}>{project.is_archived ? 'Przywróć' : 'Archiwizuj'}</button>
           {totals && !projectExpenses.length && <button className="button-quiet" type="button" disabled={saveProject.isPending || deleteProject.isPending} onClick={() => deleteProject.mutate(project)}>Usuń pusty projekt</button>}
           {!project.is_archived && <button className="primary-button" type="button" disabled={saveExpense.isPending} onClick={() => { saveExpense.reset(); setSelectedId(project.id); setEditingExpense('new') }}>Dodaj wydatek</button>}
         </div>

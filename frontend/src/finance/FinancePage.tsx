@@ -15,6 +15,7 @@ import { ProjectsPanel } from './ProjectsPanel'
 import { CategoriesPanel } from './CategoriesPanel'
 import { budgetItemTitle } from './categories'
 import { BudgetItemsPanel, type BudgetItemInput } from './BudgetItemsPanel'
+import { createUuid } from '../utils/uuid'
 import type {
   FinanceBudgetLine,
   FinanceCategory,
@@ -188,7 +189,7 @@ export function FinancePage() {
     },
   })
   const createScenario = useMutation({
-    mutationFn: (input: { name: string; description: string | null; sort_order: number }) => api.createScenario(input),
+    mutationFn: (input: { name: string; description: string | null }) => api.createScenario(input),
     onSuccess: async scenario => {
       queryClient.setQueryData<FinanceScenario[]>(['financeScenarios', profile.household_id], current => [...(current ?? []), scenario])
       setSelectedScenarioId(scenario.id)
@@ -255,7 +256,7 @@ export function FinancePage() {
     const inputWithoutRequest = { month_start: nextMonthStart(monthList), source }
     const signature = JSON.stringify(inputWithoutRequest)
     if (createMonthRequest.current?.signature !== signature) {
-      createMonthRequest.current = { signature, request_id: globalThis.crypto.randomUUID() }
+      createMonthRequest.current = { signature, request_id: createUuid() }
     }
     const request = createMonthRequest.current
     if (request) createMonth.mutate({ ...inputWithoutRequest, request_id: request.request_id })
@@ -269,12 +270,12 @@ export function FinancePage() {
 
   function addBudgetItem(input: BudgetItemInput) {
     if (!activeMonth) return Promise.reject(new Error('Wybierz miesiąc budżetu.'))
-    return createBudgetItem.mutateAsync({ ...input, month_id: activeMonth.id, sort_order: budgetItems.data?.length ?? 0 })
+    return createBudgetItem.mutateAsync({ ...input, month_id: activeMonth.id })
   }
 
   function addScenarioItem(input: BudgetItemInput) {
     if (!activeScenario) return Promise.reject(new Error('Wybierz scenariusz.'))
-    return createScenarioItem.mutateAsync({ ...input, scenario_id: activeScenario.id, sort_order: scenarioItems.data?.length ?? 0 })
+    return createScenarioItem.mutateAsync({ ...input, scenario_id: activeScenario.id })
   }
 
   function submitScenario(event: FormEvent<HTMLFormElement>) {
@@ -282,7 +283,6 @@ export function FinancePage() {
     createScenario.mutate({
       name: scenarioName.trim(),
       description: scenarioDescription.trim() || null,
-      sort_order: scenarioList.length,
     })
   }
 
@@ -408,8 +408,7 @@ export function FinancePage() {
           </section>
         </div>
       ) : view === 'savings' ? (
-        savingsView === 'reserves' ? <SavingsPlansPanel mode="reserves" api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} /> : <div className="finance-page-stack">
-          {savingsView === 'planner' && <SavingsPlansPanel mode="planner" api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />}
+        savingsView === 'reserves' ? <SavingsPlansPanel api={api} householdId={profile.household_id} userId={profile.id} /> : <div className="finance-page-stack">
           <SavingsAccountsPanel key={`${profile.household_id}:${profile.id}`} mode={savingsView} api={api} householdId={profile.household_id} userId={profile.id} months={monthList} selectedMonthId={selectedMonthId} onSelectMonth={setSelectedMonthId} />
         </div>
       ) : view === 'categories' ? (

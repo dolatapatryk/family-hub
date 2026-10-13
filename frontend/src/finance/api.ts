@@ -16,15 +16,11 @@ import type {
   FinanceMoney,
   FinanceMutationConflict,
   FinanceSavingsAccount,
-  FinancePlannedSavingsTransaction,
   FinanceSavingsTransferRecord,
   FinanceSavingsTransaction,
   FinanceSaveSavingsAccountInput,
   FinanceSaveSavingsTransactionInput,
   FinanceDeleteSavingsTransactionInput,
-  FinanceSaveSavingsDraftInput,
-  FinanceDeleteSavingsDraftInput,
-  FinanceSavingsDraftAcceptanceResult,
   FinanceScenario,
   FinanceScenarioItem,
   FinanceTransferInput,
@@ -39,7 +35,6 @@ import type {
   FinanceSaveProjectExpenseInput,
   FinanceDeleteRecordInput,
   FinanceRecordMutationInput,
-  FinanceLoadSavingsPlanResult,
 } from './types'
 
 type FinanceBudgetItemRow = Omit<FinanceBudgetItem, 'amount'> & { amount_minor: string }
@@ -57,24 +52,22 @@ type FinanceTransferMovementRow = {
   description: string | null
 }
 type FinanceSavingsTransactionRow = Omit<FinanceSavingsTransaction, 'amount'> & { amount_minor: string }
-type FinanceSavingsDraftRow = Omit<FinancePlannedSavingsTransaction, 'amount'> & { amount_minor: string }
 
-const savingsAccountColumns = 'id, household_id, created_by, created_at, updated_at, version, name, account_type, parent_id, opening_balance_minor:opening_balance::text, target_amount_minor:target_amount::text, color, is_archived, visibility, owner_user_id, sort_order'
+const savingsAccountColumns = 'id, household_id, created_by, created_at, updated_at, version, name, account_type, parent_id, opening_balance_minor:opening_balance::text, target_amount_minor:target_amount::text, is_archived, visibility, owner_user_id'
 const savingsTransferColumns = 'id, household_id, created_by, created_at, updated_at, version'
-const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, budget_month_id, excluded_from_monthly_savings, transfer_id, source_planned_transaction_id'
-const savingsDraftColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, account_id, amount_minor:amount::text, description, source_savings_plan_id'
+const savingsTransactionColumns = 'id, household_id, created_by, created_at, updated_at, version, account_id, transaction_date, amount_minor:amount::text, description, excluded_from_monthly_savings, transfer_id'
 const financePageSize = 500
 const commonColumns = 'id, household_id, created_by, created_at, updated_at, version'
-const savingsPlanColumns = `${commonColumns}, name, plan_type, account_id, monthly_amount_minor:monthly_amount::text, annual_amount_override_minor:annual_amount_override::text, visibility, owner_user_id, sort_order`
-const reserveColumns = `${commonColumns}, name, annual_amount_minor:annual_amount::text, sort_order`
-const projectColumns = `${commonColumns}, name, description, target_budget_minor:target_budget::text, is_archived, sort_order`
-const projectExpenseColumns = `${commonColumns}, project_id, expense_date, name, amount_minor:amount::text, notes, sort_order`
+const savingsPlanColumns = `${commonColumns}, name, plan_type, account_id, monthly_amount_minor:monthly_amount::text, annual_amount_override_minor:annual_amount_override::text, visibility, owner_user_id`
+const reserveColumns = `${commonColumns}, name, annual_amount_minor:annual_amount::text`
+const projectColumns = `${commonColumns}, name, description, target_budget_minor:target_budget::text, is_archived`
+const projectExpenseColumns = `${commonColumns}, project_id, expense_date, name, amount_minor:amount::text, notes`
 
-const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
-const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, allocation_role, parent_id, color, sort_order'
-const scenarioColumns = 'id, household_id, created_by, created_at, updated_at, version, name, description, sort_order'
-const budgetItemColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes, sort_order'
-const scenarioItemColumns = 'id, household_id, created_by, created_at, updated_at, version, scenario_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes, sort_order'
+const monthColumns = 'id, household_id, created_by, created_at, updated_at, month_start, display_name'
+const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, allocation_role, parent_id, color'
+const scenarioColumns = 'id, household_id, created_by, created_at, updated_at, version, name, description'
+const budgetItemColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes'
+const scenarioItemColumns = 'id, household_id, created_by, created_at, updated_at, version, scenario_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
   if (!client) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
@@ -194,17 +187,11 @@ function toSavingsTransaction(row: FinanceSavingsTransactionRow): FinanceSavings
   return { ...transaction, amount: amount_minor }
 }
 
-function toSavingsDraft(row: FinanceSavingsDraftRow): FinancePlannedSavingsTransaction {
-  const { amount_minor, ...draft } = row
-  return { ...draft, amount: amount_minor }
-}
-
 interface CreateBudgetItemInput {
   month_id: FinanceId
   category_id: FinanceId
   name: string
   amount: FinanceMoney
-  sort_order: number
 }
 
 interface CreateScenarioItemInput {
@@ -212,7 +199,6 @@ interface CreateScenarioItemInput {
   category_id: FinanceId
   name: string
   amount: FinanceMoney
-  sort_order: number
 }
 
 interface UpdateFinanceItemInput {
@@ -231,7 +217,7 @@ export function createFinanceApi(
   async function listManagedRecords<T>(table: string, columns: string, signal?: AbortSignal): Promise<T[]> {
     return readAllPages<T>((from, to) => {
       let query = requireSupabase(client).from(table).select(columns).eq('household_id', householdId)
-        .order('sort_order', { ascending: true }).order('id', { ascending: true }).range(from, to)
+        .order('created_at', { ascending: true }).order('id', { ascending: true }).range(from, to)
       if (signal) query = query.abortSignal(signal)
       return query as unknown as PromiseLike<{ data: T[] | null; error: { message: string } | null }>
     })
@@ -275,29 +261,24 @@ export function createFinanceApi(
     return mutateManagedRecord(input, { name: input.name.trim(), plan_type: input.plan_type, account_id: input.account_id,
       monthly_amount_minor: moneyToFinanceMinorUnits(input.monthly_amount),
       annual_amount_override_minor: input.annual_amount_override == null ? null : moneyToFinanceMinorUnits(input.annual_amount_override),
-      visibility: input.visibility, sort_order: input.sort_order }, 'plan')
+      visibility: input.visibility }, 'plan')
   }
   function deleteSavingsPlan(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'plan') }
   function saveIrregularReserve(input: FinanceSaveIrregularReserveInput) {
-    return mutateManagedRecord(input, { name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.annual_amount), sort_order: input.sort_order }, 'reserve')
+    return mutateManagedRecord(input, { name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.annual_amount) }, 'reserve')
   }
   function deleteIrregularReserve(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'reserve') }
   function saveProject(input: FinanceSaveProjectInput) {
     return mutateManagedRecord(input, { name: input.name.trim(), description: input.description,
       target_budget_minor: input.target_budget == null ? null : moneyToFinanceMinorUnits(input.target_budget),
-      is_archived: input.is_archived, sort_order: input.sort_order }, 'project')
+      is_archived: input.is_archived }, 'project')
   }
   function deleteProject(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'project') }
   function saveProjectExpense(input: FinanceSaveProjectExpenseInput) {
     return mutateManagedRecord(input, { project_id: input.project_id, expense_date: input.expense_date,
-      name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.amount), notes: input.notes, sort_order: input.sort_order }, 'expense')
+      name: input.name.trim(), amount_minor: moneyToFinanceMinorUnits(input.amount), notes: input.notes }, 'expense')
   }
   function deleteProjectExpense(input: FinanceDeleteRecordInput) { return mutateManagedRecord(input, null, 'expense') }
-  function loadSavingsPlans(input: { request_id: FinanceId; month_id: FinanceId }): Promise<FinanceLoadSavingsPlanResult> {
-    return resolve<FinanceLoadSavingsPlanResult>(() => requireSupabase(client).rpc('finance_load_savings_plan', {
-      p_household_id: householdId, p_request_id: input.request_id, p_month_id: input.month_id,
-    }))
-  }
   async function listMonths(signal?: AbortSignal): Promise<FinanceMonth[]> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceMonth[]>(() => {
@@ -317,8 +298,8 @@ export function createFinanceApi(
       let query = supabaseClient.from('finance_categories')
         .select(categoryColumns)
         .eq('household_id', householdId)
-        .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
+        .order('id', { ascending: true })
       if (signal) query = query.abortSignal(signal)
       return query
     })
@@ -337,7 +318,7 @@ export function createFinanceApi(
     if (!section) throw new Error('Wybierz prawidłową sekcję budżetu.')
     return resolve<FinanceCategory>(() => requireSupabase(client).from('finance_categories')
       .insert({ household_id: householdId, created_by: userId, name,
-        budget_type: section.budget_type, allocation_role: section.allocation_role, sort_order: input.sort_order })
+        budget_type: section.budget_type, allocation_role: section.allocation_role })
       .select(categoryColumns)
       .single())
   }
@@ -382,7 +363,6 @@ export function createFinanceApi(
         .select(budgetItemColumns)
         .eq('household_id', householdId)
         .eq('month_id', monthId)
-        .order('sort_order', { ascending: true })
         .order('id', { ascending: true })
       if (signal) query = query.abortSignal(signal)
       return query as unknown as PromiseLike<{ data: FinanceBudgetItemRow[] | null; error: { message: string } | null }>
@@ -396,7 +376,6 @@ export function createFinanceApi(
       let query = supabaseClient.from('finance_savings_accounts')
         .select(savingsAccountColumns)
         .eq('household_id', householdId)
-        .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to)
@@ -419,22 +398,6 @@ export function createFinanceApi(
       return query as unknown as PromiseLike<{ data: FinanceSavingsTransactionRow[] | null; error: { message: string } | null }>
     })
     return rows.map(toSavingsTransaction)
-  }
-
-  async function listSavingsDrafts(monthId: FinanceId, signal?: AbortSignal): Promise<FinancePlannedSavingsTransaction[]> {
-    const supabaseClient = requireSupabase(client)
-    const rows = await readAllPages<FinanceSavingsDraftRow>((from, to) => {
-      let query = supabaseClient.from('finance_planned_savings_transactions')
-        .select(savingsDraftColumns)
-        .eq('household_id', householdId)
-        .eq('month_id', monthId)
-        .order('created_at', { ascending: true })
-        .order('id', { ascending: true })
-        .range(from, to)
-      if (signal) query = query.abortSignal(signal)
-      return query as unknown as PromiseLike<{ data: FinanceSavingsDraftRow[] | null; error: { message: string } | null }>
-    })
-    return rows.map(toSavingsDraft)
   }
 
   async function listSavingsTransfers(signal?: AbortSignal): Promise<FinanceSavingsTransferRecord[]> {
@@ -494,8 +457,8 @@ export function createFinanceApi(
       let query = supabaseClient.from('finance_scenarios')
         .select(scenarioColumns)
         .eq('household_id', householdId)
-        .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
+        .order('id', { ascending: true })
       if (signal) query = query.abortSignal(signal)
       return query
     })
@@ -508,7 +471,6 @@ export function createFinanceApi(
         .select(scenarioItemColumns)
         .eq('household_id', householdId)
         .eq('scenario_id', scenarioId)
-        .order('sort_order', { ascending: true })
         .order('id', { ascending: true })
       if (signal) query = query.abortSignal(signal)
       return query as unknown as PromiseLike<{ data: FinanceScenarioItemRow[] | null; error: { message: string } | null }>
@@ -618,9 +580,7 @@ export function createFinanceApi(
       p_target_amount_minor: input.target_amount == null
         ? null
         : moneyToFinanceMinorUnits(input.target_amount),
-      p_color: input.color,
       p_visibility: input.visibility,
-      p_sort_order: input.sort_order,
     }) as unknown as PromiseLike<{ data: {
       account_id: FinanceId
       version?: number
@@ -651,7 +611,6 @@ export function createFinanceApi(
       p_transaction_date: input.transaction_date,
       p_amount_minor: moneyToFinanceMinorUnits(input.amount),
       p_description: input.description?.trim() || null,
-      p_budget_month_id: input.budget_month_id,
       p_excluded_from_monthly_savings: input.excluded_from_monthly_savings,
     }) as unknown as PromiseLike<{ data: {
       transaction_id: FinanceId
@@ -688,78 +647,7 @@ export function createFinanceApi(
     }
   }
 
-  async function saveSavingsDraft(input: FinanceSaveSavingsDraftInput): Promise<void> {
-    const supabaseClient = requireSupabase(client)
-    const response = await resolve<{
-      draft_id: FinanceId
-      month_id?: FinanceId
-      account_id?: FinanceId
-      version?: number
-      conflict?: true
-      current_version?: number
-    }>(() => supabaseClient.rpc('finance_save_draft', {
-      p_household_id: householdId,
-      p_request_id: input.request_id,
-      p_draft_id: input.draft_id ?? null,
-      p_expected_version: input.expected_version ?? null,
-      p_month_id: input.month_id,
-      p_account_id: input.account_id,
-      p_amount_minor: moneyToFinanceMinorUnits(input.amount),
-      p_description: input.description?.trim() || null,
-      p_source_savings_plan_id: input.source_savings_plan_id ?? null,
-    }) as unknown as PromiseLike<{ data: {
-      draft_id: FinanceId
-      month_id?: FinanceId
-      account_id?: FinanceId
-      version?: number
-      conflict?: true
-      current_version?: number
-    } | null; error: { message: string } | null }>)
-    if (response.conflict) {
-      throw new FinanceVersionConflictError(
-        input.expected_version ?? 0,
-        response.current_version == null ? null : Number(response.current_version),
-      )
-    }
-  }
-
-  async function deleteSavingsDraft(input: FinanceDeleteSavingsDraftInput): Promise<void> {
-    const supabaseClient = requireSupabase(client)
-    const response = await resolve<{
-      deleted: true
-      draft_id: FinanceId
-      account_id: FinanceId
-    } | { conflict: true; draft_id: FinanceId; current_version: number }>(() => supabaseClient.rpc('finance_delete_draft', {
-      p_household_id: householdId,
-      p_request_id: input.request_id,
-      p_draft_id: input.draft_id,
-      p_expected_version: input.expected_version,
-    }) as unknown as PromiseLike<{ data: {
-      deleted: true
-      draft_id: FinanceId
-      account_id: FinanceId
-    } | { conflict: true; draft_id: FinanceId; current_version: number } | null; error: { message: string } | null }>)
-    if ('conflict' in response) {
-      throw new FinanceVersionConflictError(input.expected_version, Number(response.current_version))
-    }
-  }
-
-  async function acceptSavingsDrafts(input: {
-    request_id: FinanceId
-    month_id: FinanceId
-  }): Promise<FinanceSavingsDraftAcceptanceResult> {
-    const supabaseClient = requireSupabase(client)
-    return resolve<FinanceSavingsDraftAcceptanceResult>(() => supabaseClient.rpc('finance_accept_savings_plan', {
-      p_household_id: householdId,
-      p_request_id: input.request_id,
-      p_month_id: input.month_id,
-    }) as unknown as PromiseLike<{
-      data: FinanceSavingsDraftAcceptanceResult | null
-      error: { message: string } | null
-    }>)
-  }
-
-  async function createScenario(input: { name: string; description: string | null; sort_order: number }): Promise<FinanceScenario> {
+  async function createScenario(input: { name: string; description: string | null }): Promise<FinanceScenario> {
     const supabaseClient = requireSupabase(client)
     return resolve<FinanceScenario>(() => supabaseClient.from('finance_scenarios')
       .insert({ household_id: householdId, created_by: userId, ...input })
@@ -780,7 +668,6 @@ export function createFinanceApi(
         is_planned: false,
         is_recurring: false,
         notes: null,
-        sort_order: input.sort_order,
       })
       .select(budgetItemColumns)
       .single() as unknown as PromiseLike<{ data: FinanceBudgetItemRow | null; error: { message: string } | null }>)
@@ -800,7 +687,6 @@ export function createFinanceApi(
         is_planned: true,
         is_recurring: false,
         notes: null,
-        sort_order: input.sort_order,
       })
       .select(scenarioItemColumns)
       .single() as unknown as PromiseLike<{ data: FinanceScenarioItemRow | null; error: { message: string } | null }>)
@@ -856,7 +742,7 @@ export function createFinanceApi(
   return {
     listSavingsPlans, listIrregularReserves, listProjects, listProjectExpenses,
     saveSavingsPlan, deleteSavingsPlan, saveIrregularReserve, deleteIrregularReserve,
-    saveProject, deleteProject, saveProjectExpense, deleteProjectExpense, loadSavingsPlans,
+    saveProject, deleteProject, saveProjectExpense, deleteProjectExpense,
     listMonths,
     listCategories,
     createCategory,
@@ -865,7 +751,6 @@ export function createFinanceApi(
     listBudgetItems,
     listSavingsAccounts,
     listSavingsTransactions,
-    listSavingsDrafts,
     listSavingsTransfers,
     listScenarios,
     listScenarioItems,
@@ -877,9 +762,6 @@ export function createFinanceApi(
     applyAccountLifecycle,
     saveSavingsTransaction,
     deleteSavingsTransaction,
-    saveSavingsDraft,
-    deleteSavingsDraft,
-    acceptSavingsDrafts,
     createScenario,
     createBudgetItem,
     createScenarioItem,

@@ -17,16 +17,11 @@ interface BillRow {
 interface BillPaymentRow {
   id: string
   due_on: string
-  paid_on: string
-  amount_minor: number | string
-  currency: string
+  status: 'paid' | 'skipped'
+  paid_on: string | null
+  amount_minor: number | string | null
+  currency: string | null
   created_at: string
-}
-
-interface BillSkipRow {
-  id: string
-  due_on: string
-  skipped_at: string
 }
 
 export interface SaveBillInput {
@@ -39,8 +34,7 @@ export interface SaveBillInput {
 }
 
 const billColumns = 'id, title, due_day, interval_months, next_due_on, expected_amount_minor, currency, active, created_at'
-const billPaymentColumns = 'id, due_on, paid_on, amount_minor, currency, created_at'
-const billSkipColumns = 'id, due_on, skipped_at'
+const billPaymentColumns = 'id, due_on, status, paid_on, amount_minor, currency, created_at'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
   if (!client) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
@@ -61,7 +55,18 @@ function toBill(row: BillRow): Bill {
   }
 }
 
-function toBillPayment(row: BillPaymentRow): BillHistoryEntry {
+function toBillHistoryEntry(row: BillPaymentRow): BillHistoryEntry {
+  if (row.status === 'skipped') {
+    return {
+      id: row.id,
+      dueOn: row.due_on,
+      kind: 'skipped',
+      skippedAt: row.created_at,
+    }
+  }
+  if (row.paid_on === null || row.amount_minor === null || row.currency === null) {
+    throw new Error('Family Hub returned an invalid paid bill entry.')
+  }
   return {
     id: row.id,
     dueOn: row.due_on,
@@ -70,15 +75,6 @@ function toBillPayment(row: BillPaymentRow): BillHistoryEntry {
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
     recordedAt: row.created_at,
-  }
-}
-
-function toBillSkip(row: BillSkipRow): BillHistoryEntry {
-  return {
-    id: row.id,
-    dueOn: row.due_on,
-    kind: 'skipped',
-    skippedAt: row.skipped_at,
   }
 }
 
@@ -106,29 +102,15 @@ export function createBillsApi(householdId: string, client: SupabaseClient | nul
 
   async function listHistory(billId: string, signal?: AbortSignal): Promise<BillHistoryEntry[]> {
     const supabaseClient = requireSupabase(client)
-    let paymentQuery = supabaseClient
+    let query = supabaseClient
       .from('bill_payments')
       .select(billPaymentColumns)
       .eq('household_id', householdId)
       .eq('bill_id', billId)
       .order('due_on', { ascending: false })
-      .order('paid_on', { ascending: false })
-    let skipQuery = supabaseClient
-      .from('bill_skips')
-      .select(billSkipColumns)
-      .eq('household_id', householdId)
-      .eq('bill_id', billId)
-      .order('due_on', { ascending: false })
-    if (signal) {
-      paymentQuery = paymentQuery.abortSignal(signal)
-      skipQuery = skipQuery.abortSignal(signal)
-    }
-    const [payments, skips] = await Promise.all([
-      resolve<BillPaymentRow[]>(paymentQuery),
-      resolve<BillSkipRow[]>(skipQuery),
-    ])
-    return [...payments.map(toBillPayment), ...skips.map(toBillSkip)]
-      .sort((a, b) => b.dueOn.localeCompare(a.dueOn))
+      .order('created_at', { ascending: false })
+    if (signal) query = query.abortSignal(signal)
+    return (await resolve<BillPaymentRow[]>(query)).map(toBillHistoryEntry)
   }
 
   async function create(input: SaveBillInput): Promise<string> {

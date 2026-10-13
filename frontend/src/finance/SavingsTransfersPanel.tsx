@@ -4,6 +4,7 @@ import { canTransferBetweenSavingsAccounts } from './privacy'
 import { getActiveSavingsAccounts } from './calculations'
 import { FinanceVersionConflictError, createFinanceApi } from './api'
 import { financeMinorUnitsToMoney, formatPln } from './money'
+import { createUuid } from '../utils/uuid'
 import type { FinanceSavingsTransferRecord } from './types'
 
 function localDateToday() {
@@ -92,7 +93,7 @@ export function SavingsTransfersPanel({
       let request = createRequests.current.get(signature)
       if (!request) {
         request = {
-          requestId: globalThis.crypto.randomUUID(),
+          requestId: createUuid(),
           fromExpectedVersion: selectedFromAccount.version,
           toExpectedVersion: selectedToAccount.version,
         }
@@ -134,7 +135,7 @@ export function SavingsTransfersPanel({
       const requestKey = `${transfer.id}:${transfer.version}`
       let requestId = deleteRequests.current.get(requestKey)
       if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
+        requestId = createUuid()
         deleteRequests.current.set(requestKey, requestId)
       }
       await api.deleteSavingsTransfer({

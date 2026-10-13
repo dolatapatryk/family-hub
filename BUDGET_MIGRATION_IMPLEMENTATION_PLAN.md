@@ -1,6 +1,6 @@
 # Home Budget → Family Hub: schema and implementation plan
 
-Prepared: 2026-10-10. Updated: 2026-10-12. Finance contracts, schema,
+Prepared: 2026-10-10. Updated: 2026-10-13. Finance contracts, schema,
 integrity, grants, RLS and the budget/savings/project flows are implemented.
 The local database contains the Finance migrations through
 `20261012220000_finance_category_sections.sql`. Categories now select all six
@@ -14,6 +14,17 @@ also verified preservation of historical identities, attribution, amounts,
 notes, flags and sections. Import, export/restore and production cutover remain
 outside this work. Amounts are stored as bounded bigint minor units.
 
+The 2026-10-13 schema simplification is in
+`supabase/migrations/20261013170000_simplify_finance_history.sql`; it is source
+only until applied. It merges skipped bill cycles into `bill_payments`, removes
+database-backed monthly savings drafts and their provenance, removes
+`sort_order` and savings-account `color`, removes `finance_months.version`, and
+reworks the local importer's source map so it no longer needs
+`private.finance_import_runs`. The monthly savings plan is UI state, optionally
+saved in `localStorage` per household/user/month; acceptance posts normal
+transactions dated at the start of that month. Account balances come from
+transaction history.
+
 ## Historical in-app work (2026-10-11)
 
 Continue from `27b55dd` in Family Hub only. Home Budget is unchanged. Data
@@ -26,18 +37,16 @@ Database tests are intentionally unrun, and database migrations are not applied.
   exact active-tree balance correction without savings income; owner-only root
   visibility changes propagating to linked plans; external-transfer blockers.
 - [x] Lifecycle preview tokens detect changes to accounts, ancestors, movements,
-  drafts, and linked plans; apply uses the household lock, optimistic versions,
+  and linked plans; apply uses the household lock, optimistic versions,
   and idempotent receipts. Frontend tests/build pass. pgTAP source added, unrun.
 - [x] Savings plan and shared irregular reserve management: versioned/idempotent
-  CRUD, inherited linked-account audience/type, owner-controlled link/scope
-  changes, and pending-draft blockers. Atomic selected-month loading skips
-  irregular, unlinked, zero, archived, and already-planned accounts; private
-  durable markers prevent regenerating a loaded plan/account after acceptance
-  or deletion of its draft. Loading never creates budget rows or movements.
+  template CRUD, inherited linked-account audience/type, and owner-controlled
+  link/scope changes. Month-specific plans are assembled in the UI; no monthly
+  plan rows or load markers are written to the database.
 - [x] Actual savings summaries: separate household and viewer-private active
   balances (each account once), balances by type, selected-month positive
   nonexcluded actual deposits, and monthly history including archived accounts.
-  Transfers, drafts, balance corrections, and withdrawals do not add deposits.
+  Transfers, balance corrections, and withdrawals do not add deposits.
 - [x] Shared projects and expenses: versioned/idempotent create/edit/delete,
   project archive/restore, preserved optional dates, signed refunds, target/spent/
   remaining totals. Projects with expenses must be archived rather than deleted;
@@ -160,11 +169,11 @@ must still belong to that household to access their private account.
 | Data | Read/change rights |
 | --- | --- |
 | Months, budget items, categories, scenarios, projects, project expenses, irregular-expense reserves | Household members |
-| Shared savings account and its transactions/drafts | Household members |
-| Private savings account and its transactions/drafts | Account owner only |
+| Shared savings account and its transactions | Household members |
+| Private savings account and its transactions | Account owner only |
 | Savings plan bound to an account | Same audience as that account |
 | Unbound savings plan | Its own declared household/private audience |
-| Import receipt and detailed validation report | Importing member only |
+| Import source-ID map | Private schema; used by the local repair importer |
 | Selected month and display filters | Per user/device UI state |
 
 Proposed first-release boundaries:
@@ -178,7 +187,7 @@ Proposed first-release boundaries:
    owners' private accounts. A shared transfer history would otherwise disclose
    details of a private account. Mixed-scope accounting needs a separate design.
 3. Only the designated owner may change an account tree's visibility. The action affects
-   existing history, goals, drafts, and linked plans, and must clearly explain
+   existing history and linked plans, and must clearly explain
    that consequence. Restrict a visibility change if any existing transfer
    connects outside the subtree; report the dependency instead of silently
    exposing data or making transfer history inconsistent.
@@ -200,20 +209,22 @@ are separate future features.
 ## 3. Proposed relational schema
 
 Use the `finance_` prefix in `public` for the browser-facing domain tables.
-Keep migration metadata and internal mutation receipts in `private`.
-The original proposal has **13 domain tables**, plus **3 internal support tables**.
-The in-app plan loader also adds `private.finance_savings_plan_month_loads`,
-a server-only durable marker keyed by household/month/plan. It retains the
-generated draft/account IDs after draft acceptance or deletion and blocks
-another generated allocation to the same account in that month.
-No separate family/household table or generic JSON state table is needed.
+Keep the source-ID repair map and internal mutation receipts in `private`.
+The current schema has **12 finance domain tables** and **2 internal support
+tables**. `finance_savings_plans` stores reusable templates. Month-specific
+savings plans live in the UI and may use `localStorage` keyed by household,
+user, and month. Accepting a plan writes ordinary dated transactions; account
+balances come from opening balances and transaction history. There are no
+persistent monthly draft tables or load markers.
 
 ### Common conventions
 
-- Domain rows: `id uuid primary key default gen_random_uuid()`,
+- Most editable domain rows: `id uuid primary key default gen_random_uuid()`,
   `household_id uuid not null`, `created_by uuid not null`,
   `created_at timestamptz not null`, `updated_at timestamptz not null`,
-  `version bigint not null default 1`.
+  and a `version bigint not null default 1` where edits use optimistic
+  concurrency. `finance_months` has no version because it is not edited through
+  a version-checked mutation.
 - Reference household to `households`; reference creator to `auth.users`.
   Make identity/household/creator/creation time immutable after insertion.
   The database controls update time and increments versions.
@@ -245,10 +256,10 @@ No separate family/household table or generic JSON state table is needed.
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
 | `finance_months` | `month_start date`, `display_name text null` | First day of month; unique `(household_id, month_start)`. Derive year/month/localized label; preserve a legacy custom label when necessary. |
-| `finance_categories` | `name text`, `budget_type text`, `allocation_role text`, `parent_id uuid null`, `color text null`, `sort_order integer` | The type and role select one of six UI sections. `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
-| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Category determines the item's section and allocation role; personal allowances use a saving category. `name` is an optional description, stored as an empty string when absent. Month/category composite FKs. |
-| `finance_scenarios` | `name text`, `description text null`, `sort_order integer` | Scenario definition; separate from real months. |
-| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Category determines the item's section and allocation role; scenario/category composite FKs. |
+| `finance_categories` | `name text`, `budget_type text`, `allocation_role text`, `parent_id uuid null`, `color text null` | The type and role select one of six UI sections. `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
+| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null` | Category determines the item's section and allocation role; personal allowances use a saving category. `name` is an optional description, stored as an empty string when absent. Month/category composite FKs. |
+| `finance_scenarios` | `name text`, `description text null` | Scenario definition; separate from real months. |
+| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null` | Category determines the item's section and allocation role; scenario/category composite FKs. |
 
 For normalization, store the most specific category on each item. If the source
 has `subcategoryId`, use it after proving it belongs under `categoryId`.
@@ -273,12 +284,11 @@ legacy categories while preserving historical amounts and sections.
 
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
-| `finance_savings_accounts` | `name text`, `account_type text`, `parent_id uuid null`, `opening_balance bigint (minor units)`, `target_amount bigint (minor units) null`, `color text null`, `is_archived boolean`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type `cash`, `goal`, `investment`, `retirement`; visibility `household`/`private`. Owner controls sharing. Parent composite FK; tree privacy/owner consistency and no cycles. |
+| `finance_savings_accounts` | `name text`, `account_type text`, `parent_id uuid null`, `opening_balance bigint (minor units)`, `target_amount bigint (minor units) null`, `is_archived boolean`, `visibility text`, `owner_user_id uuid` | Type `cash`, `goal`, `investment`, `retirement`; visibility `household`/`private`. Owner controls sharing. Parent composite FK; tree privacy/owner consistency and no cycles. Accounts retain `version` for conflict detection. |
 | `finance_savings_transfers` | No extra financial values; common identity/audit columns group two transaction legs | Transfer header gives paired legs one lifecycle. Derive endpoints, amount, and date from legs instead of duplicating them here. Access requires both legs to be accessible. |
-| `finance_savings_transactions` | `account_id uuid`, `transaction_date date`, `amount bigint (minor units)`, `description text null`, `budget_month_id uuid null`, `excluded_from_monthly_savings boolean`, `transfer_id uuid null`, `source_planned_transaction_id uuid null` | Signed delta; account/month/transfer composite FKs. Unique non-null `source_planned_transaction_id` prevents posting a draft twice. Ordinary zero deltas allowed for legacy parity. |
-| `finance_planned_savings_transactions` | `month_id uuid`, `account_id uuid`, `amount bigint (minor units)`, `description text null`, `source_savings_plan_id uuid null` | Unposted drafts only. Composite month/account/plan FKs. Optional partial unique `(household_id, month_id, account_id, source_savings_plan_id)` for plan-generated drafts. |
-| `finance_savings_plans` | `name text`, `plan_type text`, `account_id uuid null`, `monthly_amount bigint (minor units)`, `annual_amount_override bigint (minor units) null`, `visibility text`, `owner_user_id uuid`, `sort_order integer` | Type also allows `irregular`; explicit account link replaces fuzzy matching. Linked plan must have the account's visibility and owner. Unbound plan starts owned by its creator. |
-| `finance_irregular_expense_plans` | `name text`, `annual_amount bigint (minor units)`, `sort_order integer` | Shared annual reserve definitions; monthly requirement is derived as annual amount / 12 using integer arithmetic and an explicit rounding rule. |
+| `finance_savings_transactions` | `account_id uuid`, `transaction_date date`, `amount bigint (minor units)`, `description text null`, `excluded_from_monthly_savings boolean`, `transfer_id uuid null` | Signed delta; account/transfer composite FKs. The month is derived from `transaction_date`; ordinary zero deltas remain valid for legacy parity. |
+| `finance_savings_plans` | `name text`, `plan_type text`, `account_id uuid null`, `monthly_amount bigint (minor units)`, `annual_amount_override bigint (minor units) null`, `visibility text`, `owner_user_id uuid` | Reusable template; type also allows `irregular`. Explicit account link replaces fuzzy matching. Linked plan must have the account's visibility and owner. Unbound plan starts owned by its creator. Templates retain `version` for conflict detection. |
+| `finance_irregular_expense_plans` | `name text`, `annual_amount bigint (minor units)` | Shared annual reserve definitions; monthly requirement is derived as annual amount / 12 using integer arithmetic and an explicit rounding rule. |
 
 `owner_user_id` references `auth.users` and is distinct from audit `created_by`.
 The server assigns a new root to the current user and a child/linked plan to the
@@ -290,10 +300,10 @@ If an owner leaves, shared accounts remain available, private accounts become
 inaccessible, and recovery/reassignment requires a separately authorized process.
 Never automatically share private history when an owner leaves.
 
-`source_planned_transaction_id` is retained provenance, not an FK to a draft:
-acceptance removes the draft row. A legacy transaction has null provenance.
-Create only one accepted transaction per draft ID. Account-linked plans may
-explicitly post into an account but remain separate from shared budget lines.
+The planner UI assigns a stable request ID to each local monthly-plan item, so
+an acceptance retry does not duplicate the resulting transaction. Monthly plan
+items are not persisted in finance tables. Account-linked templates can be
+copied into a month's UI plan and remain separate from shared budget lines.
 If an annual savings-plan value equals monthly × 12, derive it; otherwise
 preserve the source's explicit annual value as an override.
 
@@ -308,15 +318,14 @@ so `transferPeerAccountId` is not duplicated in the new model.
 
 | Table | Additional columns | Constraints / purpose |
 | --- | --- | --- |
-| `finance_projects` | `name text`, `description text null`, `target_budget bigint (minor units) null`, `is_archived boolean`, `sort_order integer` | Shared spending project; optional target. |
-| `finance_project_expenses` | `project_id uuid`, `expense_date date null`, `name text`, `amount bigint (minor units)`, `notes text null`, `sort_order integer` | Composite project FK; preserve absent dates instead of inventing them. |
+| `finance_projects` | `name text`, `description text null`, `target_budget bigint (minor units) null`, `is_archived boolean` | Shared spending project; optional target. |
+| `finance_project_expenses` | `project_id uuid`, `expense_date date null`, `name text`, `amount bigint (minor units)`, `notes text null` | Composite project FK; preserve absent dates instead of inventing them. |
 
 ### Internal migration and mutation tables
 
 | Table | Proposed columns / keys |
 | --- | --- |
-| `private.finance_import_runs` | `id`, `household_id`, `imported_by`, `source_namespace`, `source_format_version`, `source_sha256`, `mapping_sha256`, `import_mode`, `counts jsonb`, `completed_at`; unique request fingerprint per household/importer/namespace/mode. Hash the payload and privacy/mapping choices separately. |
-| `private.finance_legacy_id_map` | `household_id`, `source_namespace`, `entity_type`, `legacy_id text`, `target_id uuid`, `import_run_id`; unique source entity key. Include scenario ID in nested scenario-item keys. |
+| `private.finance_legacy_id_map` | `household_id`, `source_namespace`, `entity_type`, `legacy_id text`, `target_id uuid`, `imported_by`, `source_sha256`; unique source entity key. Retained for the repair importer; it no longer depends on a run ledger. |
 | `private.finance_operation_receipts` | `household_id`, `actor_id`, `operation_name`, `request_id uuid`, `request_sha256`, `result jsonb`, `completed_at`; unique `(household_id, actor_id, operation_name, request_id)`. Same key/different arguments is a conflict. |
 
 JSON is appropriate for bounded receipts/reports; it is not the authoritative
@@ -340,11 +349,7 @@ erDiagram
     finance_savings_accounts ||--o{ finance_savings_accounts : parents
     finance_savings_accounts ||--o{ finance_savings_transactions : records
     finance_savings_transfers o|--|{ finance_savings_transactions : pairs
-    finance_months o|--o{ finance_savings_transactions : links
-    finance_savings_accounts ||--o{ finance_planned_savings_transactions : receives
-    finance_months ||--o{ finance_planned_savings_transactions : plans
     finance_savings_accounts o|--o{ finance_savings_plans : targets
-    finance_savings_plans o|--o{ finance_planned_savings_transactions : suggests
     households ||--o{ finance_irregular_expense_plans : defines
     households ||--o{ finance_projects : contains
     finance_projects ||--o{ finance_project_expenses : contains
@@ -358,22 +363,20 @@ two legs; that cardinality requires the constraint trigger described above.
 Index every referencing FK used in reads/deletes. In particular:
 
 - Months: unique `(household_id, month_start)`.
-- Budget/scenario items: `(household_id, month_id/scenario_id, sort_order, id)`;
+- Budget/scenario items: `(household_id, month_id/scenario_id, id)`;
   category references separately.
 - Accounts: `(household_id, visibility, created_by)`,
   `(household_id, parent_id)`; plans: account reference and visibility lookup.
 - Transactions: `(household_id, account_id, transaction_date, id)`,
-  `(household_id, transaction_date)`, transfer/month references, and draft
-  provenance uniqueness.
-- Drafts: `(household_id, month_id, account_id)` and source-plan reference.
+  `(household_id, transaction_date)`, and transfer references.
 - Expenses: `(household_id, project_id, expense_date, id)`.
 
 Use `RESTRICT` for referenced categories and savings accounts; archive accounts
 with history. Allow removing an empty account only after checking descendants,
-plans, drafts, and transfer dependencies. Deleting a transfer header cascades its
+plans, and transfer dependencies. Deleting a transfer header cascades its
 two legs in one transaction. Scenario/project child rows can cascade when their
 parent is explicitly deleted. Do not expose month deletion in the first UI;
-restrict it when linked actual savings exist. Never use an implicit account
+restrict it while budget rows still reference it. Never use an implicit account
 cascade that deletes financial history in another account.
 
 ## 4. RLS, grants, and database operations
@@ -383,7 +386,7 @@ and writes. Inserts require `created_by = auth.uid()`. Updates check both the
 old and new row and cannot move data to another household.
 
 Account policies additionally require `visibility = 'household' OR
-owner_user_id = auth.uid()`. Transactions and drafts inherit account access;
+owner_user_id = auth.uid()`. Transactions inherit account access;
 plans enforce their declared audience and linked-account consistency.
 Transfers are visible only when both account legs are accessible. These
 conditions apply to direct reads, joins, functions, exports, and summaries.
@@ -408,22 +411,19 @@ requires privileges intentionally withheld from direct browser access.
 | Function contract | Required behavior |
 | --- | --- |
 | `finance_create_month` | Create an empty month, copy recurring rows, or copy a scenario in one transaction. Unique target month; if it exists, return it without appending copied rows. Copied rows use fresh IDs and `is_planned = false`. |
-| `finance_save_account` / `finance_save_transaction` / `finance_save_draft` / removal counterparts | Validate current membership and account access; expected-version update; forbid editing transfer legs; reject posting to archived account trees. |
+| `finance_save_account` / `finance_save_transaction` / removal counterparts | Validate current membership and account access; expected-version update; forbid editing transfer legs; reject posting to archived account trees. |
 | `finance_set_account_tree_visibility` | Owner only; update the subtree and linked plans together; refuse transfer dependencies crossing the subtree; do not transfer ownership implicitly. |
 | `finance_transfer_savings` / `finance_delete_transfer` | Validate both endpoints and their privacy scope; create or remove exactly two legs atomically. Creation uses a request ID for retry safety. |
-| `finance_accept_savings_plan` | Accept only drafts accessible to the caller for the month; lock rows, post each valid nonzero draft once, use the month's first date and linked month, remove only accepted drafts, return created IDs and skipped reasons. |
-| `finance_load_savings_plan` | Use explicit accessible plan/account links; skip archived/unmapped/irregular plans; preserve the source's no-extra-plan-for-an-already-planned-account behavior; prevent duplicate generated drafts on retries. |
 | `finance_set_account_display_balance` | Lock the account tree; recalculate opening balance from the requested total minus own transactions and active descendants, preserving current UI semantics without a lost-update race. |
 | `finance_import_legacy_snapshot` | Validate and import the complete reviewed snapshot and ID map in one transaction; membership/access checks; idempotent receipt. |
 | `finance_export_snapshot` | Return a versioned consistent read of shared data plus the caller's private data; never export another member's private accounts or metadata. |
 | `finance_restore_snapshot` | Accept the versioned Family Hub export through the same preview/validation/atomic-commit machinery; require an empty authorized target scope; remap IDs and private ownership; preserve explicit allowance roles and plan links. Do not force a current-format backup through the legacy name-based mapping. |
 
-Acceptance intentionally improves two source edge cases: zero and archived
-drafts remain pending with a reason, rather than being silently removed; one
-member's acceptance never clears another member's private drafts. The
-acceptance result includes reasons for visible zero/archived drafts and states
-that inaccessible drafts remain pending without identifying another member's
-private rows. The planner preview explains this owner-only behavior.
+Month-specific savings plans are assembled in the UI and optionally stored in
+`localStorage`, scoped by household, signed-in user, and month. Acceptance sends
+each item through `finance_save_transaction` with a stable request ID and the
+month's first date. Successful items are removed from local plan state; account
+balances continue to derive from transaction history.
 
 Acquire a transaction-scoped household finance lock in all savings mutation
 functions and import/compound functions, then any needed row locks in consistent
@@ -477,9 +477,8 @@ rejected with a generic conflict, never silently merged or used to replace data.
 
 A later member can use a separate **private-accounts-only import**: skip shared
 months/items/scenarios/projects/reserves, import only reviewed private accounts,
-transactions, drafts, and associated plans owned by that member. Existing linked
-months must be explicitly mapped by date, and missing months/draft dependencies
-must be resolved or omitted in the preview. Never create shared rows implicitly
+transactions, and associated templates owned by that member. Month summaries
+continue to follow each transaction's date. Never create shared rows implicitly
 through this mode. Automatic multi-user merging is outside the first release.
 
 ### Mapping rules
@@ -494,14 +493,14 @@ through this mode. Automatic multi-user merging is outside the first release.
 | Legacy saving rows representing a household member's personal spending allocation | Import into a category with `allocation_role = 'personal_allowance'`; split mixed legacy categories so each item inherits one classification through its category. Preserve distinct labels as optional descriptions. This role is independent from savings-account transfer pairs. |
 | `parentId` | Remap after allocating all IDs; detect dangling parents, self-links, and cycles; enforce privacy consistently per tree. |
 | `initialBalance` | Convert exactly to integer minor units in `opening_balance`; do not create another opening transaction that would count it twice. |
-| Signed transaction amount / date | Convert signed money exactly to integer minor units; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |
+| Signed transaction amount / date | Convert signed money exactly to integer minor units and require a valid date. Monthly savings grouping follows the date. |
 | `transferId`, `transferPeerAccountId` | Validate exactly two reciprocal, equal/opposite legs; create one header and two remapped movements; derive peers thereafter. Broken pairs block import. |
 | `excludedFromMonthlySavings`, `isArchived`, project `archived` | Preserve flags; absent optional booleans become false. Valid transfer legs must be excluded. |
-| Planned savings rows | Import unposted drafts; no new actual transactions. |
+| Planned savings rows | Ignore old `plannedSavingsTransactions` drafts and report a warning; import saved `savingsPlans` as reusable templates. |
 | Savings plan names | Suggest links using legacy normalization; require review for ambiguous/unmatched names; use FKs thereafter. |
 | Savings-plan annual amount | Derive monthly × 12 when equivalent; preserve a differing explicit value as `annual_amount_override`. |
 | Missing optional collections | Use empty collections and report the missing fields; offer deliberate setup separately. Do not silently inject source demo data. |
-| Source timestamps and array order | Preserve existing valid source timestamps where available through the importer; use import time for missing audit dates; retain array order in `sort_order`. |
+| Source timestamps | Preserve valid source timestamps where available through the importer; use import time for missing audit dates. |
 
 Preflight also checks that decimal input money is finite, has at most two
 decimal places, and converts exactly to a bounded integer minor-unit amount;
@@ -567,13 +566,15 @@ change. Scope persisted UI preferences by household and user.
 Show explicit `Household` / `Private` labels on account selectors and summaries.
 Keep household and personal figures separate, and avoid leaking private names
 through search suggestions, validation messages, shared charts, or export reports.
-Financial amounts are never placed in service-worker caches or localStorage.
-The first release follows Family Hub's online-data behavior; show save failures
-and retain unsaved form input until the user retries.
+Financial amounts are never placed in service-worker caches. The month-specific
+savings plan may be stored in `localStorage` under the household/user/month key;
+saved templates and actual balances remain in the database. The first release
+follows Family Hub's online-data behavior; show save failures and retain
+unsaved form input until the user retries.
 
 Invalidate only affected query groups after a successful mutation: a transfer
-affects both accounts and relevant history/balances; acceptance affects drafts,
-transactions, balances, and monthly savings; it does not change budget totals.
+affects both accounts and relevant history/balances; monthly-plan acceptance
+affects transactions, balances, and monthly savings; it does not change budget totals.
 Visibility changes require fresh reads for all affected savings queries. Start
 with refetch on navigation/window focus; do not introduce Realtime subscriptions
 or an offline mutation queue until those are explicitly needed.
@@ -588,10 +589,10 @@ demo/reset functions confined to a clearly separate demo environment.
 | --- | --- | --- |
 | 1. Freeze behavior and contracts | Source-derived fixtures, money representation, privacy rules, row/API types, schema review | Monthly summary, account/tree balance, date grouping, archive inheritance, allowances, and standalone project semantics have parity expectations. Intended acceptance/privacy changes are documented. |
 | 2. Database foundation | New migrations for the 13 domain tables, internal tables, composite FKs, indexes, triggers, grants, RLS | Fresh local DB applies all migrations; same-household shared access and private isolation pass pgTAP, including direct REST-style access. |
-| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, acceptance, copy month, archive/balance correction, and sharing transitions are atomic; unauthorized calls fail; retry/concurrency checks pass. **Source progress:** account/movement/draft writes; transfers; draft acceptance with preview/results; lifecycle preview/apply with dependency snapshots; plan management/loading with durable monthly markers; shared reserve/project mutations; and audience-separated client summaries are implemented. Frontend verification passes; pgTAP/runtime verification remains unrun. Export is outside the current scope. |
+| 3. Mutation/read contracts | Savings and compound RPCs; optimistic versions; idempotent receipts; summaries/export | Transfer, monthly-plan posting, copy month, archive/balance correction, and sharing transitions are safe under retry and concurrency; unauthorized calls fail. **Source progress:** account/movement writes; transfers; UI-local monthly planning that posts dated transactions; lifecycle preview/apply with dependency snapshots; saved template management; shared reserve/project mutations; and audience-separated client summaries are implemented. |
 | 4. Importer | Validator, ID mapping, preview/privacy choices, atomic import, reconciliation receipt | Representative snapshots import with matching counts/totals; bad references or transfer pairs cause no writes; identical retry does not duplicate rows. |
 | 5. Budget vertical slice | Finance layout/routes, month setup, dashboard, budget editing and recurring copy | Household members can use a fresh shared budget and an imported budget; stale edit shows a conflict; empty state works. |
-| 6. Savings vertical slice | Account/goal trees, privacy labels, transactions, transfers, drafts, plans/reserves, archive/restore | **Source implemented:** account trees/lifecycle, movements, transfers, drafts/acceptance, plans/reserves, and separate household/personal summaries. Owner/member/outsider pgTAP source is present; runtime verification remains pending. |
+| 6. Savings vertical slice | Account/goal trees, privacy labels, transactions, transfers, monthly plans, templates/reserves, archive/restore | **Source implemented:** account trees/lifecycle, movements, transfers, UI-local monthly planning, saved templates/reserves, and separate household/personal summaries. |
 | 7. Remaining parity | Scenarios, project expense pages, accessible export/restore | **In-app source implemented:** scenarios/month creation and shared project/expense management with independent totals. Export/restore is excluded from the current work and remains future migration scope. |
 | 8. Household cutover | Staging rehearsal, final export, import/reconciliation, desktop/mobile review, target deployment | Two members complete end-to-end flows; outsider cannot read data; final authoritative snapshot reconciles; old app is retained read-only for rollback. |
 
@@ -631,9 +632,9 @@ Meaningful automated coverage:
   visibility propagation, external-transfer blockers, and balance corrections.
 - Two-leg transfer invariant, no partial writes, deletion of both legs, and
   retry with the same request ID. Verify a transfer cannot inflate monthly saving.
-- Two concurrent acceptance requests cannot post one draft twice; later replay
-  does not accept newly added drafts. Archived/zero/inaccessible drafts remain
-  untouched; a concurrent draft edit either wins before acceptance or conflicts.
+- Retrying acceptance for the same local monthly-plan item does not duplicate
+  its savings transaction. Monthly plan state is scoped by household, user, and
+  month; accepted items are removed while unaccepted items remain editable.
 - Next-month copy includes recurring rows only, preserves category/allowance,
   resets `is_planned`, handles December, and never appends to an existing month.
 - Legacy mapping of arbitrary IDs/nested scenarios, missing collections, bad

@@ -5,7 +5,6 @@ import {
   calculateSavingsBalance,
   isSavingsAccountArchived,
   getActiveSavingsAccounts,
-  previewSavingsDraftAcceptance,
 } from './calculations'
 import { FinanceVersionConflictError, createFinanceApi } from './api'
 import { FinanceSummariesPanel } from './FinanceSummariesPanel'
@@ -13,12 +12,12 @@ import { FinanceKpis } from './FinanceCharts'
 import { SavingsTransfersPanel } from './SavingsTransfersPanel'
 import { SavingsAccountLifecycle } from './SavingsAccountLifecycle'
 import { financeMinorUnitsToMoney, formatPln, moneyToFinanceMinorUnits, moneyRatio, sumMoney, addMoney } from './money'
+import { createUuid } from '../utils/uuid'
 import type {
   FinanceSavingsAccount,
   FinanceSavingsAccountType,
   FinanceMonth,
-  FinancePlannedSavingsTransaction,
-  FinanceSavingsDraftAcceptanceResult,
+  FinanceSavingsPlan,
   FinanceSavingsTransaction,
   FinanceVisibility,
 } from './types'
@@ -61,13 +60,30 @@ function absMoney(minorUnits: string) {
   return financeMinorUnitsToMoney((value < 0n ? -value : value).toString())
 }
 
-function draftSkipReasonLabel(reason: string) {
-  switch (reason) {
-    case 'zero_amount': return 'Kwota wynosi 0,00; szkic pozostaje w planie.'
-    case 'archived_account': return 'Konto lub konto nadrzędne jest zarchiwizowane; szkic pozostaje w planie.'
-    case 'already_posted': return 'Ten szkic ma już przypisany ruch; nie zaksięgowano go ponownie.'
-    case 'account_inaccessible': return 'Konto jest niedostępne; szkic pozostaje w planie.'
-    default: return 'Szkic pominięto i pozostawiono w planie.'
+interface MonthlySavingsPlanItem {
+  id: string
+  account_id: string
+  amount_minor: string
+  description: string | null
+  template_id: string | null
+}
+
+interface MonthlySavingsPlanState {
+  storage_key: string
+  items: MonthlySavingsPlanItem[]
+}
+
+function readMonthlyPlan(storageKey: string): MonthlySavingsPlanItem[] {
+  if (!storageKey) return []
+  try {
+    const value: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]')
+    if (!Array.isArray(value)) return []
+    return value.filter((item): item is MonthlySavingsPlanItem => typeof item === 'object' && item !== null
+      && typeof item.id === 'string' && typeof item.account_id === 'string'
+      && typeof item.amount_minor === 'string' && (item.description === null || typeof item.description === 'string')
+      && (item.template_id === null || typeof item.template_id === 'string'))
+  } catch {
+    return []
   }
 }
 
@@ -77,6 +93,41 @@ function polishCount(count: number, singular: string, few: string, many: string)
   if (count === 1) return `${count} ${singular}`
   if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return `${count} ${few}`
   return `${count} ${many}`
+}
+
+function MonthlySavingsPlanItemEditor({ item, accounts, pending, onSave, onRemove }: {
+  item: MonthlySavingsPlanItem
+  accounts: FinanceSavingsAccount[]
+  pending: boolean
+  onSave: (changes: Pick<MonthlySavingsPlanItem, 'account_id' | 'amount_minor' | 'description'>) => void
+  onRemove: () => void
+}) {
+  const [accountId, setAccountId] = useState(item.account_id)
+  const [amount, setAmount] = useState(financeMinorUnitsToMoney(item.amount_minor))
+  const [description, setDescription] = useState(item.description ?? '')
+  const [error, setError] = useState('')
+  return <form className="finance-savings-plan-item-edit" onSubmit={event => {
+    event.preventDefault()
+    try {
+      const amountMinor = moneyToFinanceMinorUnits(amount)
+      if (BigInt(amountMinor) === 0n) throw new Error('Kwota musi być różna od zera.')
+      setError('')
+      onSave({ account_id: accountId, amount_minor: amountMinor, description: description.trim() || null })
+    } catch (saveError) {
+      setError(errorText(saveError))
+    }
+  }}>
+    <label>Konto<select required value={accountId} onChange={event => setAccountId(event.target.value)} disabled={pending}>
+      {accounts.map(account => <option value={account.id} key={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}
+    </select></label>
+    <label>Kwota<input required inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} disabled={pending} /></label>
+    <label>Opis<input maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} disabled={pending} /></label>
+    {error && <p className="error-message finance-error" role="alert">{error}</p>}
+    <div className="finance-edit-actions">
+      <button className="primary-button" type="submit" disabled={pending || !accounts.some(account => account.id === accountId)}>Zapisz plan</button>
+      <button className="button-quiet" type="button" onClick={onRemove} disabled={pending}>Usuń</button>
+    </div>
+  </form>
 }
 
 export function SavingsAccountsPanel({
@@ -108,6 +159,7 @@ export function SavingsAccountsPanel({
   const [editAccountType, setEditAccountType] = useState<FinanceSavingsAccountType>('cash')
   const [editTargetAmount, setEditTargetAmount] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [planAccountId, setPlanAccountId] = useState('')
   const [transactionDirection, setTransactionDirection] = useState<TransactionDirection>('deposit')
   const [transactionAmount, setTransactionAmount] = useState('')
   const [transactionDate, setTransactionDate] = useState(localDateToday)
@@ -121,51 +173,40 @@ export function SavingsAccountsPanel({
   const [editTransactionDescription, setEditTransactionDescription] = useState('')
   const [editExcludeFromSavings, setEditExcludeFromSavings] = useState(false)
   const [transactionEditFormError, setTransactionEditFormError] = useState('')
-  const [draftAmount, setDraftAmount] = useState('')
-  const [draftDescription, setDraftDescription] = useState('')
-  const [draftFormError, setDraftFormError] = useState('')
-  const [editingDraftId, setEditingDraftId] = useState('')
-  const [editDraftAmount, setEditDraftAmount] = useState('')
-  const [editDraftDescription, setEditDraftDescription] = useState('')
-  const [editDraftAccountId, setEditDraftAccountId] = useState('')
-  const [editDraftMonthId, setEditDraftMonthId] = useState('')
-  const [draftEditFormError, setDraftEditFormError] = useState('')
-  const [showAcceptancePreview, setShowAcceptancePreview] = useState(mode === 'planner')
-  const [acceptanceResult, setAcceptanceResult] = useState<FinanceSavingsDraftAcceptanceResult | null>(null)
+  const [planAmount, setPlanAmount] = useState('')
+  const [planDescription, setPlanDescription] = useState('')
+  const [planError, setPlanError] = useState('')
+  const [acceptanceError, setAcceptanceError] = useState('')
+  const [acceptedCount, setAcceptedCount] = useState(0)
+  const activeMonthForPlan = months.find(month => month.id === selectedMonthId)
+  const monthlyPlanStorageKey = activeMonthForPlan
+    ? `family-hub:finance:monthlySavingsPlan:${householdId}:${userId}:${activeMonthForPlan.month_start}`
+    : ''
+  const [monthlyPlanState, setMonthlyPlanState] = useState<MonthlySavingsPlanState>(() => ({
+    storage_key: monthlyPlanStorageKey,
+    items: readMonthlyPlan(monthlyPlanStorageKey),
+  }))
   const accountRequests = useRef(new Map<string, string>())
   const transactionRequests = useRef(new Map<string, string>())
   const deleteRequests = useRef(new Map<string, string>())
-  const draftRequests = useRef(new Map<string, string>())
-  const draftDeleteRequests = useRef(new Map<string, string>())
-  const acceptanceRequests = useRef(new Map<string, string>())
 
   const accountsKey = ['financeSavingsAccounts', householdId, userId] as const
   const transactionsKey = ['financeSavingsTransactions', householdId, userId] as const
-  const draftsKey = ['financeSavingsDrafts', householdId, userId, selectedMonthId] as const
   const accounts = useQuery({ queryKey: accountsKey, queryFn: ({ signal }) => api.listSavingsAccounts(signal) })
   const transactions = useQuery({ queryKey: transactionsKey, queryFn: ({ signal }) => api.listSavingsTransactions(signal) })
-  const drafts = useQuery({
-    queryKey: draftsKey,
-    queryFn: ({ signal }) => api.listSavingsDrafts(selectedMonthId, signal),
-    enabled: mode === 'planner' && Boolean(selectedMonthId),
+  const templates = useQuery({
+    queryKey: ['financeSavingsPlans', householdId, userId],
+    queryFn: ({ signal }) => api.listSavingsPlans(signal),
+    enabled: mode === 'planner',
   })
   const accountList = accounts.data ?? []
   const activeAccounts = useMemo(() => getActiveSavingsAccounts(accountList), [accountList])
   const transactionList = transactions.data ?? []
-  const draftList = drafts.data ?? []
-  const acceptancePreview = useMemo(
-    () => previewSavingsDraftAcceptance(draftList, accountList),
-    [draftList, accountList],
-  )
-  const readyDraftCount = acceptancePreview.filter(item => item.state === 'ready').length
-  const readyDraftTotalMinor = acceptancePreview.reduce(
-    (total, item) => item.state === 'ready' ? total + BigInt(item.draft.amount) : total,
-    0n,
-  )
+  const templateList = templates.data ?? []
+  const monthlyPlanItems = monthlyPlanState.storage_key === monthlyPlanStorageKey ? monthlyPlanState.items : []
   const selectedAccount = accountList.find(account => account.id === selectedAccountId)
   const selectedAccountActive = activeAccounts.some(account => account.id === selectedAccountId)
   const selectedTransactions = transactionList.filter(transaction => transaction.account_id === selectedAccountId)
-  const selectedDrafts = mode === 'planner' ? draftList : draftList.filter(draft => draft.account_id === selectedAccountId)
 
   useEffect(() => {
     const availableAccounts = mode === 'summary' ? activeAccounts : accountList
@@ -174,7 +215,37 @@ export function SavingsAccountsPanel({
     }
   }, [accountList, activeAccounts, selectedAccountId, mode])
 
-  useEffect(() => { if (mode === 'planner') setShowAcceptancePreview(true) }, [mode])
+  useEffect(() => {
+    if (!activeAccounts.some(account => account.id === planAccountId)) {
+      setPlanAccountId(activeAccounts[0]?.id ?? '')
+    }
+  }, [activeAccounts, planAccountId])
+
+  useEffect(() => {
+    setMonthlyPlanState({ storage_key: monthlyPlanStorageKey, items: readMonthlyPlan(monthlyPlanStorageKey) })
+    setAcceptedCount(0)
+    setAcceptanceError('')
+  }, [monthlyPlanStorageKey])
+
+  useEffect(() => {
+    if (!monthlyPlanStorageKey || monthlyPlanState.storage_key !== monthlyPlanStorageKey) return
+    try {
+      window.localStorage.setItem(monthlyPlanStorageKey, JSON.stringify(monthlyPlanState.items))
+    } catch {
+      // Keep the current plan editable for this session when browser storage is unavailable.
+    }
+  }, [monthlyPlanState, monthlyPlanStorageKey])
+
+  function persistMonthlyPlan(items: MonthlySavingsPlanItem[]) {
+    if (!monthlyPlanStorageKey) return
+    const state = { storage_key: monthlyPlanStorageKey, items }
+    setMonthlyPlanState(state)
+    try {
+      window.localStorage.setItem(monthlyPlanStorageKey, JSON.stringify(items))
+    } catch {
+      // Keep the current plan editable for this session when browser storage is unavailable.
+    }
+  }
 
   function invalidateSavings() {
     return Promise.all([
@@ -197,7 +268,7 @@ export function SavingsAccountsPanel({
     }) => {
       let requestId = accountRequests.current.get(input.signature)
       if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
+        requestId = createUuid()
         accountRequests.current.set(input.signature, requestId)
       }
       await api.saveSavingsAccount({
@@ -211,11 +282,7 @@ export function SavingsAccountsPanel({
           : input.parent_id ?? null,
         opening_balance: input.opening_balance ?? null,
         target_amount: input.target_amount,
-        color: null,
         visibility: input.visibility,
-        sort_order: input.account_id
-          ? accountList.find(account => account.id === input.account_id)?.sort_order ?? 0
-          : accountList.length,
       })
       return input.signature
     },
@@ -251,7 +318,7 @@ export function SavingsAccountsPanel({
     }) => {
       let requestId = transactionRequests.current.get(input.signature)
       if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
+        requestId = createUuid()
         transactionRequests.current.set(input.signature, requestId)
       }
       await api.saveSavingsTransaction({
@@ -262,7 +329,6 @@ export function SavingsAccountsPanel({
         transaction_date: input.transaction_date,
         amount: input.amount,
         description: input.description.trim() || null,
-        budget_month_id: null,
         excluded_from_monthly_savings: input.excluded_from_monthly_savings,
       })
       return input.signature
@@ -290,7 +356,7 @@ export function SavingsAccountsPanel({
       const signature = `${transaction.id}:${transaction.version}`
       let requestId = deleteRequests.current.get(signature)
       if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
+        requestId = createUuid()
         deleteRequests.current.set(signature, requestId)
       }
       await api.deleteSavingsTransaction({
@@ -309,106 +375,101 @@ export function SavingsAccountsPanel({
     },
   })
 
-  const saveDraft = useMutation({
-    mutationFn: async (input: {
-      signature: string
-      draft_id?: string
-      expected_version?: number
-      month_id: string
-      account_id: string
-      amount: string
-      description: string
-      source_savings_plan_id: string | null
-    }) => {
-      let requestId = draftRequests.current.get(input.signature)
-      if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
-        draftRequests.current.set(input.signature, requestId)
-      }
-      await api.saveSavingsDraft({
-        request_id: requestId,
-        draft_id: input.draft_id ?? null,
-        expected_version: input.expected_version ?? null,
-        month_id: input.month_id,
-        account_id: input.account_id,
-        amount: input.amount,
-        description: input.description.trim() || null,
-        source_savings_plan_id: input.source_savings_plan_id,
-      })
-      return input.signature
-    },
-    onSuccess: async (signature, input) => {
-      draftRequests.current.delete(signature)
-      if (!input.draft_id) {
-        setDraftAmount('')
-        setDraftDescription('')
-      } else {
-        setSelectedAccountId(input.account_id)
-        selectMonth(input.month_id)
-      }
-      setEditingDraftId('')
-      setDraftEditFormError('')
-      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
-    },
-    onError: async (error, input) => {
-      if (!(error instanceof FinanceVersionConflictError)) return
-      draftRequests.current.delete(input.signature)
-      setEditingDraftId('')
-      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
-    },
-  })
-
-  const deleteDraft = useMutation({
-    mutationFn: async (draft: FinancePlannedSavingsTransaction) => {
-      const signature = `${draft.id}:${draft.version}`
-      let requestId = draftDeleteRequests.current.get(signature)
-      if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
-        draftDeleteRequests.current.set(signature, requestId)
-      }
-      await api.deleteSavingsDraft({
-        request_id: requestId,
-        draft_id: draft.id,
-        expected_version: draft.version,
-      })
-      return signature
-    },
-    onSuccess: async signature => {
-      draftDeleteRequests.current.delete(signature)
-      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
-    },
-    onError: async (error, draft) => {
-      if (!(error instanceof FinanceVersionConflictError)) return
-      draftDeleteRequests.current.delete(`${draft.id}:${draft.version}`)
-      await queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] })
-    },
-  })
-
-  const acceptDrafts = useMutation({
+  const acceptMonthlyPlan = useMutation({
     mutationFn: async (monthId: string) => {
-      let requestId = acceptanceRequests.current.get(monthId)
-      if (!requestId) {
-        requestId = globalThis.crypto.randomUUID()
-        acceptanceRequests.current.set(monthId, requestId)
+      const month = months.find(candidate => candidate.id === monthId)
+      if (!month) throw new Error('Wybierz dostępny miesiąc.')
+      let remaining = monthlyPlanItems
+      let posted = 0
+      for (const item of monthlyPlanItems) {
+        const account = accountList.find(candidate => candidate.id === item.account_id)
+        if (!account || isSavingsAccountArchived(account, accountList)) {
+          throw new Error(`Konto „${account?.name ?? 'niedostępne'}” nie jest aktywne. Zmień konto w planie.`)
+        }
+        await api.saveSavingsTransaction({
+          request_id: item.id,
+          account_id: item.account_id,
+          transaction_date: month.month_start,
+          amount: financeMinorUnitsToMoney(item.amount_minor),
+          description: item.description,
+          excluded_from_monthly_savings: false,
+        })
+        remaining = remaining.filter(candidate => candidate.id !== item.id)
+        persistMonthlyPlan(remaining)
+        posted += 1
+        setAcceptedCount(posted)
       }
-      return api.acceptSavingsDrafts({ request_id: requestId, month_id: monthId })
+      return posted
     },
-    onSuccess: async result => {
-      acceptanceRequests.current.delete(result.month_id)
-      setAcceptanceResult(result)
-      setShowAcceptancePreview(true)
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['financeSavingsDrafts', householdId, userId] }),
-        queryClient.invalidateQueries({ queryKey: transactionsKey }),
-        queryClient.invalidateQueries({ queryKey: accountsKey }),
-      ])
+    onSuccess: async posted => {
+      setAcceptedCount(posted)
+      setAcceptanceError('')
+      await invalidateSavings()
+    },
+    onError: async error => {
+      setAcceptanceError(errorText(error))
+      await invalidateSavings()
     },
   })
 
   function selectMonth(monthId: string) {
     onSelectMonth(monthId)
-    setShowAcceptancePreview(false)
-    setAcceptanceResult(null)
+    setAcceptedCount(0)
+    setAcceptanceError('')
+  }
+
+  function submitMonthlyPlanItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!selectedMonthId || !activeAccounts.some(account => account.id === planAccountId)) {
+      setPlanError('Wybierz aktywne konto i miesiąc.')
+      return
+    }
+    let amountMinor: string
+    try {
+      amountMinor = moneyToFinanceMinorUnits(planAmount)
+      if (BigInt(amountMinor) === 0n) throw new Error('Kwota musi być różna od zera.')
+      setPlanError('')
+    } catch (error) {
+      setPlanError(errorText(error))
+      return
+    }
+    persistMonthlyPlan([...monthlyPlanItems, {
+      id: createUuid(),
+      account_id: planAccountId,
+      amount_minor: amountMinor,
+      description: planDescription.trim() || null,
+      template_id: null,
+    }])
+    setPlanAmount('')
+    setPlanDescription('')
+  }
+
+  function addTemplateToMonthlyPlan(plan: FinanceSavingsPlan) {
+    if (!plan.account_id || BigInt(plan.monthly_amount) <= 0n
+      || monthlyPlanItems.some(item => item.template_id === plan.id)) return
+    const account = accountList.find(candidate => candidate.id === plan.account_id)
+    if (!account || isSavingsAccountArchived(account, accountList)) return
+    persistMonthlyPlan([...monthlyPlanItems, {
+      id: createUuid(),
+      account_id: account.id,
+      amount_minor: plan.monthly_amount,
+      description: plan.name,
+      template_id: plan.id,
+    }])
+  }
+
+  function updateMonthlyPlanItem(itemId: string, changes: Partial<Pick<MonthlySavingsPlanItem, 'account_id' | 'amount_minor' | 'description'>>) {
+    persistMonthlyPlan(monthlyPlanItems.map(item => item.id === itemId ? { ...item, ...changes } : item))
+  }
+
+  function removeMonthlyPlanItem(itemId: string) {
+    persistMonthlyPlan(monthlyPlanItems.filter(item => item.id !== itemId))
+  }
+
+  function acceptPlan() {
+    setAcceptedCount(0)
+    setAcceptanceError('')
+    acceptMonthlyPlan.mutate(selectedMonthId)
   }
 
   function startAccountEdit(account: FinanceSavingsAccount) {
@@ -509,79 +570,6 @@ export function SavingsAccountsPanel({
     })
   }
 
-  function submitDraft(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selectedAccount || !selectedMonthId) return
-    try {
-      moneyToFinanceMinorUnits(draftAmount)
-      setDraftFormError('')
-    } catch (error) {
-      setDraftFormError(errorText(error))
-      return
-    }
-    const description = draftDescription.trim()
-    const signature = JSON.stringify({
-      month_id: selectedMonthId,
-      account_id: selectedAccount.id,
-      amount: draftAmount,
-      description,
-      source_savings_plan_id: null,
-    })
-    saveDraft.mutate({
-      signature,
-      month_id: selectedMonthId,
-      account_id: selectedAccount.id,
-      amount: draftAmount,
-      description,
-      source_savings_plan_id: null,
-    })
-  }
-
-  function startDraftEdit(draft: FinancePlannedSavingsTransaction) {
-    setEditingDraftId(draft.id)
-    setDraftEditFormError('')
-    setEditDraftAmount(financeMinorUnitsToMoney(draft.amount))
-    setEditDraftDescription(draft.description ?? '')
-    setEditDraftAccountId(draft.account_id)
-    setEditDraftMonthId(draft.month_id)
-  }
-
-  function submitDraftEdit(event: FormEvent<HTMLFormElement>, draft: FinancePlannedSavingsTransaction) {
-    event.preventDefault()
-    if (!activeAccounts.some(account => account.id === editDraftAccountId)
-      || !months.some(month => month.id === editDraftMonthId)) {
-      setDraftEditFormError('Wybierz dostępne konto i miesiąc.')
-      return
-    }
-    try {
-      moneyToFinanceMinorUnits(editDraftAmount)
-      setDraftEditFormError('')
-    } catch (error) {
-      setDraftEditFormError(errorText(error))
-      return
-    }
-    const description = editDraftDescription.trim()
-    const signature = JSON.stringify({
-      id: draft.id,
-      version: draft.version,
-      month_id: editDraftMonthId,
-      account_id: editDraftAccountId,
-      amount: editDraftAmount,
-      description,
-      source_savings_plan_id: draft.source_savings_plan_id,
-    })
-    saveDraft.mutate({
-      signature,
-      draft_id: draft.id,
-      expected_version: draft.version,
-      month_id: editDraftMonthId,
-      account_id: editDraftAccountId,
-      amount: editDraftAmount,
-      description,
-      source_savings_plan_id: draft.source_savings_plan_id,
-    })
-  }
-
   const accountRows = accountList.map(account => ({
     account,
     balance: calculateActiveSavingsTreeBalance(
@@ -606,100 +594,63 @@ export function SavingsAccountsPanel({
     ),
   }))
 
-  const acceptanceSection = <>      {selectedMonthId && months.length > 0 && (
-        <section className="finance-savings-acceptance" aria-label="Przyjmowanie planowanych ruchów oszczędnościowych">
-          <div className="finance-savings-acceptance-head">
-            <div>
-              <h3 className="finance-subheading">Przyjmij plany · {monthLabel(months.find(month => month.id === selectedMonthId) ?? months[0])}</h3>
-              <p className="panel-message">Akceptacja zapisze zaplanowane wpłaty na dostępnych kontach. Prywatne plany innych domowników przyjmują ich właściciele.</p>
+  const monthlyPlanTotal = sumMoney(monthlyPlanItems.map(item => financeMinorUnitsToMoney(item.amount_minor)))
+  const monthlyPlanContent = <>
+    <div className="finance-savings-acceptance">
+      {months.length === 0 ? <p className="panel-message">Utwórz miesiąc w budżecie, aby przygotować plan oszczędności.</p> : <>
+        <label className="finance-month-select">Miesiąc
+          <select value={selectedMonthId} onChange={event => selectMonth(event.target.value)}>
+            {months.map(month => <option value={month.id} key={month.id}>{monthLabel(month)}</option>)}
+          </select>
+        </label>
+        <p className="panel-message">Plan miesięczny jest zapisany w tej przeglądarce dla Twojego konta i wybranego miesiąca. Akceptacja utworzy rzeczywiste transakcje z datą pierwszego dnia miesiąca.</p>
+        <form className="finance-savings-plan-form" onSubmit={submitMonthlyPlanItem}>
+          <label>Konto<select required value={planAccountId} onChange={event => setPlanAccountId(event.target.value)} disabled={acceptMonthlyPlan.isPending}>
+            {activeAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}
+          </select></label>
+          <label>Kwota<input required inputMode="decimal" value={planAmount} onChange={event => setPlanAmount(event.target.value)} placeholder="0,00" disabled={acceptMonthlyPlan.isPending} /></label>
+          <label>Opis<input maxLength={2000} value={planDescription} onChange={event => setPlanDescription(event.target.value)} placeholder="Opcjonalny opis" disabled={acceptMonthlyPlan.isPending} /></label>
+          <button className="primary-button" type="submit" disabled={!selectedMonthId || !activeAccounts.length || acceptMonthlyPlan.isPending}>Dodaj do planu</button>
+        </form>
+        {planError && <p className="error-message finance-error" role="alert">{planError}</p>}
+        <h3 className="finance-subheading">Zapisane szablony</h3>
+        {templates.isPending && <p className="panel-message" role="status">Ładuję szablony…</p>}
+        {!templates.isPending && templateList.length === 0 && <p className="panel-message">Nie ma szablonów. Możesz dodać własne pozycje do planu powyżej.</p>}
+        <div className="finance-savings-acceptance-list">
+          {templateList.map(template => {
+            const account = accountList.find(candidate => candidate.id === template.account_id)
+            const alreadyAdded = monthlyPlanItems.some(item => item.template_id === template.id)
+            const canAdd = template.plan_type !== 'irregular' && account !== undefined
+              && !isSavingsAccountArchived(account, accountList) && BigInt(template.monthly_amount) > 0n
+            return <div className="finance-savings-acceptance-row" key={template.id}>
+              <div className="finance-transfer-copy">
+                <strong>{template.name}</strong>
+                <span>{account ? `${account.name} · ${privacyLabel(account.visibility)}` : 'Szablon bez dostępnego konta'}</span>
+                {!canAdd && <span className="finance-savings-skip-reason">Połącz szablon z aktywnym kontem i ustaw dodatnią kwotę miesięczną.</span>}
+              </div>
+              <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(template.monthly_amount))}</strong>
+              <button className="button-quiet" type="button" disabled={!canAdd || alreadyAdded || acceptMonthlyPlan.isPending}
+                onClick={() => addTemplateToMonthlyPlan(template)}>{alreadyAdded ? 'Dodano' : 'Dodaj szablon'}</button>
             </div>
-            <button
-              className="button-quiet"
-              type="button"
-              onClick={() => setShowAcceptancePreview(open => !open)}
-              aria-expanded={showAcceptancePreview}
-            >
-              {showAcceptancePreview ? 'Ukryj podgląd' : 'Podgląd przyjęcia'}
-            </button>
-          </div>
-
-          {showAcceptancePreview && (
-            <div className="finance-savings-acceptance-body">
-              {drafts.isPending && <p className="panel-message" role="status">Ładuję szkice do podglądu…</p>}
-              {!drafts.isPending && !drafts.isError && draftList.length === 0 && (
-                <p className="panel-message">W tym miesiącu nie ma dostępnych szkiców do przyjęcia.</p>
-              )}
-              {acceptancePreview.length > 0 && (
-                <>
-                  <p className="finance-savings-acceptance-summary">
-                    Do przyjęcia: <strong>{readyDraftCount}</strong> · suma: <strong>{formatPln(financeMinorUnitsToMoney(readyDraftTotalMinor.toString()))}</strong> · pominięte: <strong>{acceptancePreview.length - readyDraftCount}</strong>
-                  </p>
-                  <div className="finance-savings-acceptance-list">
-                    {acceptancePreview.map(({ draft, state, reasons }) => {
-                      const account = accountList.find(candidate => candidate.id === draft.account_id)
-                      return (
-                        <div className="finance-savings-acceptance-row" key={draft.id}>
-                          <div className="finance-transfer-copy">
-                            <strong>{draft.description || 'Planowany ruch oszczędnościowy'}</strong>
-                            <span>{account ? `${account.name} · ${privacyLabel(account.visibility)}` : 'Konto niedostępne'}{draft.source_savings_plan_id ? ' · źródłowy plan oszczędności' : ''}</span>
-                            {reasons.map(reason => <span className="finance-savings-skip-reason" key={reason}>{draftSkipReasonLabel(reason)}</span>)}
-                          </div>
-                          <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(draft.amount))}</strong>
-                          <span className={`finance-savings-acceptance-status ${state}`}>
-                            {state === 'ready' ? 'Do przyjęcia' : 'Pozostaje w planie'}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <button
-                    className="primary-button finance-savings-accept-button"
-                    type="button"
-                    onClick={() => acceptDrafts.mutate(selectedMonthId)}
-                    disabled={acceptDrafts.isPending || drafts.isPending || draftList.length === 0}
-                  >
-                    {acceptDrafts.isPending
-                      ? 'Przyjmuję szkice…'
-                      : `Przyjmij ${polishCount(readyDraftCount, 'ruch', 'ruchy', 'ruchów')}`}
-                  </button>
-                </>
-              )}
-              {acceptDrafts.isError && <p className="error-message finance-error" role="alert">{errorText(acceptDrafts.error)}</p>}
-              {acceptanceResult?.month_id === selectedMonthId && (
-                <section className="finance-savings-acceptance-result" aria-live="polite">
-                  <h4>Wynik przyjęcia · {acceptanceResult.month_start}</h4>
-                  <p className="panel-message">
-                    Zaksięgowano {polishCount(acceptanceResult.posted_count, 'ruch', 'ruchy', 'ruchów')}. Pominięto {polishCount(acceptanceResult.skipped_count, 'szkic', 'szkice', 'szkiców')}; pozostają w planie.
-                  </p>
-                  {acceptanceResult.posted.map(entry => (
-                    <div className="finance-savings-acceptance-row" key={entry.draft_id}>
-                      <div className="finance-transfer-copy">
-                        <strong>{entry.description || 'Ruch oszczędnościowy'}</strong>
-                        <span>{accountList.find(account => account.id === entry.account_id)?.name ?? 'Konto'} · przyjęto z planu</span>
-                      </div>
-                      <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(entry.amount_minor))}</strong>
-                      <span className="finance-savings-acceptance-status ready">Przyjęto</span>
-                    </div>
-                  ))}
-                  {acceptanceResult.skipped.map(entry => (
-                    <div className="finance-savings-acceptance-row" key={entry.draft_id}>
-                      <div className="finance-transfer-copy">
-                        <strong>{entry.description || 'Planowany ruch oszczędnościowy'}</strong>
-                        <span>{accountList.find(account => account.id === entry.account_id)?.name ?? 'Konto'} · pozostaje w planie</span>
-                        {entry.reasons.map(reason => <span className="finance-savings-skip-reason" key={reason}>{draftSkipReasonLabel(reason)}</span>)}
-                      </div>
-                      <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(entry.amount_minor))}</strong>
-                      <span className="finance-savings-acceptance-status skipped">Pominięto</span>
-                    </div>
-                  ))}
-                </section>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-
-</>
+          })}
+        </div>
+        <h3 className="finance-subheading">Pozycje planu · {activeMonthForPlan ? monthLabel(activeMonthForPlan) : ''}</h3>
+        {monthlyPlanItems.length === 0 && <p className="panel-message">Plan jest pusty. Dodaj własną pozycję albo wybierz zapisany szablon.</p>}
+        {monthlyPlanItems.map(item => <MonthlySavingsPlanItemEditor key={item.id} item={item}
+          accounts={accountList.filter(account => !isSavingsAccountArchived(account, accountList) || account.id === item.account_id)}
+          pending={acceptMonthlyPlan.isPending}
+          onSave={changes => updateMonthlyPlanItem(item.id, changes)}
+          onRemove={() => removeMonthlyPlanItem(item.id)} />)}
+        <p className="finance-savings-acceptance-summary">Suma planu: <strong>{formatPln(monthlyPlanTotal)}</strong></p>
+        <button className="primary-button finance-savings-accept-button" type="button" onClick={acceptPlan}
+          disabled={!selectedMonthId || monthlyPlanItems.length === 0 || acceptMonthlyPlan.isPending}>
+          {acceptMonthlyPlan.isPending ? 'Zapisuję transakcje…' : `Akceptuj ${polishCount(monthlyPlanItems.length, 'pozycję', 'pozycje', 'pozycji')}`}
+        </button>
+        {acceptanceError && <p className="error-message finance-error" role="alert">{acceptanceError}</p>}
+        {acceptedCount > 0 && <p className="panel-message" role="status">Zapisano {polishCount(acceptedCount, 'rzeczywistą transakcję', 'rzeczywiste transakcje', 'rzeczywistych transakcji')}. Saldo uwzględnia zapisane ruchy.</p>}
+      </>}
+    </div>
+  </>
   const accountForm = <>      <form className="finance-savings-account-form" onSubmit={submitNewAccount}>
         <label>Nazwa konta
           <input required maxLength={160} value={accountName} onChange={event => setAccountName(event.target.value)} placeholder="Nazwa konta" />
@@ -844,84 +795,10 @@ export function SavingsAccountsPanel({
 
         </div>
       )}</>
-  const draftContent = selectedAccount ? <>          <div className="finance-savings-drafts">
-            <h3 className="finance-subheading">Planowane wpłaty</h3>
-            {months.length === 0 ? (
-              <p className="panel-message">Utwórz miesiąc w budżecie, aby zaplanować ruchy oszczędnościowe.</p>
-            ) : (
-              <>
-                {selectedAccountActive && <form className="finance-savings-draft-form" onSubmit={submitDraft}>
-                  <label>Kwota
-                    <input required inputMode="decimal" value={draftAmount} onChange={event => setDraftAmount(event.target.value)} placeholder="0,00" />
-                  </label>
-                  <label>Opis
-                    <input maxLength={2000} value={draftDescription} onChange={event => setDraftDescription(event.target.value)} placeholder="Opcjonalny opis" />
-                  </label>
-                  <button className="primary-button" type="submit" disabled={!selectedMonthId || saveDraft.isPending}>
-                    {saveDraft.isPending ? 'Zapisuję plan…' : 'Dodaj planowany ruch'}
-                  </button>
-                </form>}
-                {draftFormError && <p className="error-message finance-error" role="alert">{draftFormError}</p>}
-                {saveDraft.isError && <p className="error-message finance-error" role="alert">{errorText(saveDraft.error)}</p>}
-                {drafts.isPending && <p className="panel-message" role="status">Ładuję planowane ruchy…</p>}
-                {selectedDrafts.length === 0 && !drafts.isPending && <p className="panel-message">Brak planowanych ruchów w tym miesiącu.</p>}
-                {selectedDrafts.map(draft => {
-                  if (editingDraftId === draft.id) {
-                    return (
-                      <form className="finance-savings-draft-edit" key={draft.id} onSubmit={event => submitDraftEdit(event, draft)}>
-                        <label>Konto
-                          <select
-                            required
-                            value={editDraftAccountId}
-                            onChange={event => setEditDraftAccountId(event.target.value)}
-                            disabled={saveDraft.isPending || Boolean(draft.source_savings_plan_id)}
-                          >
-                            {activeAccounts.map(account => <option value={account.id} key={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}
-                          </select>
-                        </label>
-                        <label>Miesiąc
-                          <select required value={editDraftMonthId} onChange={event => setEditDraftMonthId(event.target.value)} disabled={saveDraft.isPending}>
-                            {months.map(month => <option value={month.id} key={month.id}>{monthLabel(month)}</option>)}
-                          </select>
-                        </label>
-                        <label>Kwota<input required inputMode="decimal" value={editDraftAmount} onChange={event => setEditDraftAmount(event.target.value)} /></label>
-                        <label>Opis<input maxLength={2000} value={editDraftDescription} onChange={event => setEditDraftDescription(event.target.value)} /></label>
-                        {draft.source_savings_plan_id && <p className="panel-message">Konto jest przypisane do źródłowego planu oszczędności.</p>}
-                        {draftEditFormError && <p className="error-message finance-error" role="alert">{draftEditFormError}</p>}
-                        <div className="finance-edit-actions">
-                          <button className="primary-button" type="submit" disabled={saveDraft.isPending}>Zapisz plan</button>
-                          <button className="button-quiet" type="button" onClick={() => { setEditingDraftId(''); setDraftEditFormError('') }} disabled={saveDraft.isPending}>Anuluj</button>
-                        </div>
-                      </form>
-                    )
-                  }
-                  return (
-                    <div className="finance-savings-transaction-row" key={draft.id}>
-                      <div className="finance-transfer-copy">
-                        <strong>{draft.description || 'Planowany ruch oszczędnościowy'}</strong>
-                        <span>{accountList.find(account => account.id === draft.account_id)?.name ?? 'Konto niedostępne'} · {monthLabel(months.find(month => month.id === draft.month_id) ?? months[0])}{draft.source_savings_plan_id ? ' · plan oszczędności' : ''}</span>
-                      </div>
-                      <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(draft.amount))}</strong>
-                      <div className="finance-savings-transaction-actions">
-                        <button className="button-quiet finance-edit-button" type="button" onClick={() => startDraftEdit(draft)} disabled={saveDraft.isPending || deleteDraft.isPending}>Edytuj</button>
-                        <button className="button-quiet finance-edit-button" type="button" onClick={() => deleteDraft.mutate(draft)} disabled={deleteDraft.isPending || saveDraft.isPending}>Usuń</button>
-                      </div>
-                    </div>
-                  )
-                })}
-                {deleteDraft.isError && <p className="error-message finance-error" role="alert">{errorText(deleteDraft.error)}</p>}
-              </>
-            )}
-          </div>
-</> : <p className="panel-message">Dodaj konto w zakładce Konta, aby zaplanować wpłaty.</p>
-
-  const accountPicker = <label className="finance-month-select">Konto<select value={selectedAccountId} onChange={event => setSelectedAccountId(event.target.value)}>
-    {accountList.map(account => <option key={account.id} value={account.id}>{account.name} · {privacyLabel(account.visibility)}{isSavingsAccountArchived(account, accountList) ? ' · archiwalne' : ''}</option>)}
-  </select></label>
   const errors = <>
     {accounts.isError && <p className="error-message" role="alert">{errorText(accounts.error)}</p>}
     {transactions.isError && <p className="error-message" role="alert">{errorText(transactions.error)}</p>}
-    {mode === 'planner' && drafts.isError && <p className="error-message" role="alert">{errorText(drafts.error)}</p>}
+    {mode === 'planner' && templates.isError && <p className="error-message" role="alert">{errorText(templates.error)}</p>}
   </>
   function renderSummaryAccount(account: FinanceSavingsAccount, ancestors = new Set<string>()) {
     if (ancestors.has(account.id)) return null
@@ -948,24 +825,22 @@ export function SavingsAccountsPanel({
     <div className="panel-head"><div><h2 className="panel-title">Konta</h2><p className="panel-kicker">Zarządzaj kontami, subkontami i celami oszczędnościowymi.</p></div></div>
     {errors}{accounts.isPending && <p className="panel-message" role="status">Ładuję konta…</p>}{accountForm}{accountListContent}
   </section>
-  const plannedTotal = sumMoney(draftList.map(draft => financeMinorUnitsToMoney(draft.amount)))
   const activeBalance = sumMoney(accountRows.filter(({ account }) => !account.parent_id).map(row => row.balance))
   return <div className="finance-page-stack">
     {errors}
     <FinanceKpis values={[
-      { label: 'Planowane wpłaty', value: formatPln(plannedTotal) },
+      { label: 'Planowane wpłaty', value: formatPln(monthlyPlanTotal) },
       { label: 'Aktualny stan kont', value: formatPln(activeBalance) },
-      { label: 'Stan po akceptacji', value: formatPln(addMoney(activeBalance, financeMinorUnitsToMoney(readyDraftTotalMinor.toString()))) },
+      { label: 'Stan po akceptacji', value: formatPln(addMoney(activeBalance, monthlyPlanTotal)) },
     ]} />
-    <section className="panel finance-panel"><div className="panel-head"><h2 className="panel-title">Plan dla miesiąca</h2>{accountPicker}</div>{draftContent}</section>
-    {selectedMonthId && months.length > 0 && <section className="panel finance-panel">{acceptanceSection}</section>}
-    {!accounts.isPending && !transactions.isPending && !drafts.isPending && !accounts.isError && !transactions.isError && !drafts.isError && <section className="panel finance-management-panel">
-      <div className="panel-head"><h2 className="panel-title">Podgląd po akceptacji</h2></div>
+    <section className="panel finance-panel"><div className="panel-head"><h2 className="panel-title">Plan dla miesiąca</h2></div>{monthlyPlanContent}</section>
+    {!accounts.isPending && !transactions.isPending && !templates.isPending && !accounts.isError && !transactions.isError && !templates.isError && <section className="panel finance-management-panel">
+      <div className="panel-head"><h2 className="panel-title">Saldo z planem</h2></div>
       {accountRows.filter(({ account }) => !account.parent_id && !isSavingsAccountArchived(account, accountList)).map(({ account, balance }) => {
         const projected = calculateActiveSavingsTreeBalance(
           { ...account, opening_balance: financeMinorUnitsToMoney(account.opening_balance) },
           accountList.map(item => ({ ...item, opening_balance: financeMinorUnitsToMoney(item.opening_balance) })),
-          [...transactionList.map(item => ({ ...item, amount: financeMinorUnitsToMoney(item.amount) })), ...acceptancePreview.filter(item => item.state === 'ready').map(item => ({ account_id: item.draft.account_id, amount: financeMinorUnitsToMoney(item.draft.amount) }))],
+          [...transactionList.map(item => ({ ...item, amount: financeMinorUnitsToMoney(item.amount) })), ...monthlyPlanItems.map(item => ({ account_id: item.account_id, amount: financeMinorUnitsToMoney(item.amount_minor) }))],
         )
         return <div className="finance-management-row" key={account.id}><strong>{account.name}</strong><span>{formatPln(balance)} → <strong>{formatPln(projected)}</strong></span></div>
       })}

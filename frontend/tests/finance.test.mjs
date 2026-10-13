@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createFinanceApi, FinanceVersionConflictError } from '../src/finance/api.ts'
-import { calculateActiveSavingsTreeBalance, calculateIrregularMonthlyReserve, calculateProjectTotals, calculateSavingsAudienceSummary, calculateSavingsPlanAnnualAmount, previewSavingsDraftAcceptance } from '../src/finance/calculations.ts'
+import { calculateActiveSavingsTreeBalance, calculateIrregularMonthlyReserve, calculateProjectTotals, calculateSavingsAudienceSummary, calculateSavingsPlanAnnualAmount } from '../src/finance/calculations.ts'
 import { canTransferBetweenSavingsAccounts } from '../src/finance/privacy.ts'
 
 const owner = 'member-owner'
@@ -20,11 +20,9 @@ function account(id, overrides = {}) {
     parent_id: null,
     opening_balance_minor: '12500',
     target_amount_minor: null,
-    color: null,
     is_archived: false,
     visibility: 'household',
     owner_user_id: owner,
-    sort_order: 0,
     ...overrides,
   }
 }
@@ -80,31 +78,51 @@ test('category creation trims the name and binds scope and attribution to the si
   const category = { id: 'category-1', name: 'Zakupy spożywcze', budget_type: 'variable_expense' }
   const client = fakeClient({ tableResults: { finance_categories: { data: category, error: null } } })
   const result = await createFinanceApi(household, owner, client).createCategory({
-    name: '  Zakupy spożywcze  ', section: 'variable_expense', sort_order: 3,
+    name: '  Zakupy spożywcze  ', section: 'variable_expense',
     household_id: 'another-household', created_by: 'another-member', version: 999,
   })
   assert.deepEqual(result, category)
   assert.equal(client.calls[0].table, 'finance_categories')
   assert.deepEqual(client.calls[0].operations.find(([op]) => op === 'insert')[1], {
-    household_id: household, created_by: owner, name: 'Zakupy spożywcze', budget_type: 'variable_expense', allocation_role: 'standard', sort_order: 3,
+    household_id: household, created_by: owner, name: 'Zakupy spożywcze', budget_type: 'variable_expense', allocation_role: 'standard',
   })
 })
 
 test('invalid category names and classifications are rejected before a database write', async () => {
   const client = fakeClient()
   const api = createFinanceApi(household, owner, client)
-  await assert.rejects(api.createCategory({ name: '   ', section: 'income', sort_order: 0 }), /Podaj nazwę/)
+  await assert.rejects(api.createCategory({ name: '   ', section: 'income' }), /Podaj nazwę/)
   await assert.rejects(api.renameCategory({ id: 'category-1', expected_version: 1, name: 'x'.repeat(161) }), /160/)
-  await assert.rejects(api.createCategory({ name: 'Zakupy', section: 'unknown', sort_order: 0 }), /sekcję budżetu/)
+  await assert.rejects(api.createCategory({ name: 'Zakupy', section: 'unknown' }), /sekcję budżetu/)
   assert.equal(client.calls.length, 0)
 })
 
 test('individual-account category creation persists the classification without a separate item role choice', async () => {
   const client = fakeClient({ tableResults: { finance_categories: { data: { id: 'personal-category' }, error: null } } })
-  await createFinanceApi(household, owner, client).createCategory({ name: 'Patryk — środki osobiste', section: 'personal', sort_order: 0 })
+  await createFinanceApi(household, owner, client).createCategory({ name: 'Patryk — środki osobiste', section: 'personal' })
   const values = client.calls[0].operations.find(([op]) => op === 'insert')[1]
   assert.equal(values.budget_type, 'saving')
   assert.equal(values.allocation_role, 'personal_allowance')
+})
+
+test('finance months have no version field or versioned RPC payload', async () => {
+  const month = {
+    id: 'month-1', household_id: household, created_by: owner,
+    created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z',
+    month_start: '2026-10-01', display_name: null,
+  }
+  const client = fakeClient({
+    tableResults: { finance_months: { data: [month], error: null } },
+    rpcResult: { data: month, error: null },
+  })
+  const api = createFinanceApi(household, owner, client)
+  assert.deepEqual(await api.listMonths(), [month])
+  assert.doesNotMatch(client.calls[0].operations.find(([op]) => op === 'select')[1], /version/)
+  assert.deepEqual(await api.createMonth({ request_id: 'month-request', month_start: '2026-10-01', source: { kind: 'empty' } }), month)
+  assert.deepEqual(client.rpcCalls[0], { name: 'finance_create_month', args: {
+    p_household_id: household, p_request_id: 'month-request', p_month_start: '2026-10-01',
+    p_source_kind: 'empty', p_source_month_id: null, p_scenario_id: null,
+  } })
 })
 
 test('budgets and forecasts save a category and amount with an optional description', async () => {
@@ -114,7 +132,7 @@ test('budgets and forecasts save a category and amount with an optional descript
   ]) {
     const client = fakeClient({ tableResults: { [table]: { data: { id: 'line-1', name: '', amount_minor: '150000' }, error: null } } })
     await createFinanceApi(household, owner, client)[method]({ ...scope, category_id: 'category-1',
-      name: '', amount: '1500.00', sort_order: 0 })
+      name: '', amount: '1500.00' })
     const values = client.calls[0].operations.find(([op]) => op === 'insert')[1]
     assert.equal(values.name, '')
     assert.equal(values.amount, '150000')
@@ -270,24 +288,23 @@ test('plan mutation carries explicit links, exact amounts, expected versions and
   const client = fakeClient({ rpcResult: { data: { plan_id: 'plan', version: 2 }, error: null } })
   const api = createFinanceApi(household, owner, client)
   await api.saveSavingsPlan({ request_id: 'save-plan', id: 'plan', expected_version: 1, name: ' Goal ', plan_type: 'goal', account_id: 'account',
-    monthly_amount: '123,45', annual_amount_override: '1500.00', visibility: 'private', sort_order: 4 })
+    monthly_amount: '123,45', annual_amount_override: '1500.00', visibility: 'private' })
   assert.deepEqual(client.rpcCalls[0], { name: 'finance_mutate_savings_plan', args: {
     p_household_id: household, p_request_id: 'save-plan', p_plan_id: 'plan', p_expected_version: 1, p_delete: false,
-    p_details: { name: 'Goal', plan_type: 'goal', account_id: 'account', monthly_amount_minor: '12345', annual_amount_override_minor: '150000', visibility: 'private', sort_order: 4 },
+    p_details: { name: 'Goal', plan_type: 'goal', account_id: 'account', monthly_amount_minor: '12345', annual_amount_override_minor: '150000', visibility: 'private' },
   } })
   await api.deleteSavingsPlan({ request_id: 'delete-plan', id: 'plan', expected_version: 2 })
   assert.equal(client.rpcCalls[1].args.p_delete, true)
   assert.equal(client.rpcCalls[1].args.p_details, null)
-  await api.loadSavingsPlans({ request_id: 'load-plans', month_id: 'october' })
-  assert.deepEqual(client.rpcCalls[2], { name: 'finance_load_savings_plan', args: { p_household_id: household, p_request_id: 'load-plans', p_month_id: 'october' } })
+  assert.equal(client.rpcCalls.length, 2, 'saved templates have no monthly load RPC')
 })
 
 test('shared mutations use narrow RPCs, retain null dates, and send signed expense minor units', async () => {
   const client = fakeClient({ rpcResult: { data: { id: 'record', version: 2 }, error: null } })
   const api = createFinanceApi(household, owner, client)
-  await api.saveIrregularReserve({ request_id: 'reserve', name: ' Insurance ', annual_amount: '100.01', sort_order: 0 })
-  await api.saveProject({ request_id: 'project', id: 'project', expected_version: 1, name: 'Kitchen', description: null, target_budget: '90071992547409.93', is_archived: true, sort_order: 0 })
-  await api.saveProjectExpense({ request_id: 'expense', project_id: 'project', name: 'Refund', amount: '-23.45', expense_date: null, notes: null, sort_order: 0 })
+  await api.saveIrregularReserve({ request_id: 'reserve', name: ' Insurance ', annual_amount: '100.01' })
+  await api.saveProject({ request_id: 'project', id: 'project', expected_version: 1, name: 'Kitchen', description: null, target_budget: '90071992547409.93', is_archived: true })
+  await api.saveProjectExpense({ request_id: 'expense', project_id: 'project', name: 'Refund', amount: '-23.45', expense_date: null, notes: null })
   assert.equal(client.rpcCalls[0].args.p_details.amount_minor, '10001')
   assert.equal(client.rpcCalls[1].args.p_details.target_budget_minor, '9007199254740993')
   assert.equal(client.rpcCalls[1].args.p_details.is_archived, true)
@@ -400,10 +417,8 @@ test('savings transaction reads cast bigint values to exact minor-unit text and 
     transaction_date: '2026-10-09',
     amount_minor: String(index - 250),
     description: null,
-    budget_month_id: null,
     excluded_from_monthly_savings: false,
     transfer_id: null,
-    source_planned_transaction_id: null,
   }))
   const client = fakeClient({ tableResults: { finance_savings_transactions: { data: movements, error: null } } })
   const history = await createFinanceApi(household, owner, client).listSavingsTransactions()
@@ -413,95 +428,6 @@ test('savings transaction reads cast bigint values to exact minor-unit text and 
   assert.equal(history[500].amount, '250')
   assert.match(client.calls[0].operations.find(([name]) => name === 'select')[1], /amount::text/)
   assert.ok(client.calls.filter(call => call.table === 'finance_savings_transactions').length > 1)
-})
-
-test('savings draft reads are month-scoped and cast bigint values to exact minor-unit text', async () => {
-  const client = fakeClient({
-    tableResults: {
-      finance_planned_savings_transactions: {
-        data: [{
-          id: 'draft-1', household_id: household, created_by: owner,
-          created_at: '2026-10-09T12:00:00Z', updated_at: '2026-10-09T12:00:00Z', version: 3,
-          month_id: 'month-1', account_id: 'source', amount_minor: '12345',
-          description: 'Planned deposit', source_savings_plan_id: null,
-        }],
-        error: null,
-      },
-    },
-  })
-
-  const drafts = await createFinanceApi(household, owner, client).listSavingsDrafts('month-1')
-  assert.deepEqual(drafts, [{
-    id: 'draft-1', household_id: household, created_by: owner,
-    created_at: '2026-10-09T12:00:00Z', updated_at: '2026-10-09T12:00:00Z', version: 3,
-    month_id: 'month-1', account_id: 'source', amount: '12345',
-    description: 'Planned deposit', source_savings_plan_id: null,
-  }])
-  assert.ok(client.calls[0].operations.some(([name, column, value]) => name === 'eq' && column === 'month_id' && value === 'month-1'))
-  assert.match(client.calls[0].operations.find(([name]) => name === 'select')[1], /amount::text/)
-})
-
-test('savings draft acceptance preview excludes zero, archived, and unavailable accounts', () => {
-  const draft = (id, amount, accountId) => ({
-    id,
-    household_id: household,
-    created_by: owner,
-    created_at: '2026-10-09T12:00:00Z',
-    updated_at: '2026-10-09T12:00:00Z',
-    version: 1,
-    month_id: 'month-1',
-    account_id: accountId,
-    amount,
-    description: null,
-    source_savings_plan_id: null,
-  })
-  const accounts = [
-    { id: 'active', parent_id: null, is_archived: false },
-    { id: 'archived-parent', parent_id: null, is_archived: true },
-    { id: 'archived-child', parent_id: 'archived-parent', is_archived: false },
-  ]
-
-  assert.deepEqual(previewSavingsDraftAcceptance([
-    draft('ready', '12500', 'active'),
-    draft('zero', '0', 'active'),
-    draft('archived', '400', 'archived-child'),
-    draft('unavailable', '500', 'private-account'),
-  ], accounts).map(item => ({ id: item.draft.id, state: item.state, reasons: item.reasons })), [
-    { id: 'ready', state: 'ready', reasons: [] },
-    { id: 'zero', state: 'skipped', reasons: ['zero_amount'] },
-    { id: 'archived', state: 'skipped', reasons: ['archived_account'] },
-    { id: 'unavailable', state: 'skipped', reasons: ['account_inaccessible'] },
-  ])
-})
-
-test('savings draft acceptance sends the selected month and returns provenance result', async () => {
-  const result = {
-    month_id: 'month-1',
-    month_start: '2026-10-01',
-    posted: [{
-      draft_id: 'draft-1', transaction_id: 'transaction-1', account_id: 'account-1',
-      amount_minor: '12505', description: 'Planned deposit', source_savings_plan_id: 'plan-1',
-    }],
-    skipped: [{
-      draft_id: 'draft-zero', account_id: 'account-1', amount_minor: '0', description: null,
-      source_savings_plan_id: null, reasons: ['zero_amount'],
-    }],
-    posted_count: 1,
-    skipped_count: 1,
-    inaccessible_draft_policy: 'remain_pending',
-  }
-  const client = fakeClient({ rpcResult: { data: result, error: null } })
-  assert.deepEqual(await createFinanceApi(household, owner, client).acceptSavingsDrafts({
-    request_id: 'accept-request', month_id: 'month-1',
-  }), result)
-  assert.deepEqual(client.rpcCalls[0], {
-    name: 'finance_accept_savings_plan',
-    args: {
-      p_household_id: household,
-      p_request_id: 'accept-request',
-      p_month_id: 'month-1',
-    },
-  })
 })
 
 test('account save RPC sends exact opening and target minor units', async () => {
@@ -514,9 +440,7 @@ test('account save RPC sends exact opening and target minor units', async () => 
     parent_id: null,
     opening_balance: '125.05',
     target_amount: '500.00',
-    color: null,
     visibility: 'private',
-    sort_order: 4,
   })
 
   assert.deepEqual(client.rpcCalls[0], {
@@ -531,9 +455,7 @@ test('account save RPC sends exact opening and target minor units', async () => 
       p_parent_id: null,
       p_opening_balance_minor: '12505',
       p_target_amount_minor: '50000',
-      p_color: null,
       p_visibility: 'private',
-      p_sort_order: 4,
     },
   })
 })
@@ -545,7 +467,7 @@ test('account and transaction stale versions surface frontend conflicts', async 
   await assert.rejects(createFinanceApi(household, owner, accountClient).saveSavingsAccount({
     request_id: 'account-update', account_id: 'account-1', expected_version: 8,
     name: 'Updated', account_type: 'cash', parent_id: null, opening_balance: null,
-    target_amount: null, color: null, visibility: 'household', sort_order: 0,
+    target_amount: null, visibility: 'household',
   }), error => error instanceof FinanceVersionConflictError
     && error.expected_version === 8 && error.current_version === 9)
 
@@ -555,7 +477,7 @@ test('account and transaction stale versions surface frontend conflicts', async 
   await assert.rejects(createFinanceApi(household, owner, transactionClient).saveSavingsTransaction({
     request_id: 'movement-update', transaction_id: 'movement-1', expected_version: 2,
     account_id: 'account-1', transaction_date: '2026-10-09', amount: '-1.25',
-    description: null, budget_month_id: null, excluded_from_monthly_savings: true,
+    description: null, excluded_from_monthly_savings: true,
   }), error => error instanceof FinanceVersionConflictError
     && error.expected_version === 2 && error.current_version === 3)
 })
@@ -565,7 +487,7 @@ test('ordinary transaction writes preserve signed minor units and deletion reque
   const api = createFinanceApi(household, owner, saveClient)
   await api.saveSavingsTransaction({
     request_id: 'movement-create', account_id: 'account-1', transaction_date: '2026-10-09',
-    amount: '-25.40', description: '  Withdrawal  ', budget_month_id: null,
+    amount: '-25.40', description: '  Withdrawal  ',
     excluded_from_monthly_savings: false,
   })
   assert.equal(saveClient.rpcCalls[0].name, 'finance_save_transaction')
@@ -589,80 +511,22 @@ test('ordinary transaction writes preserve signed minor units and deletion reque
   })
 })
 
-test('savings draft writes send exact minor units and stable create, edit, and delete request IDs', async () => {
-  const saveClient = fakeClient({ rpcResult: { data: { draft_id: 'draft-1', version: 1 }, error: null } })
-  const api = createFinanceApi(household, owner, saveClient)
-  await api.saveSavingsDraft({
-    request_id: 'draft-create', month_id: 'month-1', account_id: 'account-1',
-    amount: '125.05', description: '  Deposit next month  ',
+test('monthly plan posting writes ordinary dated transactions without month or template provenance fields', async () => {
+  const client = fakeClient({ rpcResult: { data: { transaction_id: 'posted-1', version: 1 }, error: null } })
+  await createFinanceApi(household, owner, client).saveSavingsTransaction({
+    request_id: 'local-plan-item-1', account_id: 'account-1', transaction_date: '2026-10-01',
+    amount: '125.05', description: 'Goal', excluded_from_monthly_savings: false,
   })
-  assert.deepEqual(saveClient.rpcCalls[0], {
-    name: 'finance_save_draft',
+  assert.deepEqual(client.rpcCalls[0], {
+    name: 'finance_save_transaction',
     args: {
-      p_household_id: household,
-      p_request_id: 'draft-create',
-      p_draft_id: null,
-      p_expected_version: null,
-      p_month_id: 'month-1',
-      p_account_id: 'account-1',
-      p_amount_minor: '12505',
-      p_description: 'Deposit next month',
-      p_source_savings_plan_id: null,
+      p_household_id: household, p_request_id: 'local-plan-item-1', p_transaction_id: null,
+      p_expected_version: null, p_account_id: 'account-1', p_transaction_date: '2026-10-01',
+      p_amount_minor: '12505', p_description: 'Goal', p_excluded_from_monthly_savings: false,
     },
   })
-
-  const updateClient = fakeClient({ rpcResult: { data: { draft_id: 'draft-1', version: 2 }, error: null } })
-  await createFinanceApi(household, owner, updateClient).saveSavingsDraft({
-    request_id: 'draft-edit', draft_id: 'draft-1', expected_version: 1,
-    month_id: 'month-2', account_id: 'account-2', amount: '-2.50',
-    description: null, source_savings_plan_id: 'plan-1',
-  })
-  assert.deepEqual(updateClient.rpcCalls[0].args, {
-    p_household_id: household,
-    p_request_id: 'draft-edit',
-    p_draft_id: 'draft-1',
-    p_expected_version: 1,
-    p_month_id: 'month-2',
-    p_account_id: 'account-2',
-    p_amount_minor: '-250',
-    p_description: null,
-    p_source_savings_plan_id: 'plan-1',
-  })
-
-  const deleteClient = fakeClient({ rpcResult: {
-    data: { deleted: true, draft_id: 'draft-1', account_id: 'account-1' }, error: null,
-  } })
-  await createFinanceApi(household, owner, deleteClient).deleteSavingsDraft({
-    request_id: 'draft-delete', draft_id: 'draft-1', expected_version: 4,
-  })
-  assert.deepEqual(deleteClient.rpcCalls[0], {
-    name: 'finance_delete_draft',
-    args: {
-      p_household_id: household,
-      p_request_id: 'draft-delete',
-      p_draft_id: 'draft-1',
-      p_expected_version: 4,
-    },
-  })
-})
-
-test('stale savings draft saves and deletes surface frontend conflicts', async () => {
-  const saveClient = fakeClient({ rpcResult: {
-    data: { conflict: true, draft_id: 'draft-1', current_version: 5 }, error: null,
-  } })
-  await assert.rejects(createFinanceApi(household, owner, saveClient).saveSavingsDraft({
-    request_id: 'draft-save-stale', draft_id: 'draft-1', expected_version: 4,
-    month_id: 'month-1', account_id: 'account-1', amount: '20.00', description: null,
-  }), error => error instanceof FinanceVersionConflictError
-    && error.expected_version === 4 && error.current_version === 5)
-
-  const deleteClient = fakeClient({ rpcResult: {
-    data: { conflict: true, draft_id: 'draft-1', current_version: 5 }, error: null,
-  } })
-  await assert.rejects(createFinanceApi(household, owner, deleteClient).deleteSavingsDraft({
-    request_id: 'draft-delete-stale', draft_id: 'draft-1', expected_version: 4,
-  }), error => error instanceof FinanceVersionConflictError
-    && error.expected_version === 4 && error.current_version === 5)
+  assert.equal(typeof createFinanceApi(household, owner, client).saveSavingsDraft, 'undefined')
+  assert.equal(typeof createFinanceApi(household, owner, client).loadSavingsPlans, 'undefined')
 })
 
 test('transfer RPC receives exact minor units and both endpoint versions', async () => {

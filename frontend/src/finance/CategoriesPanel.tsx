@@ -56,8 +56,7 @@ export function CategoriesPanel({ api, householdId, categories, loading, loadFai
   function submitCategory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     resetMessages()
-    create.mutate({ name, section: sectionId,
-      sort_order: categories.reduce((max, category) => Math.max(max, category.sort_order), -1) + 1 })
+    create.mutate({ name, section: sectionId })
   }
 
   return <div className="finance-page-stack">
