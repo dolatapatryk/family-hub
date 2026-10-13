@@ -84,12 +84,12 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
           {preview.isPending && <p role="status">Ładuję podgląd…</p>}
           {preview.isError && <p className="error-message" role="alert">{String(preview.error.message)}</p>}
           {data && <>
-            {action === 'archive' && <p>Archiwizacja wyłączy konto i jego podkonta ({data.account_count}) z aktywnych sald oraz nowych ruchów. Historia pozostanie zachowana.</p>}
+            {action === 'archive' && <p>Archiwizacja wyłączy konto i jego podkonta ({data.account_count}) z aktywnych sald oraz nowych transakcji. Historia pozostanie zachowana.</p>}
             {action === 'restore' && <p>Przywrócenie włączy konto i podkonta, które nie zostały zarchiwizowane osobno.</p>}
             {restoreBlocked && <p role="alert">Najpierw przywróć zarchiwizowane konto nadrzędne.</p>}
             {action === 'balance' && <>
               <p>Aktualne saldo z aktywnymi podkontami: {formatPln(financeMinorUnitsToMoney(data.display_balance_minor))}. Podkonta: {formatPln(financeMinorUnitsToMoney(data.active_children_balance_minor))}.</p>
-              <p>Korekta zmieni saldo początkowe tego konta. Zachowa historię ruchów i nie zwiększy miesięcznych oszczędności.</p>
+              <p>Korekta zmieni saldo początkowe tego konta. Zachowa historię transakcji i nie zwiększy miesięcznych oszczędności.</p>
               <label>Nowe saldo z aktywnymi podkontami<input required inputMode="decimal" value={balance} onChange={event => setBalance(event.target.value)} disabled={apply.isPending} /></label>
               {balanceBlocked && <p role="alert">Przywróć konto i jego przodków przed korektą.</p>}
             </>}

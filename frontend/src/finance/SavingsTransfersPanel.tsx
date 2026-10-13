@@ -7,6 +7,8 @@ import { financeMinorUnitsToMoney, formatPln } from './money'
 import { createUuid } from '../utils/uuid'
 import type { FinanceSavingsTransferRecord } from './types'
 
+const transferPageSize = 3
+
 function localDateToday() {
   const today = new Date()
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
@@ -40,6 +42,7 @@ export function SavingsTransfersPanel({
   const [amount, setAmount] = useState('')
   const [date, setDate] = useState(localDateToday)
   const [description, setDescription] = useState('')
+  const [page, setPage] = useState(0)
   const createRequests = useRef(new Map<string, {
     requestId: string
     fromExpectedVersion: number
@@ -60,12 +63,23 @@ export function SavingsTransfersPanel({
 
   const accountList = accounts.data ?? []
   const availableAccounts = useMemo(() => getActiveSavingsAccounts(accountList), [accountList])
+  const orderedTransfers = useMemo(() => [...(transfers.data ?? [])].sort((left, right) =>
+    right.transaction_date.localeCompare(left.transaction_date)
+      || right.created_at.localeCompare(left.created_at)
+      || right.id.localeCompare(left.id)), [transfers.data])
+  const pageCount = Math.ceil(orderedTransfers.length / transferPageSize)
+  const visiblePage = Math.min(page, Math.max(0, pageCount - 1))
+  const visibleTransfers = orderedTransfers.slice(visiblePage * transferPageSize, (visiblePage + 1) * transferPageSize)
   const selectedFromAccount = availableAccounts.find(account => account.id === fromAccountId)
   const eligibleDestinationAccounts = selectedFromAccount
     ? availableAccounts.filter(account => account.id !== selectedFromAccount.id
       && canTransferBetweenSavingsAccounts(selectedFromAccount, account))
     : []
   const selectedToAccount = eligibleDestinationAccounts.find(account => account.id === toAccountId)
+
+  useEffect(() => {
+    if (page !== visiblePage) setPage(visiblePage)
+  }, [page, visiblePage])
 
   useEffect(() => {
     if (!availableAccounts.some(account => account.id === fromAccountId)) {
@@ -113,6 +127,7 @@ export function SavingsTransfersPanel({
     },
     onSuccess: async signature => {
       createRequests.current.delete(signature)
+      setPage(0)
       setAmount('')
       setDescription('')
       await Promise.all([
@@ -176,86 +191,89 @@ export function SavingsTransfersPanel({
   const accountById = new Map(accountList.map(account => [account.id, account]))
 
   return (
-    <section className="panel finance-panel">
-      <div className="panel-head">
-        <div>
-          <h2 className="panel-title">Przelewy między kontami</h2>
-          <p className="panel-kicker">Przelewy wymagają zgodnego zakresu prywatności i nie zwiększają miesięcznych oszczędności.</p>
+    <details className="panel finance-panel finance-savings-accordion">
+      <summary className="finance-savings-accordion-summary"><span><strong>Przelew między kontami</strong><small>Przelewy wymagają zgodnego zakresu prywatności i nie zwiększają miesięcznych oszczędności.</small></span></summary>
+      <div className="finance-savings-accordion-content">
+        {accounts.isPending && <p className="panel-message finance-savings-feedback" role="status">Ładuję dostępne konta…</p>}
+        {accounts.isError && <p className="error-message finance-error finance-savings-feedback" role="alert">{errorText(accounts.error)}</p>}
+        {!accounts.isPending && availableAccounts.length === 0 && (
+          <p className="panel-message finance-savings-feedback">Nie ma jeszcze aktywnych kont oszczędnościowych dostępnych do przelewu.</p>
+        )}
+
+        {availableAccounts.length > 0 && (
+          <form className="finance-transfer-form" onSubmit={submitTransfer}>
+            <label>Z konta
+              <select required value={fromAccountId} onChange={event => setFromAccountId(event.target.value)} disabled={createTransfer.isPending}>
+                {availableAccounts.map(account => (
+                  <option value={account.id} key={account.id}>
+                    {account.name} · {accountAudienceLabel(account.visibility)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>Na konto
+              <select required value={toAccountId} onChange={event => setToAccountId(event.target.value)} disabled={!eligibleDestinationAccounts.length || createTransfer.isPending}>
+                {eligibleDestinationAccounts.map(account => (
+                  <option value={account.id} key={account.id}>
+                    {account.name} · {accountAudienceLabel(account.visibility)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>Kwota
+              <input required min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0,00" disabled={createTransfer.isPending} />
+            </label>
+            <label>Data
+              <input required type="date" value={date} onChange={event => setDate(event.target.value)} disabled={createTransfer.isPending} />
+            </label>
+            <label className="finance-transfer-description">Opis
+              <input maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Opcjonalny opis" disabled={createTransfer.isPending} />
+            </label>
+            <button className="primary-button" type="submit" disabled={!selectedFromAccount || !selectedToAccount || createTransfer.isPending}>
+              {createTransfer.isPending ? 'Zapisuję przelew…' : 'Dodaj przelew'}
+            </button>
+          </form>
+        )}
+
+        {createTransfer.isError && <p className="error-message finance-error finance-savings-feedback" role="alert">{errorText(createTransfer.error)}</p>}
+
+        <div className="finance-transfer-history">
+          <h3 className="finance-subheading">Historia przelewów</h3>
+          {transfers.isPending && <p className="panel-message" role="status">Ładuję historię…</p>}
+          {transfers.isError && <p className="error-message finance-error finance-savings-feedback" role="alert">{errorText(transfers.error)}</p>}
+          {transfers.data?.length === 0 && <p className="panel-message">Nie ma jeszcze przelewów dostępnych w tym widoku.</p>}
+          {visibleTransfers.map(transfer => {
+            const from = accountById.get(transfer.from_account_id)
+            const to = accountById.get(transfer.to_account_id)
+            return (
+              <div className="finance-transfer-row" key={transfer.id}>
+                <div className="finance-transfer-copy">
+                  <strong>{from?.name ?? 'Konto'} → {to?.name ?? 'Konto'}</strong>
+                  <span>{transfer.transaction_date}{transfer.description ? ` · ${transfer.description}` : ''}</span>
+                </div>
+                <strong>{formatPln(financeMinorUnitsToMoney(transfer.amount))}</strong>
+                <button
+                  className="button-quiet finance-edit-button finance-budget-edit-button finance-budget-delete-button"
+                  type="button"
+                  onClick={() => deleteTransfer.mutate(transfer)}
+                  disabled={deleteTransfer.isPending}
+                  aria-label={`Usuń przelew z ${from?.name ?? 'konta'} do ${to?.name ?? 'konta'}`}
+                  title="Usuń przelew"
+                ><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m19 6-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button>
+              </div>
+            )
+          })}
+          {orderedTransfers.length > transferPageSize && <div className="finance-transfer-pagination">
+            <span>{visiblePage * transferPageSize + 1}–{Math.min((visiblePage + 1) * transferPageSize, orderedTransfers.length)} z {orderedTransfers.length}</span>
+            <div>
+              <button className="button-quiet" type="button" onClick={() => setPage(current => Math.max(0, current - 1))} disabled={visiblePage === 0}>Poprzednie</button>
+              <span aria-live="polite">Strona {visiblePage + 1} z {pageCount}</span>
+              <button className="button-quiet" type="button" onClick={() => setPage(current => Math.min(pageCount - 1, current + 1))} disabled={visiblePage >= pageCount - 1}>Następne</button>
+            </div>
+          </div>}
+          {deleteTransfer.isError && <p className="error-message finance-error finance-savings-feedback" role="alert">{errorText(deleteTransfer.error)}</p>}
         </div>
       </div>
-
-      {accounts.isPending && <p className="panel-message" role="status">Ładuję dostępne konta…</p>}
-      {accounts.isError && <p className="error-message finance-error" role="alert">{errorText(accounts.error)}</p>}
-      {!accounts.isPending && availableAccounts.length === 0 && (
-        <p className="panel-message">Nie ma jeszcze aktywnych kont oszczędnościowych dostępnych do przelewu.</p>
-      )}
-
-      {availableAccounts.length > 0 && (
-        <form className="finance-transfer-form" onSubmit={submitTransfer}>
-          <label>Z konta
-            <select required value={fromAccountId} onChange={event => setFromAccountId(event.target.value)} disabled={createTransfer.isPending}>
-              {availableAccounts.map(account => (
-                <option value={account.id} key={account.id}>
-                  {account.name} · {accountAudienceLabel(account.visibility)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>Na konto
-            <select required value={toAccountId} onChange={event => setToAccountId(event.target.value)} disabled={!eligibleDestinationAccounts.length || createTransfer.isPending}>
-              {eligibleDestinationAccounts.map(account => (
-                <option value={account.id} key={account.id}>
-                  {account.name} · {accountAudienceLabel(account.visibility)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>Kwota
-            <input required min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0,00" disabled={createTransfer.isPending} />
-          </label>
-          <label>Data
-            <input required type="date" value={date} onChange={event => setDate(event.target.value)} disabled={createTransfer.isPending} />
-          </label>
-          <label className="finance-transfer-description">Opis
-            <input maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Opcjonalny opis" disabled={createTransfer.isPending} />
-          </label>
-          <button className="primary-button" type="submit" disabled={!selectedFromAccount || !selectedToAccount || createTransfer.isPending}>
-            {createTransfer.isPending ? 'Zapisuję przelew…' : 'Dodaj przelew'}
-          </button>
-        </form>
-      )}
-
-      {createTransfer.isError && <p className="error-message finance-error" role="alert">{errorText(createTransfer.error)}</p>}
-
-      <div className="finance-transfer-history">
-        <h3 className="finance-subheading">Historia przelewów</h3>
-        {transfers.isPending && <p className="panel-message" role="status">Ładuję historię…</p>}
-        {transfers.isError && <p className="error-message finance-error" role="alert">{errorText(transfers.error)}</p>}
-        {transfers.data?.length === 0 && <p className="panel-message">Nie ma jeszcze przelewów dostępnych w tym widoku.</p>}
-        {(transfers.data ?? []).map(transfer => {
-          const from = accountById.get(transfer.from_account_id)
-          const to = accountById.get(transfer.to_account_id)
-          return (
-            <div className="finance-transfer-row" key={transfer.id}>
-              <div className="finance-transfer-copy">
-                <strong>{from?.name ?? 'Konto'} → {to?.name ?? 'Konto'}</strong>
-                <span>{transfer.transaction_date}{transfer.description ? ` · ${transfer.description}` : ''}</span>
-              </div>
-              <strong>{formatPln(financeMinorUnitsToMoney(transfer.amount))}</strong>
-              <button
-                className="button-quiet finance-edit-button"
-                type="button"
-                onClick={() => deleteTransfer.mutate(transfer)}
-                disabled={deleteTransfer.isPending}
-                aria-label={`Usuń przelew ${from?.name ?? ''} do ${to?.name ?? ''}`}
-              >
-                Usuń
-              </button>
-            </div>
-          )
-        })}
-        {deleteTransfer.isError && <p className="error-message finance-error" role="alert">{errorText(deleteTransfer.error)}</p>}
-      </div>
-    </section>
+    </details>
   )
 }

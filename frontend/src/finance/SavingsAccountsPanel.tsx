@@ -166,6 +166,7 @@ export function SavingsAccountsPanel({
   const [transactionDescription, setTransactionDescription] = useState('')
   const [excludeFromSavings, setExcludeFromSavings] = useState(false)
   const [transactionFormError, setTransactionFormError] = useState('')
+  const [transactionToggleError, setTransactionToggleError] = useState('')
   const [editingTransactionId, setEditingTransactionId] = useState('')
   const [editTransactionDirection, setEditTransactionDirection] = useState<TransactionDirection>('deposit')
   const [editTransactionAmount, setEditTransactionAmount] = useState('')
@@ -186,6 +187,7 @@ export function SavingsAccountsPanel({
     storage_key: monthlyPlanStorageKey,
     items: readMonthlyPlan(monthlyPlanStorageKey),
   }))
+  const transactionDialogRef = useRef<HTMLDialogElement>(null)
   const accountRequests = useRef(new Map<string, string>())
   const transactionRequests = useRef(new Map<string, string>())
   const deleteRequests = useRef(new Map<string, string>())
@@ -207,6 +209,14 @@ export function SavingsAccountsPanel({
   const selectedAccount = accountList.find(account => account.id === selectedAccountId)
   const selectedAccountActive = activeAccounts.some(account => account.id === selectedAccountId)
   const selectedTransactions = transactionList.filter(transaction => transaction.account_id === selectedAccountId)
+  const editingTransaction = transactionList.find(transaction => transaction.id === editingTransactionId)
+
+  useEffect(() => {
+    const dialog = transactionDialogRef.current
+    if (!dialog) return
+    if (editingTransactionId && !dialog.open) dialog.showModal()
+    else if (!editingTransactionId && dialog.open) dialog.close()
+  }, [editingTransaction, editingTransactionId])
 
   useEffect(() => {
     const availableAccounts = mode === 'summary' ? activeAccounts : accountList
@@ -315,6 +325,7 @@ export function SavingsAccountsPanel({
       transaction_date: string
       description: string
       excluded_from_monthly_savings: boolean
+      monthly_savings_toggle?: boolean
     }) => {
       let requestId = transactionRequests.current.get(input.signature)
       if (!requestId) {
@@ -335,6 +346,7 @@ export function SavingsAccountsPanel({
     },
     onSuccess: async (signature, input) => {
       transactionRequests.current.delete(signature)
+      setTransactionToggleError('')
       if (!input.transaction_id) {
         setTransactionAmount('')
         setTransactionDescription('')
@@ -344,6 +356,7 @@ export function SavingsAccountsPanel({
       await invalidateSavings()
     },
     onError: async (error, input) => {
+      if (input.monthly_savings_toggle) setTransactionToggleError(errorText(error))
       if (!(error instanceof FinanceVersionConflictError)) return
       transactionRequests.current.delete(input.signature)
       setEditingTransactionId('')
@@ -517,6 +530,7 @@ export function SavingsAccountsPanel({
   function submitTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!selectedAccount) return
+    setTransactionToggleError('')
     let signed: string
     try {
       signed = signedAmount(transactionAmount, transactionDirection)
@@ -538,6 +552,8 @@ export function SavingsAccountsPanel({
 
   function startTransactionEdit(transaction: FinanceSavingsTransaction) {
     const amount = BigInt(transaction.amount)
+    saveTransaction.reset()
+    setTransactionToggleError('')
     setEditingTransactionId(transaction.id)
     setTransactionEditFormError('')
     setEditTransactionDirection(amount < 0n ? 'withdrawal' : 'deposit')
@@ -547,8 +563,14 @@ export function SavingsAccountsPanel({
     setEditExcludeFromSavings(transaction.excluded_from_monthly_savings)
   }
 
+  function closeTransactionEdit() {
+    setEditingTransactionId('')
+    setTransactionEditFormError('')
+  }
+
   function submitTransactionEdit(event: FormEvent<HTMLFormElement>, transaction: FinanceSavingsTransaction) {
     event.preventDefault()
+    setTransactionToggleError('')
     let signed: string
     try {
       signed = signedAmount(editTransactionAmount, editTransactionDirection)
@@ -567,6 +589,27 @@ export function SavingsAccountsPanel({
       transaction_date: editTransactionDate,
       description: editTransactionDescription,
       excluded_from_monthly_savings: editExcludeFromSavings,
+    })
+  }
+
+  function setTransactionMonthlySavingsStatus(transaction: FinanceSavingsTransaction, included: boolean) {
+    if (transaction.transfer_id || BigInt(transaction.amount) <= 0n) return
+    setTransactionToggleError('')
+    const signature = JSON.stringify({
+      transaction_id: transaction.id,
+      expected_version: transaction.version,
+      excluded_from_monthly_savings: !included,
+    })
+    saveTransaction.mutate({
+      signature,
+      transaction_id: transaction.id,
+      expected_version: transaction.version,
+      account_id: transaction.account_id,
+      amount: financeMinorUnitsToMoney(transaction.amount),
+      transaction_date: transaction.transaction_date,
+      description: transaction.description ?? '',
+      excluded_from_monthly_savings: !included,
+      monthly_savings_toggle: true,
     })
   }
 
@@ -647,7 +690,7 @@ export function SavingsAccountsPanel({
           {acceptMonthlyPlan.isPending ? 'Zapisuję transakcje…' : `Akceptuj ${polishCount(monthlyPlanItems.length, 'pozycję', 'pozycje', 'pozycji')}`}
         </button>
         {acceptanceError && <p className="error-message finance-error" role="alert">{acceptanceError}</p>}
-        {acceptedCount > 0 && <p className="panel-message" role="status">Zapisano {polishCount(acceptedCount, 'rzeczywistą transakcję', 'rzeczywiste transakcje', 'rzeczywistych transakcji')}. Saldo uwzględnia zapisane ruchy.</p>}
+        {acceptedCount > 0 && <p className="panel-message" role="status">Zapisano {polishCount(acceptedCount, 'rzeczywistą transakcję', 'rzeczywiste transakcje', 'rzeczywistych transakcji')}. Saldo uwzględnia zapisane transakcje.</p>}
       </>}
     </div>
   </>
@@ -722,7 +765,9 @@ export function SavingsAccountsPanel({
       </div>
 
 </>
-  const movementForm = <section className="panel finance-panel"><div className="panel-head"><h2 className="panel-title">Transakcja</h2></div>          {selectedAccountActive && <>
+  const transactionForm = <details className="panel finance-panel finance-savings-accordion">
+    <summary className="finance-savings-accordion-summary"><span><strong>Nowa transakcja</strong><small>Dodaj wpłatę lub wypłatę na wybranym koncie.</small></span></summary>
+    <div className="finance-savings-accordion-content finance-savings-form-content">{selectedAccountActive && <>
           <form className="finance-savings-transaction-form" onSubmit={submitTransaction}>
             <label>Konto<select value={selectedAccountId} onChange={event => setSelectedAccountId(event.target.value)}>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {privacyLabel(account.visibility)}</option>)}</select></label>
             <label>Rodzaj
@@ -738,61 +783,134 @@ export function SavingsAccountsPanel({
             <label>Opis<input maxLength={2000} value={transactionDescription} onChange={event => setTransactionDescription(event.target.value)} placeholder="Opcjonalny opis" /></label>
             <label className="finance-checkbox-label"><input type="checkbox" checked={excludeFromSavings} onChange={event => setExcludeFromSavings(event.target.checked)} /> Nie uwzględniaj w miesięcznych oszczędnościach</label>
             <button className="primary-button" type="submit" disabled={saveTransaction.isPending}>
-              {saveTransaction.isPending ? 'Zapisuję ruch…' : 'Dodaj ruch'}
+              {saveTransaction.isPending ? 'Zapisuję transakcję…' : 'Dodaj transakcję'}
             </button>
           </form>
-          {transactionFormError && <p className="error-message finance-error" role="alert">{transactionFormError}</p>}
-          {saveTransaction.isError && <p className="error-message finance-error" role="alert">{errorText(saveTransaction.error)}</p>}
+          {transactionFormError && <p className="error-message finance-error finance-savings-feedback" role="alert">{transactionFormError}</p>}
+          {saveTransaction.isError && !transactionToggleError && <p className="error-message finance-error finance-savings-feedback" role="alert">{errorText(saveTransaction.error)}</p>}
           </>}
-{!selectedAccountActive && <p className="panel-message">Wybierz aktywne konto, aby dodać transakcję.</p>}</section>
+      {!selectedAccountActive && <p className="panel-message finance-savings-feedback">Wybierz aktywne konto, aby dodać transakcję.</p>}
+    </div>
+  </details>
   const historyContent = <>      {selectedAccount && (
         <div className="finance-savings-transactions">
-          <h3 className="finance-subheading">Ruchy · {selectedAccount.name}</h3>
-          {!selectedAccountActive && <p className="panel-message">Historia zarchiwizowanego konta. Przywróć drzewo, aby dodawać lub edytować ruchy.</p>}
+          {!selectedAccountActive && <p className="panel-message">Historia zarchiwizowanego konta. Przywróć drzewo, aby dodawać lub edytować transakcje.</p>}
           {transactions.isPending && <p className="panel-message" role="status">Ładuję historię konta…</p>}
-          {selectedTransactions.length === 0 && !transactions.isPending && <p className="panel-message">To konto nie ma jeszcze ruchów.</p>}
+          {selectedTransactions.length === 0 && !transactions.isPending && <p className="panel-message">To konto nie ma jeszcze transakcji.</p>}
           {selectedTransactions.map(transaction => {
             const isTransfer = transaction.transfer_id !== null
-            const isEditing = editingTransactionId === transaction.id
-            if (isEditing && !isTransfer) {
-              return (
-                <form className="finance-savings-transaction-edit" key={transaction.id} onSubmit={event => submitTransactionEdit(event, transaction)}>
-                  <label>Rodzaj
-                    <select value={editTransactionDirection} onChange={event => setEditTransactionDirection(event.target.value as TransactionDirection)}>
-                      <option value="deposit">Wpłata</option>
-                      <option value="withdrawal">Wypłata</option>
-                    </select>
-                  </label>
-                  <label>Kwota<input required min="0.01" step="0.01" inputMode="decimal" value={editTransactionAmount} onChange={event => setEditTransactionAmount(event.target.value)} /></label>
-                  <label>Data<input required type="date" value={editTransactionDate} onChange={event => setEditTransactionDate(event.target.value)} /></label>
-                  <label>Opis<input maxLength={2000} value={editTransactionDescription} onChange={event => setEditTransactionDescription(event.target.value)} /></label>
-                  <label className="finance-checkbox-label"><input type="checkbox" checked={editExcludeFromSavings} onChange={event => setEditExcludeFromSavings(event.target.checked)} /> Nie uwzględniaj w miesięcznych oszczędnościach</label>
-                  {transactionEditFormError && <p className="error-message finance-error" role="alert">{transactionEditFormError}</p>}
-                  <div className="finance-edit-actions">
-                    <button className="primary-button" type="submit" disabled={saveTransaction.isPending}>Zapisz ruch</button>
-                    <button className="button-quiet" type="button" onClick={() => { setEditingTransactionId(''); setTransactionEditFormError('') }} disabled={saveTransaction.isPending}>Anuluj</button>
-                  </div>
-                </form>
-              )
-            }
+            const transactionAmountMinor = BigInt(transaction.amount)
+            const transferCounterpart = isTransfer
+              ? transactionList.find(candidate => candidate.transfer_id === transaction.transfer_id && candidate.id !== transaction.id)
+              : undefined
+            const transferFromId = isTransfer
+              ? (transactionAmountMinor < 0n ? transaction.account_id : transferCounterpart?.account_id)
+              : undefined
+            const transferToId = isTransfer
+              ? (transactionAmountMinor > 0n ? transaction.account_id : transferCounterpart?.account_id)
+              : undefined
+            const transferFromName = transferFromId ? accountList.find(account => account.id === transferFromId)?.name : undefined
+            const transferToName = transferToId ? accountList.find(account => account.id === transferToId)?.name : undefined
+            const transferLabel = transferFromName && transferToName
+              ? `Przelew · ${transferFromName} → ${transferToName}`
+              : 'Przelew między kontami'
+            const transactionLabel = transaction.description || transaction.transaction_date
+            const transactionAmountTone = transactionAmountMinor > 0n
+              ? 'is-positive'
+              : transactionAmountMinor < 0n ? 'is-negative' : ''
             return (
-              <div className="finance-savings-transaction-row" key={transaction.id}>
-                <div className="finance-transfer-copy">
-                  <strong>{isTransfer ? 'Przelew' : transaction.description || 'Ruch oszczędnościowy'}</strong>
-                  <span>{transaction.transaction_date}{transaction.excluded_from_monthly_savings ? ' · poza miesięcznymi oszczędnościami' : ''}</span>
-                </div>
-                <strong className="finance-savings-transaction-amount">{formatPln(financeMinorUnitsToMoney(transaction.amount))}</strong>
-                {!isTransfer && (
-                  <div className="finance-savings-transaction-actions">
-                    <button className="button-quiet finance-edit-button" type="button" onClick={() => startTransactionEdit(transaction)} disabled={!selectedAccountActive || saveTransaction.isPending || deleteTransaction.isPending}>Edytuj</button>
-                    <button className="button-quiet finance-edit-button" type="button" onClick={() => deleteTransaction.mutate(transaction)} disabled={deleteTransaction.isPending || saveTransaction.isPending}>Usuń</button>
+              <div className={`finance-savings-transaction-row${isTransfer ? ' is-transfer' : ''}`} key={transaction.id}>
+                {isTransfer ? <>
+                  <div className="finance-transfer-copy">
+                    <strong>{transferLabel}</strong>
+                    <span>{transaction.transaction_date}</span>
                   </div>
+                  <strong className={`finance-savings-transaction-amount ${transactionAmountTone}`}>{formatPln(financeMinorUnitsToMoney(transaction.amount))}</strong>
+                </> : <button
+                  className="finance-savings-transaction-open"
+                  type="button"
+                  aria-label={`Edytuj transakcję: ${transactionLabel}`}
+                  onClick={() => startTransactionEdit(transaction)}
+                  disabled={!selectedAccountActive || saveTransaction.isPending || deleteTransaction.isPending}
+                >
+                  <span className="finance-transfer-copy">
+                    <strong>{transaction.description || 'Transakcja oszczędnościowa'}</strong>
+                    <span>{transaction.transaction_date}</span>
+                  </span>
+                  <strong className={`finance-savings-transaction-amount ${transactionAmountTone}`}>{formatPln(financeMinorUnitsToMoney(transaction.amount))}</strong>
+                </button>}
+                <label className="finance-savings-monthly-toggle">
+                  <input
+                    type="checkbox"
+                    checked={transactionAmountMinor > 0n && !transaction.excluded_from_monthly_savings && !isTransfer}
+                    disabled={transactionAmountMinor <= 0n || isTransfer || !selectedAccountActive || saveTransaction.isPending || deleteTransaction.isPending}
+                    aria-label={`Wliczaj transakcję ${transactionLabel} do miesięcznych oszczędności`}
+                    onChange={event => setTransactionMonthlySavingsStatus(transaction, event.target.checked)}
+                  />
+                  Wliczaj
+                </label>
+                {!isTransfer && (
+                  <button className="button-quiet finance-edit-button finance-budget-edit-button finance-budget-delete-button" type="button" aria-label={`Usuń transakcję: ${transactionLabel}`} title="Usuń transakcję" onClick={() => deleteTransaction.mutate(transaction)} disabled={deleteTransaction.isPending || saveTransaction.isPending}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="m19 6-1 14H6L5 6" /><path d="M10 11v5M14 11v5" /></svg></button>
                 )}
               </div>
             )
           })}
+          {transactionToggleError && <p className="error-message finance-error finance-savings-feedback" role="alert">{transactionToggleError}</p>}
           {deleteTransaction.isError && <p className="error-message finance-error" role="alert">{errorText(deleteTransaction.error)}</p>}
-
+          {editingTransaction && (
+            <dialog
+              ref={transactionDialogRef}
+              className="finance-transaction-dialog"
+              aria-labelledby="finance-transaction-dialog-title"
+              onCancel={event => {
+                event.preventDefault()
+                if (!saveTransaction.isPending) closeTransactionEdit()
+              }}
+              onClick={event => {
+                if (event.target === event.currentTarget && !saveTransaction.isPending) closeTransactionEdit()
+              }}
+            >
+              <form className="finance-transaction-dialog-form" onSubmit={event => submitTransactionEdit(event, editingTransaction)}>
+                <header className="finance-transaction-dialog-header">
+                  <button className="button-quiet finance-transaction-dialog-close" type="button" aria-label="Anuluj edycję" onClick={closeTransactionEdit} disabled={saveTransaction.isPending}>
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
+                  </button>
+                  <h2 id="finance-transaction-dialog-title">Edycja transakcji</h2>
+                  <span aria-hidden="true" />
+                </header>
+                <div className="finance-transaction-dialog-body">
+                  <label>Rodzaj
+                    <select value={editTransactionDirection} onChange={event => setEditTransactionDirection(event.target.value as TransactionDirection)} disabled={saveTransaction.isPending}>
+                      <option value="deposit">Wpłata</option>
+                      <option value="withdrawal">Wypłata</option>
+                    </select>
+                  </label>
+                  <label>Kwota
+                    <input required min="0.01" step="0.01" inputMode="decimal" value={editTransactionAmount} onChange={event => setEditTransactionAmount(event.target.value)} disabled={saveTransaction.isPending} />
+                  </label>
+                  <label>Data<input required type="date" value={editTransactionDate} onChange={event => setEditTransactionDate(event.target.value)} disabled={saveTransaction.isPending} /></label>
+                  <label>Opis<input maxLength={2000} value={editTransactionDescription} onChange={event => setEditTransactionDescription(event.target.value)} disabled={saveTransaction.isPending} /></label>
+                  <label className="finance-savings-monthly-toggle finance-transaction-dialog-monthly-toggle">
+                    <input
+                      type="checkbox"
+                      checked={editTransactionDirection === 'deposit' && !editExcludeFromSavings}
+                      disabled={editTransactionDirection === 'withdrawal' || saveTransaction.isPending}
+                      onChange={event => setEditExcludeFromSavings(!event.target.checked)}
+                    />
+                    Wliczaj do miesięcznych oszczędności
+                  </label>
+                  {transactionEditFormError && <p className="error-message finance-error" role="alert">{transactionEditFormError}</p>}
+                  {saveTransaction.isError && !transactionToggleError && <p className="error-message finance-error" role="alert">{errorText(saveTransaction.error)}</p>}
+                </div>
+                <footer className="finance-transaction-dialog-actions">
+                  <button className="button-quiet" type="button" onClick={closeTransactionEdit} disabled={saveTransaction.isPending}>Anuluj</button>
+                  <button className="primary-button" type="submit" disabled={saveTransaction.isPending}>
+                    {saveTransaction.isPending ? 'Zapisuję…' : 'Zapisz zmiany'}
+                  </button>
+                </footer>
+              </form>
+            </dialog>
+          )}
         </div>
       )}</>
   const errors = <>
@@ -818,7 +936,7 @@ export function SavingsAccountsPanel({
     {!activeAccounts.length && <p className="panel-message">Brak aktywnych kont. Dodaj konto w zakładce Konta.</p>}
   </div>
   if (mode === 'summary') return <FinanceSummariesPanel api={api} householdId={householdId} userId={userId} months={months} selectedMonthId={selectedMonthId}
-    actions={<>{movementForm}<SavingsTransfersPanel api={api} householdId={householdId} userId={userId} /></>}>
+    actions={<>{transactionForm}<SavingsTransfersPanel api={api} householdId={householdId} userId={userId} /></>}>
     <section className="panel finance-panel"><div className="panel-head"><h2 className="panel-title">Konta</h2></div>{summaryTree}</section>
   </FinanceSummariesPanel>
   if (mode === 'accounts') return <section className="panel finance-panel">
