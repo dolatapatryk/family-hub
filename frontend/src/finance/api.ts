@@ -363,6 +363,7 @@ export function createFinanceApi(
         .select(budgetItemColumns)
         .eq('household_id', householdId)
         .eq('month_id', monthId)
+        .order('created_at', { ascending: true })
         .order('id', { ascending: true })
       if (signal) query = query.abortSignal(signal)
       return query as unknown as PromiseLike<{ data: FinanceBudgetItemRow[] | null; error: { message: string } | null }>
