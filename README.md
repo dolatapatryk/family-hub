@@ -292,6 +292,10 @@ Reset the local Supabase database when testing migration changes:
 The Finance feature, normalized database schema, shared/private savings
 account rules, and the historical Home Budget data migration sequence are documented in
 [BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md](BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md).
+The proposed monthly transaction register, physical wallets, UI design, and
+later savings-goal allocation model are described in
+[FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md](FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md).
+This is a staged implementation plan, not an already implemented feature.
 Categories select one of six budget sections, including individual accounts.
 Budget and forecast lines require a category and amount, with an optional
 description. Each section offers its own add action. Migration
