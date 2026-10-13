@@ -82,7 +82,7 @@
 }
 
 .finance-workspace .finance-budget-item-row {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
 }
 
 .finance-budget-item-row .finance-budget-edit-button {
@@ -119,8 +119,105 @@
   height: 18px;
 }
 
+.finance-budget-recurring {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.finance-budget-recurring-short {
+  display: none;
+}
+
+.finance-budget-recurring input {
+  width: 16px !important;
+  min-height: 16px !important;
+  accent-color: var(--color-blue);
+}
+
+.finance-budget-delete-button {
+  color: #a44e48;
+}
+
+.finance-budget-delete-button:hover:not(:disabled) {
+  border-color: #efd4d1;
+  background: #fff4f2;
+  color: #8e352f;
+}
+
+.finance-budget-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+}
+
+.finance-budget-section-toggle {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 5px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.finance-budget-section-toggle:hover {
+  background: #f6f9f7;
+}
+
+.finance-budget-section-toggle > strong {
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.finance-budget-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--color-muted);
+  transition: transform 150ms ease;
+}
+
+.finance-budget-chevron.is-expanded {
+  transform: rotate(180deg);
+}
+
+.finance-budget-add-button {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  background: #f5f9f6;
+  color: #285d52;
+}
+
+.finance-budget-add-button:hover:not(:disabled) {
+  border-color: #b8d4c4;
+  background: #eaf4ee;
+}
+
+.finance-budget-add-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.finance-budget-section-content > .panel-message {
+  padding: 0 19px 16px;
+}
+
 .finance-workspace .finance-budget-section .finance-budget-item-form {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .finance-budget-item-form .finance-edit-actions {
@@ -133,7 +230,64 @@
   }
 
   .finance-workspace .finance-budget-item-row {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) minmax(76px, max-content) max-content 34px 34px;
+    gap: 4px;
+    padding-inline: 10px;
+  }
+
+  .finance-workspace .finance-budget-item-row .finance-item-copy {
+    display: grid;
+    align-content: center;
+    gap: 2px;
+    overflow: hidden;
+  }
+
+  .finance-workspace .finance-budget-item-row .finance-item-copy strong,
+  .finance-workspace .finance-budget-item-row .finance-item-copy span {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .finance-workspace .finance-budget-recurring {
+    gap: 3px !important;
+    font-size: 10px;
+  }
+
+  .finance-workspace .finance-budget-recurring-full {
+    display: none;
+  }
+
+  .finance-workspace .finance-budget-recurring-short {
+    display: inline;
+  }
+
+  .finance-workspace .finance-budget-item-row .finance-budget-edit-button {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+  }
+
+  .finance-workspace .finance-budget-amount-button {
+    width: 100%;
+    padding-inline: 0;
+    font-size: 12px;
+    text-align: right;
+  }
+
+  .finance-budget-section-head {
+    gap: 6px;
+    padding-inline: 10px;
+  }
+
+  .finance-budget-section-toggle {
+    gap: 8px;
+  }
+
+  .finance-budget-section-toggle .panel-title {
+    font-size: 14px;
   }
 }
 
@@ -909,3 +1063,7 @@
 .finance-account-summary[open] > summary::before, .finance-monthly-item[open] > summary::before { transform: rotate(180deg); }
 .finance-account-summary > summary > span, .finance-monthly-item > summary > span { flex: 1; }
 .finance-account-summary > summary > span::before, .finance-monthly-item > summary > span::before { content: none; }
+@media (max-width: 800px) {
+  .finance-workspace .finance-budget-section input:not([type="checkbox"]),
+  .finance-workspace .finance-budget-section select { font-size: 16px; }
+}

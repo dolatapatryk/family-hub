@@ -192,6 +192,7 @@ interface CreateBudgetItemInput {
   category_id: FinanceId
   name: string
   amount: FinanceMoney
+  is_recurring?: boolean
 }
 
 interface CreateScenarioItemInput {
@@ -199,6 +200,7 @@ interface CreateScenarioItemInput {
   category_id: FinanceId
   name: string
   amount: FinanceMoney
+  is_recurring?: boolean
 }
 
 interface UpdateFinanceItemInput {
@@ -207,6 +209,7 @@ interface UpdateFinanceItemInput {
   category_id: FinanceId
   name: string
   amount: FinanceMoney
+  is_recurring?: boolean
 }
 
 export function createFinanceApi(
@@ -667,7 +670,7 @@ export function createFinanceApi(
         name: input.name.trim(),
         amount: moneyToFinanceMinorUnits(input.amount),
         is_planned: false,
-        is_recurring: false,
+        is_recurring: input.is_recurring ?? false,
         notes: null,
       })
       .select(budgetItemColumns)
@@ -686,7 +689,7 @@ export function createFinanceApi(
         name: input.name.trim(),
         amount: moneyToFinanceMinorUnits(input.amount),
         is_planned: true,
-        is_recurring: false,
+        is_recurring: input.is_recurring ?? false,
         notes: null,
       })
       .select(scenarioItemColumns)
@@ -702,6 +705,7 @@ export function createFinanceApi(
           category_id: input.category_id,
           name: input.name.trim(),
           amount: moneyToFinanceMinorUnits(input.amount),
+          ...(input.is_recurring === undefined ? {} : { is_recurring: input.is_recurring }),
         })
         .eq('id', input.id)
         .eq('household_id', householdId)
@@ -717,6 +721,23 @@ export function createFinanceApi(
     )
   }
 
+  async function deleteBudgetItem(input: { id: FinanceId; expected_version: number }): Promise<void> {
+    const supabaseClient = requireSupabase(client)
+    await resolveVersionedUpdate(
+      () => supabaseClient.from('finance_budget_items').delete()
+        .eq('household_id', householdId)
+        .eq('id', input.id)
+        .eq('version', input.expected_version)
+        .select('id')
+        .maybeSingle() as unknown as PromiseLike<VersionedUpdateResponse>,
+      () => supabaseClient.from('finance_budget_items').select('version')
+        .eq('household_id', householdId)
+        .eq('id', input.id)
+        .maybeSingle() as unknown as PromiseLike<CurrentVersionResponse>,
+      input.expected_version,
+    )
+  }
+
   async function updateScenarioItem(input: UpdateFinanceItemInput): Promise<void> {
     const supabaseClient = requireSupabase(client)
     await resolveVersionedUpdate(
@@ -725,6 +746,7 @@ export function createFinanceApi(
           category_id: input.category_id,
           name: input.name.trim(),
           amount: moneyToFinanceMinorUnits(input.amount),
+          ...(input.is_recurring === undefined ? {} : { is_recurring: input.is_recurring }),
         })
         .eq('id', input.id)
         .eq('household_id', householdId)
@@ -768,5 +790,6 @@ export function createFinanceApi(
     createScenarioItem,
     updateBudgetItem,
     updateScenarioItem,
+    deleteBudgetItem,
   }
 }

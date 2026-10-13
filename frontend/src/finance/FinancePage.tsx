@@ -231,6 +231,17 @@ export function FinancePage() {
       await queryClient.invalidateQueries({ queryKey })
     },
   })
+  const deleteBudgetItem = useMutation({
+    mutationFn: (input: Parameters<typeof api.deleteBudgetItem>[0]) => api.deleteBudgetItem(input),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id] })
+    },
+    onError: async error => {
+      if (error instanceof FinanceVersionConflictError) {
+        await queryClient.invalidateQueries({ queryKey: ['financeBudgetItems', profile.household_id] })
+      }
+    },
+  })
 
   const monthList = months.data ?? []
   const categoryList = categories.data ?? []
@@ -266,6 +277,7 @@ export function FinancePage() {
     createBudgetItem.reset()
     createScenarioItem.reset()
     updateFinanceItem.reset()
+    deleteBudgetItem.reset()
   }
 
   function addBudgetItem(input: BudgetItemInput) {
@@ -353,10 +365,11 @@ export function FinancePage() {
               {budgetItems.data && budgetItems.data.length === 0 && <p className="panel-message">Ten miesiąc nie ma jeszcze pozycji.</p>}
               <label className="finance-zero-toggle"><input type="checkbox" checked={showZeroItems} onChange={event => setShowZeroItems(event.target.checked)} /> Pokaż pozycje zerowe</label>
               <BudgetItemsPanel key={activeMonth.id} items={budgetItems.data ?? []} categories={categoryList}
-                pending={createBudgetItem.isPending || updateFinanceItem.isPending}
+                pending={createBudgetItem.isPending || updateFinanceItem.isPending || deleteBudgetItem.isPending}
                 unavailable={categories.isPending || categories.isError || budgetItems.isPending || budgetItems.isError}
-                createError={createBudgetItem.error} updateError={updateFinanceItem.error} showZeroItems={showZeroItems}
+                createError={createBudgetItem.error} updateError={updateFinanceItem.error} deleteError={deleteBudgetItem.error} showZeroItems={showZeroItems}
                 onCreate={addBudgetItem} onUpdate={input => updateFinanceItem.mutateAsync({ ...input, kind: 'budget' })}
+                onDelete={input => deleteBudgetItem.mutateAsync(input)}
                 onResetErrors={resetItemErrors} />
             </>
           )}
