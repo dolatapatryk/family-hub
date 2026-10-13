@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { FinanceVersionConflictError } from './api'
 import { budgetItemDescription, budgetItemTitle, categorySection, financeSections } from './categories'
@@ -76,6 +76,37 @@ export function BudgetItemsPanel({ items, categories, pending, unavailable, crea
 }) {
   const [addingSection, setAddingSection] = useState<FinanceSectionId | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingAmount, setEditingAmount] = useState<{ id: string; value: string } | null>(null)
+  const savingAmountIds = useRef(new Set<string>())
+
+  async function saveAmount(item: BudgetItem, amount: string) {
+    if (savingAmountIds.current.has(item.id) || pending) return
+    const currentAmount = financeMinorUnitsToMoney(item.amount)
+    if (amount.trim() === currentAmount) {
+      setEditingAmount(current => current?.id === item.id ? null : current)
+      return
+    }
+
+    savingAmountIds.current.add(item.id)
+    onResetErrors()
+    try {
+      await onUpdate({
+        id: item.id,
+        expected_version: item.version,
+        category_id: item.category_id,
+        name: item.name,
+        amount,
+      })
+      setEditingAmount(current => current?.id === item.id ? null : current)
+    } catch (error) {
+      if (error instanceof FinanceVersionConflictError) {
+        setEditingAmount(current => current?.id === item.id ? null : current)
+      }
+    } finally {
+      savingAmountIds.current.delete(item.id)
+    }
+  }
+
   const sections = [
     ...financeSections,
     ...(items.some(item => !categories.some(category => category.id === item.category_id)) ? [{ id: 'unavailable' as const, label: 'Kategoria niedostępna' }] : []),
@@ -109,10 +140,40 @@ export function BudgetItemsPanel({ items, categories, pending, unavailable, crea
             catch (error) { if (error instanceof FinanceVersionConflictError) setEditingId(null); throw error }
           }} /> : <div className="finance-item-row finance-budget-item-row" key={item.id}>
             <div className="finance-item-copy"><strong>{title}</strong>{!category && <span>Kategoria niedostępna</span>}</div>
-            <strong className="finance-item-amount">{formatPln(financeMinorUnitsToMoney(item.amount))}</strong>
-            <button className="button-quiet finance-edit-button" type="button" aria-label={`Edytuj: ${title}`} disabled={pending || unavailable} onClick={() => {
-              onResetErrors(); setAddingSection(null); setEditingId(item.id)
-            }}>Edytuj</button>
+            {editingAmount?.id === item.id ? <input
+              className="finance-item-amount finance-budget-amount-input"
+              type="text"
+              inputMode="decimal"
+              aria-label={`Kwota: ${title}`}
+              autoFocus
+              value={editingAmount.value}
+              disabled={pending || unavailable}
+              onChange={event => setEditingAmount({ id: item.id, value: event.currentTarget.value })}
+              onFocus={event => event.currentTarget.select()}
+              onBlur={() => void saveAmount(item, editingAmount.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void saveAmount(item, editingAmount.value)
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  setEditingAmount(null)
+                }
+              }}
+            /> : <button
+              className="finance-item-amount finance-budget-amount-button"
+              type="button"
+              aria-label={`Edytuj kwotę: ${title}`}
+              title={`Kliknij, aby edytować kwotę: ${title}`}
+              disabled={pending || unavailable}
+              onClick={() => {
+                onResetErrors()
+                setEditingAmount({ id: item.id, value: financeMinorUnitsToMoney(item.amount) })
+              }}
+            >{formatPln(financeMinorUnitsToMoney(item.amount))}</button>}
+            <button className="button-quiet finance-edit-button finance-budget-edit-button" type="button" aria-label={`Edytuj: ${title}`} title={`Edytuj: ${title}`} disabled={pending || unavailable} onClick={() => {
+              onResetErrors(); setAddingSection(null); setEditingAmount(null); setEditingId(item.id)
+            }}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg></button>
           </div>
         })}
         {!sectionItems.length && <p className="panel-message">Brak pozycji.</p>}

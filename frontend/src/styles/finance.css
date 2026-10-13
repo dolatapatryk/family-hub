@@ -85,6 +85,40 @@
   grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
+.finance-budget-item-row .finance-budget-edit-button {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.finance-budget-amount-button {
+  min-height: 40px;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink);
+  font-weight: 700;
+  text-align: right;
+}
+
+.finance-budget-amount-button:hover:not(:disabled) {
+  border-color: var(--color-line);
+  background: #f1f5f3;
+}
+
+.finance-budget-amount-input {
+  width: 112px;
+  padding-inline: 8px;
+  text-align: right;
+}
+
+.finance-budget-edit-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .finance-workspace .finance-budget-section .finance-budget-item-form {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -99,11 +133,7 @@
   }
 
   .finance-workspace .finance-budget-item-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .finance-budget-item-row .finance-edit-button {
-    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto auto;
   }
 }
 
