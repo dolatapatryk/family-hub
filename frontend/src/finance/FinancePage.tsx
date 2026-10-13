@@ -311,8 +311,27 @@ export function FinancePage() {
       </nav>}
 
       {pageErrors.map((error, index) => <p className="error-message" role="alert" key={index}>{errorText(error)}</p>)}
+      {view === 'dashboard' && <section className="panel finance-panel">
+        <div className="panel-head">
+          <div>
+            <h2 className="panel-title">Nowy miesiąc</h2>
+            <p className="panel-kicker">Wybierz pozycje początkowe dla tworzonego miesiąca.</p>
+          </div>
+          <div className="finance-month-actions">
+            <label className="finance-month-select">Początkowe pozycje
+              <select value={effectiveMonthSource} onChange={event => setMonthSource(event.target.value)} disabled={createMonth.isPending || months.isPending}>
+                <option value="empty">Pusty miesiąc</option>
+                {latestMonth && <option value="recurring">Powtarzalne z {displayMonth(latestMonth)}</option>}
+                {scenarioList.map(scenario => <option key={scenario.id} value={`scenario:${scenario.id}`}>{scenario.name}</option>)}
+              </select>
+            </label>
+            <button className="primary-button" onClick={() => submitNewMonth()} disabled={createMonth.isPending || months.isPending}>{createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz kolejny miesiąc' : 'Utwórz bieżący miesiąc'}</button>
+          </div>
+        </div>
+        {createMonth.isError && <p className="error-message finance-error" role="alert">{errorText(createMonth.error)}</p>}
+      </section>}
       {view === 'dashboard' ? (
-        months.isPending || (selectedMonthId && budgetItems.isPending) ? <p className="panel-message" role="status">Ładuję dashboard…</p> : budgetItems.isError ? <p className="error-message" role="alert">{errorText(budgetItems.error)}</p> : activeMonth ? <FinanceDashboard lines={budgetLines} monthName={displayMonth(activeMonth)} /> : <section className="panel finance-chart-panel"><h2 className="panel-title">Twój budżet domowy</h2><p>Utwórz pierwszy miesiąc, aby zobaczyć podsumowanie finansów.</p><Link className="primary-button" to="/finance/budget">Przejdź do budżetu</Link></section>
+        months.isPending || (selectedMonthId && budgetItems.isPending) ? <p className="panel-message" role="status">Ładuję dashboard…</p> : budgetItems.isError ? <p className="error-message" role="alert">{errorText(budgetItems.error)}</p> : activeMonth ? <FinanceDashboard lines={budgetLines} monthName={displayMonth(activeMonth)} /> : <section className="panel finance-chart-panel"><h2 className="panel-title">Twój budżet domowy</h2><p>Utwórz bieżący miesiąc, aby zobaczyć podsumowanie finansów.</p></section>
       ) : view === 'budget' ? (
         <section className="panel finance-panel">
           <div className="panel-head">
@@ -320,21 +339,11 @@ export function FinancePage() {
               <h2 className="panel-title">{activeMonth ? displayMonth(activeMonth) : 'Budżet miesięczny'}</h2>
               <p className="panel-kicker">Saldo po wydatkach, oszczędnościach i inwestycjach: <strong>{formatPln(calculateMonthSummary(budgetLines).cashflow)}</strong></p>
             </div>
-            <div className="finance-month-actions">
-              <label className="finance-month-select">Początkowe pozycje
-                <select value={effectiveMonthSource} onChange={event => setMonthSource(event.target.value)} disabled={createMonth.isPending || months.isPending}>
-                  <option value="empty">Pusty miesiąc</option>
-                  {latestMonth && <option value="recurring">Powtarzalne z {displayMonth(latestMonth)}</option>}
-                  {scenarioList.map(scenario => <option key={scenario.id} value={`scenario:${scenario.id}`}>{scenario.name}</option>)}
-                </select>
-              </label>
-              <button className="primary-button" onClick={() => submitNewMonth()} disabled={createMonth.isPending || months.isPending}>{createMonth.isPending ? 'Tworzę miesiąc…' : monthList.length ? 'Utwórz kolejny miesiąc' : 'Utwórz bieżący miesiąc'}</button>
-            </div>
           </div>
 
           {months.isPending && <p className="panel-message" role="status">Ładuję miesiące…</p>}
           {monthList.length === 0 && !months.isPending && (
-            <p className="panel-message">Nie ma jeszcze miesięcy budżetowych. Utwórz miesiąc, aby dodać pozycje.</p>
+            <p className="panel-message">Nie ma jeszcze miesięcy budżetowych. <Link to="/finance/dashboard">Przejdź do Dashboardu, aby utworzyć miesiąc.</Link></p>
           )}
           {activeMonth && (
             <>
@@ -351,7 +360,6 @@ export function FinancePage() {
                 onResetErrors={resetItemErrors} />
             </>
           )}
-          {createMonth.isError && <p className="error-message finance-error" role="alert">{errorText(createMonth.error)}</p>}
         </section>
       ) : view === 'forecast' ? (
         <div className="finance-scenarios-layout">
