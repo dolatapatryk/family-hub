@@ -159,6 +159,7 @@ export function SavingsAccountsPanel({
   const [editAccountType, setEditAccountType] = useState<FinanceSavingsAccountType>('cash')
   const [editTargetAmount, setEditTargetAmount] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState('')
+  const [expandedSummaryAccountId, setExpandedSummaryAccountId] = useState('')
   const [planAccountId, setPlanAccountId] = useState('')
   const [transactionDirection, setTransactionDirection] = useState<TransactionDirection>('deposit')
   const [transactionAmount, setTransactionAmount] = useState('')
@@ -203,6 +204,17 @@ export function SavingsAccountsPanel({
   })
   const accountList = accounts.data ?? []
   const activeAccounts = useMemo(() => getActiveSavingsAccounts(accountList), [accountList])
+  const expandedSummaryAccountIds = useMemo(() => {
+    const expandedIds = new Set<string>()
+    let account = activeAccounts.find(candidate => candidate.id === expandedSummaryAccountId)
+    while (account && !expandedIds.has(account.id)) {
+      expandedIds.add(account.id)
+      account = account.parent_id
+        ? activeAccounts.find(candidate => candidate.id === account?.parent_id)
+        : undefined
+    }
+    return expandedIds
+  }, [activeAccounts, expandedSummaryAccountId])
   const transactionList = transactions.data ?? []
   const templateList = templates.data ?? []
   const monthlyPlanItems = monthlyPlanState.storage_key === monthlyPlanStorageKey ? monthlyPlanState.items : []
@@ -224,6 +236,12 @@ export function SavingsAccountsPanel({
       setSelectedAccountId(availableAccounts[0]?.id ?? '')
     }
   }, [accountList, activeAccounts, selectedAccountId, mode])
+
+  useEffect(() => {
+    if (expandedSummaryAccountId && !activeAccounts.some(account => account.id === expandedSummaryAccountId)) {
+      setExpandedSummaryAccountId('')
+    }
+  }, [activeAccounts, expandedSummaryAccountId])
 
   useEffect(() => {
     if (!activeAccounts.some(account => account.id === planAccountId)) {
@@ -923,13 +941,28 @@ export function SavingsAccountsPanel({
     const nextAncestors = new Set([...ancestors, account.id])
     const balance = accountRows.find(row => row.account.id === account.id)?.balance ?? '0.00'
     const children = activeAccounts.filter(child => child.parent_id === account.id)
-    return <details className="finance-account-summary" key={account.id} onToggle={event => {
-      if (event.target === event.currentTarget && event.currentTarget.open) setSelectedAccountId(account.id)
+    return <details className="finance-account-summary" key={account.id} open={expandedSummaryAccountIds.has(account.id)} onToggle={event => {
+      if (event.target !== event.currentTarget) return
+      if (event.currentTarget.open) {
+        setExpandedSummaryAccountId(account.id)
+        setSelectedAccountId(account.id)
+        return
+      }
+      setExpandedSummaryAccountId(current => {
+        let expandedAccount = activeAccounts.find(candidate => candidate.id === current)
+        while (expandedAccount) {
+          if (expandedAccount.id === account.id) return ''
+          expandedAccount = expandedAccount.parent_id
+            ? activeAccounts.find(candidate => candidate.id === expandedAccount?.parent_id)
+            : undefined
+        }
+        return current
+      })
     }}>
       <summary><span><strong>{account.name}</strong><small>{accountTypeNames[account.account_type]} · {privacyLabel(account.visibility)}</small></span><strong>{formatPln(balance)}</strong></summary>
       {account.target_amount && BigInt(account.target_amount) > 0n && <progress className="finance-goal-progress" max={100} value={Math.min(100, Math.max(0, moneyRatio(balance, financeMinorUnitsToMoney(account.target_amount)) * 100))} aria-label={`Postęp celu: ${account.name}`} />}
       {children.length > 0 && <div className="finance-subaccount-list">{children.map(child => renderSummaryAccount(child, nextAncestors))}</div>}
-      {selectedAccountId === account.id ? historyContent : <button className="button-quiet finance-account-history-button" onClick={() => setSelectedAccountId(account.id)}>Historia i edycja transakcji</button>}
+      {expandedSummaryAccountId === account.id && historyContent}
     </details>
   }
   const summaryTree = <div className="finance-savings-account-list">{activeAccounts.filter(account => !account.parent_id || !activeAccounts.some(parent => parent.id === account.parent_id)).map(account => renderSummaryAccount(account))}

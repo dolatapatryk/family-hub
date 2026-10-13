@@ -1415,7 +1415,6 @@
 .finance-account-summary small { color: var(--color-muted); font-size: 12px; }
 .finance-account-summary .finance-goal-progress { width: calc(100% - 28px); margin-inline: 14px; }
 .finance-subaccount-list { display: grid; gap: 8px; margin: 0 14px 12px 28px; }
-.finance-account-history-button { margin: 0 14px 14px; }
 .finance-close-editor { margin: 14px 19px 0; }
 @media (max-width: 620px) {
   .finance-account-summary > summary { flex-wrap: wrap; }
