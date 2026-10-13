@@ -28,26 +28,18 @@ select throws_ok($$insert into public.finance_categories (household_id, created_
         'Invalid income allowance', 'income', 'personal_allowance')$$, '23514', null,
     'individual accounts cannot be misclassified as income');
 
-select lives_ok($$insert into public.finance_budget_items (household_id, created_by, month_id, category_id, amount, allocation_role, is_recurring)
+select lives_ok($$insert into public.finance_budget_items (household_id, created_by, month_id, category_id, amount, is_recurring)
     select '27000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001',
-        '37000000-0000-4000-8000-000000000001', id, 10000, 'personal_allowance', true
+        '37000000-0000-4000-8000-000000000001', id, 10000, true
     from public.finance_categories where name = 'Patryk — środki osobiste'$$, 'budget descriptions are optional');
 select is((select name from public.finance_budget_items where household_id = '27000000-0000-4000-8000-000000000001'), '',
     'a new budget line does not duplicate its category name');
 
-select lives_ok($$insert into public.finance_scenario_items (household_id, created_by, scenario_id, category_id, amount, allocation_role)
+select lives_ok($$insert into public.finance_scenario_items (household_id, created_by, scenario_id, category_id, amount)
     select '27000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001',
-        '47000000-0000-4000-8000-000000000001', id, 20000, 'personal_allowance'
+        '47000000-0000-4000-8000-000000000001', id, 20000
     from public.finance_categories where name = 'Patryk — środki osobiste'$$, 'forecast descriptions are optional');
 
-select throws_ok($$insert into public.finance_budget_items (household_id, created_by, month_id, category_id, amount, allocation_role)
-    select '27000000-0000-4000-8000-000000000001', '17000000-0000-4000-8000-000000000001',
-        '37000000-0000-4000-8000-000000000001', id, 10000, 'standard'
-    from public.finance_categories where name = 'Patryk — środki osobiste'$$, '23514', null,
-    'budget lines cannot diverge from the category section');
-select throws_ok($$update public.finance_scenario_items set allocation_role = 'standard'
-    where household_id = '27000000-0000-4000-8000-000000000001'$$, '23514', null,
-    'forecasts cannot diverge from the category section');
 select throws_ok($$update public.finance_categories set allocation_role = 'standard'
     where household_id = '27000000-0000-4000-8000-000000000001'$$, '42501', null,
     'clients cannot move historical categories to another section');
@@ -64,8 +56,9 @@ select lives_ok($$select public.finance_create_month('27000000-0000-4000-8000-00
     '67000000-0000-4000-8000-000000000002', '2026-12-01', 'scenario', null, '47000000-0000-4000-8000-000000000001')$$,
     'forecast month creation preserves optional descriptions and individual-account sections');
 select is((select count(*)::integer from public.finance_budget_items
-    where household_id = '27000000-0000-4000-8000-000000000001' and name = '' and allocation_role = 'personal_allowance'), 3,
-    'copied and original lines retain the category section without duplicate names');
+    where household_id = '27000000-0000-4000-8000-000000000001' and name = ''
+      and category_id in (select id from public.finance_categories where allocation_role = 'personal_allowance')), 3,
+    'copied and original lines retain their category-driven section without duplicate names');
 
 select * from finish();
 rollback;

@@ -3,11 +3,9 @@ import { supabase } from '../auth/supabase.ts'
 import { moneyToFinanceMinorUnits } from './money.ts'
 import { financeSections } from './categories.ts'
 import type {
-  FinanceAllocationRole,
   FinanceAccountLifecycleInput,
   FinanceAccountLifecyclePreview,
   FinanceBudgetItem,
-  FinanceBudgetType,
   FinanceCategory,
   FinanceCreateCategoryInput,
   FinanceRenameCategoryInput,
@@ -28,7 +26,6 @@ import type {
   FinanceDeleteSavingsDraftInput,
   FinanceSavingsDraftAcceptanceResult,
   FinanceScenario,
-  FinanceScenarioItemChanges,
   FinanceScenarioItem,
   FinanceTransferInput,
   FinanceTransferResult,
@@ -76,8 +73,8 @@ const projectExpenseColumns = `${commonColumns}, project_id, expense_date, name,
 const monthColumns = 'id, household_id, created_by, created_at, updated_at, version, month_start, display_name'
 const categoryColumns = 'id, household_id, created_by, created_at, updated_at, version, name, budget_type, allocation_role, parent_id, color, sort_order'
 const scenarioColumns = 'id, household_id, created_by, created_at, updated_at, version, name, description, sort_order'
-const budgetItemColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, category_id, name, amount_minor:amount::text, allocation_role, is_planned, is_recurring, notes, sort_order'
-const scenarioItemColumns = 'id, household_id, created_by, created_at, updated_at, version, scenario_id, category_id, name, amount_minor:amount::text, allocation_role, is_planned, is_recurring, notes, sort_order'
+const budgetItemColumns = 'id, household_id, created_by, created_at, updated_at, version, month_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes, sort_order'
+const scenarioItemColumns = 'id, household_id, created_by, created_at, updated_at, version, scenario_id, category_id, name, amount_minor:amount::text, is_planned, is_recurring, notes, sort_order'
 
 function requireSupabase(client: SupabaseClient | null): SupabaseClient {
   if (!client) throw new Error('Supabase is not configured. Check the Family Hub environment settings.')
@@ -202,34 +199,28 @@ function toSavingsDraft(row: FinanceSavingsDraftRow): FinancePlannedSavingsTrans
   return { ...draft, amount: amount_minor }
 }
 
-function assertRoleMatchesCategory(role: FinanceAllocationRole, categoryType: FinanceBudgetType) {
-  if (role === 'personal_allowance' && categoryType !== 'saving') {
-    throw new Error('Personal allowances can only use a saving category.')
-  }
-}
-
 interface CreateBudgetItemInput {
   month_id: FinanceId
   category_id: FinanceId
-  category_type: FinanceBudgetType
   name: string
   amount: FinanceMoney
-  allocation_role: FinanceAllocationRole
   sort_order: number
 }
 
-type CreateScenarioItemInput = Omit<FinanceScenarioItemChanges, 'is_planned' | 'is_recurring' | 'notes'> & {
-  category_type: FinanceBudgetType
+interface CreateScenarioItemInput {
+  scenario_id: FinanceId
+  category_id: FinanceId
+  name: string
+  amount: FinanceMoney
+  sort_order: number
 }
 
 interface UpdateFinanceItemInput {
   id: FinanceId
   expected_version: number
   category_id: FinanceId
-  category_type: FinanceBudgetType
   name: string
   amount: FinanceMoney
-  allocation_role: FinanceAllocationRole
 }
 
 export function createFinanceApi(
@@ -777,7 +768,6 @@ export function createFinanceApi(
   }
 
   async function createBudgetItem(input: CreateBudgetItemInput): Promise<FinanceBudgetItem> {
-    assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
     const row = await resolve<FinanceBudgetItemRow>(() => supabaseClient.from('finance_budget_items')
       .insert({
@@ -787,7 +777,6 @@ export function createFinanceApi(
         category_id: input.category_id,
         name: input.name.trim(),
         amount: moneyToFinanceMinorUnits(input.amount),
-        allocation_role: input.allocation_role,
         is_planned: false,
         is_recurring: false,
         notes: null,
@@ -799,7 +788,6 @@ export function createFinanceApi(
   }
 
   async function createScenarioItem(input: CreateScenarioItemInput): Promise<FinanceScenarioItem> {
-    assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
     const row = await resolve<FinanceScenarioItemRow>(() => supabaseClient.from('finance_scenario_items')
       .insert({
@@ -809,7 +797,6 @@ export function createFinanceApi(
         category_id: input.category_id,
         name: input.name.trim(),
         amount: moneyToFinanceMinorUnits(input.amount),
-        allocation_role: input.allocation_role,
         is_planned: true,
         is_recurring: false,
         notes: null,
@@ -821,7 +808,6 @@ export function createFinanceApi(
   }
 
   async function updateBudgetItem(input: UpdateFinanceItemInput): Promise<void> {
-    assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
     await resolveVersionedUpdate(
       () => supabaseClient.from('finance_budget_items')
@@ -829,7 +815,6 @@ export function createFinanceApi(
           category_id: input.category_id,
           name: input.name.trim(),
           amount: moneyToFinanceMinorUnits(input.amount),
-          allocation_role: input.allocation_role,
         })
         .eq('id', input.id)
         .eq('household_id', householdId)
@@ -846,7 +831,6 @@ export function createFinanceApi(
   }
 
   async function updateScenarioItem(input: UpdateFinanceItemInput): Promise<void> {
-    assertRoleMatchesCategory(input.allocation_role, input.category_type)
     const supabaseClient = requireSupabase(client)
     await resolveVersionedUpdate(
       () => supabaseClient.from('finance_scenario_items')
@@ -854,7 +838,6 @@ export function createFinanceApi(
           category_id: input.category_id,
           name: input.name.trim(),
           amount: moneyToFinanceMinorUnits(input.amount),
-          allocation_role: input.allocation_role,
         })
         .eq('id', input.id)
         .eq('household_id', householdId)

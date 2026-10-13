@@ -66,7 +66,6 @@ export interface FinanceBudgetItem extends FinanceRow {
   /** Optional description; an empty string displays only the category name. */
   name: string
   amount: FinanceMinorUnits
-  allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
@@ -85,7 +84,6 @@ export interface FinanceScenarioItem extends FinanceRow {
   /** Optional description; an empty string displays only the category name. */
   name: string
   amount: FinanceMinorUnits
-  allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
@@ -381,7 +379,6 @@ export interface FinanceBudgetItemChanges {
   name: string
   /** Decimal major-unit input; the adapter converts it to bigint minor units. */
   amount: FinanceMoney
-  allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
   notes: string | null
@@ -398,7 +395,6 @@ export interface FinanceScenarioItemChanges {
   name: string
   /** Decimal major-unit input; the adapter converts it to bigint minor units. */
   amount: FinanceMoney
-  allocation_role: FinanceAllocationRole
   is_planned: boolean
   is_recurring: boolean
   notes: string | null

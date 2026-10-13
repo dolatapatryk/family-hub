@@ -20,7 +20,8 @@ export function ForecastOverview({ api, householdId, scenarios, categories, pend
     if (!query.data) return []
     const lines = query.data.flatMap(item => {
       const category = categories.find(candidate => candidate.id === item.category_id)
-      return category ? [{ ...item, amount: financeMinorUnitsToMoney(item.amount), budget_type: category.budget_type }] : []
+      return category ? [{ ...item, amount: financeMinorUnitsToMoney(item.amount),
+        budget_type: category.budget_type, allocation_role: category.allocation_role }] : []
     })
     return [{ ...scenario, items: query.data, summary: calculateMonthSummary(lines) }]
   })

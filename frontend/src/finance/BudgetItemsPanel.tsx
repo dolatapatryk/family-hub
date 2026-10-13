@@ -4,7 +4,7 @@ import { FinanceVersionConflictError } from './api'
 import { budgetItemDescription, budgetItemTitle, categorySection, financeSections } from './categories'
 import { financeMinorUnitsToMoney, formatPln, sumMoney } from './money'
 import { financeActionError } from './useFinanceAction'
-import type { FinanceAllocationRole, FinanceBudgetType, FinanceCategory, FinanceSectionId } from './types'
+import type { FinanceCategory, FinanceSectionId } from './types'
 
 interface BudgetItem {
   id: string
@@ -12,15 +12,12 @@ interface BudgetItem {
   category_id: string
   name: string
   amount: string
-  allocation_role: FinanceAllocationRole
 }
 
 export interface BudgetItemInput {
   category_id: string
-  category_type: FinanceBudgetType
   name: string
   amount: string
-  allocation_role: FinanceAllocationRole
 }
 
 function ItemForm({ item, categories, sectionId, pending, onSave, onCancel }: {
@@ -41,8 +38,7 @@ function ItemForm({ item, categories, sectionId, pending, onSave, onCancel }: {
     event.preventDefault()
     if (!category || pending) return
     try {
-      await onSave({ category_id: category.id, category_type: category.budget_type,
-        allocation_role: category.allocation_role, name: description.trim(), amount })
+      await onSave({ category_id: category.id, name: description.trim(), amount })
     } catch {
       // Mutation errors are displayed by the containing panel; retain form input.
     }

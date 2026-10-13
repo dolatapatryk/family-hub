@@ -16,7 +16,6 @@ import { CategoriesPanel } from './CategoriesPanel'
 import { budgetItemTitle } from './categories'
 import { BudgetItemsPanel, type BudgetItemInput } from './BudgetItemsPanel'
 import type {
-  FinanceAllocationRole,
   FinanceBudgetLine,
   FinanceCategory,
   FinanceCreateMonthInput,
@@ -57,7 +56,7 @@ function SummaryCards({ lines }: { lines: FinanceBudgetLine[] }) {
 }
 
 function makeLines(
-  items: Array<{ id: string; name: string; amount: string; allocation_role: FinanceAllocationRole; is_planned: boolean; is_recurring: boolean; category_id: string }>,
+  items: Array<{ id: string; name: string; amount: string; is_planned: boolean; is_recurring: boolean; category_id: string }>,
   categories: FinanceCategory[],
 ): FinanceBudgetLine[] {
   return items.flatMap(item => {
@@ -68,7 +67,7 @@ function makeLines(
       name: budgetItemTitle(item.name, category),
       amount: financeMinorUnitsToMoney(item.amount),
       budget_type: category.budget_type,
-      allocation_role: item.allocation_role,
+      allocation_role: category.allocation_role,
       is_planned: item.is_planned,
       is_recurring: item.is_recurring,
     }]

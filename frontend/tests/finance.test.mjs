@@ -113,13 +113,13 @@ test('budgets and forecasts save a category and amount with an optional descript
     ['createScenarioItem', 'finance_scenario_items', { scenario_id: 'scenario-1' }],
   ]) {
     const client = fakeClient({ tableResults: { [table]: { data: { id: 'line-1', name: '', amount_minor: '150000' }, error: null } } })
-    await createFinanceApi(household, owner, client)[method]({ ...scope, category_id: 'category-1', category_type: 'saving',
-      allocation_role: 'personal_allowance', name: '', amount: '1500.00', sort_order: 0 })
+    await createFinanceApi(household, owner, client)[method]({ ...scope, category_id: 'category-1',
+      name: '', amount: '1500.00', sort_order: 0 })
     const values = client.calls[0].operations.find(([op]) => op === 'insert')[1]
     assert.equal(values.name, '')
     assert.equal(values.amount, '150000')
     assert.equal(values.category_id, 'category-1')
-    assert.equal(values.allocation_role, 'personal_allowance')
+    assert.equal(Object.hasOwn(values, 'allocation_role'), false)
   }
 })
 

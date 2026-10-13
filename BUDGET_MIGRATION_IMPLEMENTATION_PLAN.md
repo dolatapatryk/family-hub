@@ -120,10 +120,11 @@ Important qualifications:
   accounts; active account balance cards exclude archived trees.
 - Editing a displayed goal/tree balance recalculates the account's opening
   balance after subtracting its transactions and active child balances.
-- Personal allowances are budget lines with `allocation_role = 'personal_allowance'`
-  and a saving category. They reduce income available for the month and are excluded
-  from savings and the savings-rate numerator. Treat the role as explicit finance
-  data determined by the category; new flows should not infer it from a line's label.
+- Personal allowances use a saving category with
+  `allocation_role = 'personal_allowance'`. They reduce income available for the
+  month and are excluded from savings and the savings-rate numerator. The budget
+  line inherits this classification through its category; do not infer it from a
+  line's label.
 - `loadIdealPlan` matches plans to accounts by fuzzy name matching. Replace this
   with explicit links, using name matching only as a migration suggestion.
 - Legacy IDs are arbitrary strings, including `2026-05`, `emergency-fund`, and
@@ -245,9 +246,9 @@ No separate family/household table or generic JSON state table is needed.
 | --- | --- | --- |
 | `finance_months` | `month_start date`, `display_name text null` | First day of month; unique `(household_id, month_start)`. Derive year/month/localized label; preserve a legacy custom label when necessary. |
 | `finance_categories` | `name text`, `budget_type text`, `allocation_role text`, `parent_id uuid null`, `color text null`, `sort_order integer` | The type and role select one of six UI sections. `budget_type` is `income`, `fixed_expense`, `variable_expense`, `saving`, or `investment`. Parent must have the same type; prevent cycles. |
-| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Item role must match its category (`standard` or `personal_allowance`); personal allowances require a saving category. `name` is an optional description, stored as an empty string when absent. Month/category composite FKs. |
+| `finance_budget_items` | `month_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Category determines the item's section and allocation role; personal allowances use a saving category. `name` is an optional description, stored as an empty string when absent. Month/category composite FKs. |
 | `finance_scenarios` | `name text`, `description text null`, `sort_order integer` | Scenario definition; separate from real months. |
-| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `allocation_role text`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Same line semantics as budget items; scenario/category composite FKs. |
+| `finance_scenario_items` | `scenario_id uuid`, `category_id uuid`, `name text`, `amount bigint (minor units)`, `is_planned boolean`, `is_recurring boolean`, `notes text null`, `sort_order integer` | Category determines the item's section and allocation role; scenario/category composite FKs. |
 
 For normalization, store the most specific category on each item. If the source
 has `subcategoryId`, use it after proving it belongs under `categoryId`.
@@ -260,9 +261,9 @@ historical classifications. Names/colors can still change.
 Categories determine the six sections exposed to users: income, individual
 accounts, fixed expenses, variable expenses, saving at the start of the month,
 and investments. The individual-account section persists as a saving category
-with `allocation_role = 'personal_allowance'`. Items copy their category's role;
-the database rejects mismatches. Users select a category and amount, with an
-optional description, without a separate role selector. Labels are rendered as
+with `allocation_role = 'personal_allowance'`. Items inherit the role through
+their category. Users select a category and amount, with an optional description,
+without a separate role selector. Labels are rendered as
 `category` or `category — description`; renaming a category updates displayed
 labels without changing calculations. Migration `20261012220000` normalizes
 repeated labels, reclassifies exclusively personal categories and splits mixed
@@ -490,7 +491,7 @@ through this mode. Automatic multi-user merging is outside the first release.
 | `selectedMonthId` | Restore the importing user's UI selection if valid; no shared selected-month column. |
 | `BudgetItem.type`, category type | Map camelCase names to snake_case category types; validate agreement before dropping repeated item type. |
 | `categoryId`, `subcategoryId` | Validate both references/type/ancestry; persist the leaf. Report inconsistent records for explicit repair. |
-| Legacy saving rows representing a household member's personal spending allocation | Import into a category with `allocation_role = 'personal_allowance'` and give the item the same role; split mixed legacy categories. Preserve distinct labels as optional descriptions. This role is independent from savings-account transfer pairs. |
+| Legacy saving rows representing a household member's personal spending allocation | Import into a category with `allocation_role = 'personal_allowance'`; split mixed legacy categories so each item inherits one classification through its category. Preserve distinct labels as optional descriptions. This role is independent from savings-account transfer pairs. |
 | `parentId` | Remap after allocating all IDs; detect dangling parents, self-links, and cycles; enforce privacy consistently per tree. |
 | `initialBalance` | Convert exactly to integer minor units in `opening_balance`; do not create another opening transaction that would count it twice. |
 | Signed transaction amount / date | Convert signed money exactly to integer minor units; require a valid date; remap the optional linked month. Monthly savings grouping still follows date. |
