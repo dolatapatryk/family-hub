@@ -774,12 +774,14 @@ and the current router rather than introducing additional state infrastructure.
 
 ### Milestone 1 — contracts and fixtures
 
-- [ ] Confirm this plan's defaults in code contracts: PLN only, date semantics,
-  same-audience transfers, explicit savings effects, no automatic legacy linking.
-- [ ] Add representative fixtures for two wallets, mixed categories, a refund,
+- [x] Confirm this plan's defaults in code contracts: PLN only, date semantics,
+  same-audience transfers, explicit savings effects, no automatic legacy linking
+  in `frontend/src/finance/transactions/types.ts`.
+- [x] Add representative fixtures for two wallets, mixed categories, a refund,
   a contribution transfer, savings-funded spending and its refund, private data,
-  and an empty month.
-- [ ] Document all transaction-kind constraints and exact expected aggregates.
+  and an empty month in `frontend/tests/fixtures/finance-transactions.acceptance.json`.
+- [x] Document all transaction-kind constraints and exact expected aggregates
+  in Section 3 and the acceptance fixture.
 
 ### Milestone 2 — persistence and API
 

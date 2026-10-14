@@ -1,0 +1,318 @@
+{
+  "contract_version": 1,
+  "currency": "PLN",
+  "date_semantics": "date-only",
+  "entities": {
+    "categories": [
+      { "id": "salary", "budget_type": "income", "allocation_role": "standard" },
+      { "id": "food", "budget_type": "variable_expense", "allocation_role": "standard" },
+      { "id": "home", "budget_type": "fixed_expense", "allocation_role": "standard" },
+      { "id": "saving", "budget_type": "saving", "allocation_role": "standard" },
+      { "id": "personal_allowance", "budget_type": "saving", "allocation_role": "personal_allowance" }
+    ],
+    "wallets": [
+      {
+        "id": "wallet_a",
+        "household_id": "household_1",
+        "created_by": "user_shared",
+        "name": "Konto A",
+        "wallet_type": "bank",
+        "currency": "PLN",
+        "visibility": "household",
+        "owner_user_id": "user_shared",
+        "opened_on": "2026-10-01",
+        "opening_balance_minor": "100000"
+      },
+      {
+        "id": "wallet_b",
+        "household_id": "household_1",
+        "created_by": "user_shared",
+        "name": "Konto B",
+        "wallet_type": "savings_bank",
+        "currency": "PLN",
+        "visibility": "household",
+        "owner_user_id": "user_shared",
+        "opened_on": "2026-10-01",
+        "opening_balance_minor": "0"
+      },
+      {
+        "id": "wallet_private",
+        "household_id": "household_1",
+        "created_by": "user_private",
+        "name": "Moje konto",
+        "wallet_type": "bank",
+        "currency": "PLN",
+        "visibility": "private",
+        "owner_user_id": "user_private",
+        "opened_on": "2026-10-01",
+        "opening_balance_minor": "250000"
+      }
+    ],
+    "transactions": [
+      {
+        "id": "opening_a",
+        "kind": "opening",
+        "transaction_date": "2026-10-01",
+        "amount_minor": "100000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_a",
+        "category_id": null,
+        "savings_effect": "none"
+      },
+      {
+        "id": "opening_b",
+        "kind": "opening",
+        "transaction_date": "2026-10-01",
+        "amount_minor": "0",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_b",
+        "category_id": null,
+        "savings_effect": "none"
+      },
+      {
+        "id": "salary_october",
+        "kind": "income",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "900000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_a",
+        "category_id": "salary",
+        "savings_effect": "none"
+      },
+      {
+        "id": "groceries_october",
+        "kind": "expense",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "18000",
+        "source_wallet_id": "wallet_a",
+        "destination_wallet_id": null,
+        "category_id": "food",
+        "savings_effect": "none"
+      },
+      {
+        "id": "new_savings_transfer",
+        "kind": "transfer",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "100000",
+        "source_wallet_id": "wallet_a",
+        "destination_wallet_id": "wallet_b",
+        "category_id": "saving",
+        "savings_effect": "contribution"
+      },
+      {
+        "id": "existing_savings_move",
+        "kind": "transfer",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "20000",
+        "source_wallet_id": "wallet_b",
+        "destination_wallet_id": "wallet_a",
+        "category_id": "saving",
+        "savings_effect": "none"
+      },
+      {
+        "id": "savings_purchase",
+        "kind": "savings_expense",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "20000",
+        "source_wallet_id": "wallet_a",
+        "destination_wallet_id": null,
+        "category_id": "home",
+        "savings_effect": "none"
+      },
+      {
+        "id": "grocery_refund",
+        "kind": "refund",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "2000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_a",
+        "category_id": "food",
+        "savings_effect": "none"
+      },
+      {
+        "id": "savings_purchase_refund",
+        "kind": "savings_refund",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "5000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_a",
+        "category_id": "home",
+        "savings_effect": "none"
+      },
+      {
+        "id": "private_opening",
+        "kind": "opening",
+        "transaction_date": "2026-10-01",
+        "amount_minor": "250000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_private",
+        "category_id": null,
+        "savings_effect": "none"
+      },
+      {
+        "id": "private_income",
+        "kind": "income",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "100000",
+        "source_wallet_id": null,
+        "destination_wallet_id": "wallet_private",
+        "category_id": "salary",
+        "savings_effect": "none"
+      },
+      {
+        "id": "mixed_regular_part",
+        "kind": "expense",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "30000",
+        "source_wallet_id": "wallet_a",
+        "destination_wallet_id": null,
+        "category_id": "home",
+        "savings_effect": "none",
+        "description": "Zakup mieszany"
+      },
+      {
+        "id": "mixed_savings_part",
+        "kind": "savings_expense",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "20000",
+        "source_wallet_id": "wallet_b",
+        "destination_wallet_id": null,
+        "category_id": "home",
+        "savings_effect": "none",
+        "description": "Zakup mieszany"
+      },
+      {
+        "id": "personal_allowance_transfer",
+        "kind": "transfer",
+        "transaction_date": "2026-10-14",
+        "amount_minor": "10000",
+        "source_wallet_id": "wallet_a",
+        "destination_wallet_id": "wallet_b",
+        "category_id": "personal_allowance",
+        "savings_effect": "none"
+      }
+    ]
+  },
+  "cases": {
+    "shared_october": {
+      "actor_user_id": "user_shared",
+      "scope": "household",
+      "month_start": "2026-10-01",
+      "wallet_ids": ["wallet_a", "wallet_b"],
+      "transaction_ids": [
+        "opening_a",
+        "opening_b",
+        "salary_october",
+        "groceries_october",
+        "new_savings_transfer",
+        "existing_savings_move",
+        "savings_purchase",
+        "grocery_refund",
+        "savings_purchase_refund"
+      ],
+      "expected": {
+        "wallet_balances_minor": { "wallet_a": "889000", "wallet_b": "80000" },
+        "physical_balance_minor": "969000",
+        "income_minor": "900000",
+        "regular_expenses_minor": "16000",
+        "monthly_balance_minor": "884000",
+        "savings_contributions_minor": "100000",
+        "savings_spending_minor": "15000",
+        "savings_change_minor": "85000",
+        "total_spending_minor": "31000",
+        "ordinary_transaction_count": 7,
+        "regular_category_totals_minor": { "food": "16000" },
+        "savings_category_totals_minor": { "home": "15000" }
+      }
+    },
+    "private_scope": {
+      "actor_user_id": "user_private",
+      "scope": "personal",
+      "month_start": "2026-10-01",
+      "wallet_ids": ["wallet_private"],
+      "transaction_ids": ["private_opening", "private_income"],
+      "expected": {
+        "wallet_balances_minor": { "wallet_private": "350000" },
+        "income_minor": "100000",
+        "regular_expenses_minor": "0",
+        "monthly_balance_minor": "100000",
+        "savings_contributions_minor": "0",
+        "savings_spending_minor": "0",
+        "total_spending_minor": "0",
+        "ordinary_transaction_count": 1
+      }
+    },
+    "all_accessible_october": {
+      "actor_user_id": "user_private",
+      "scope": "all_accessible",
+      "month_start": "2026-10-01",
+      "wallet_ids": ["wallet_a", "wallet_b", "wallet_private"],
+      "transaction_ids": [
+        "opening_a",
+        "opening_b",
+        "salary_october",
+        "groceries_october",
+        "new_savings_transfer",
+        "existing_savings_move",
+        "savings_purchase",
+        "grocery_refund",
+        "savings_purchase_refund",
+        "private_opening",
+        "private_income"
+      ],
+      "expected": {
+        "physical_balance_minor": "1319000",
+        "income_minor": "1000000",
+        "regular_expenses_minor": "16000",
+        "monthly_balance_minor": "984000",
+        "savings_contributions_minor": "100000",
+        "savings_spending_minor": "15000",
+        "total_spending_minor": "31000",
+        "ordinary_transaction_count": 8
+      }
+    },
+    "mixed_funding_purchase": {
+      "actor_user_id": "user_shared",
+      "scope": "household",
+      "month_start": "2026-10-01",
+      "wallet_ids": ["wallet_a", "wallet_b"],
+      "transaction_ids": ["mixed_regular_part", "mixed_savings_part"],
+      "expected": {
+        "regular_expenses_minor": "30000",
+        "monthly_balance_minor": "-30000",
+        "savings_spending_minor": "20000",
+        "total_spending_minor": "50000",
+        "combined_wallet_decrease_minor": "50000"
+      }
+    },
+    "personal_allowance_transfer": {
+      "actor_user_id": "user_shared",
+      "scope": "household",
+      "month_start": "2026-10-01",
+      "wallet_ids": ["wallet_a", "wallet_b"],
+      "transaction_ids": ["personal_allowance_transfer"],
+      "expected": {
+        "monthly_balance_minor": "0",
+        "savings_contributions_minor": "0",
+        "combined_wallet_change_minor": "0"
+      }
+    },
+    "empty_month": {
+      "actor_user_id": "user_shared",
+      "scope": "household",
+      "month_start": "2026-09-01",
+      "wallet_ids": [],
+      "transaction_ids": [],
+      "expected": {
+        "income_minor": "0",
+        "regular_expenses_minor": "0",
+        "monthly_balance_minor": "0",
+        "savings_contributions_minor": "0",
+        "savings_spending_minor": "0",
+        "savings_change_minor": "0",
+        "total_spending_minor": "0",
+        "ordinary_transaction_count": 0
+      }
+    }
+  }
+}
