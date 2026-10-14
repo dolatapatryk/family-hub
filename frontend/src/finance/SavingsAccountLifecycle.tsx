@@ -88,17 +88,17 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive }: {
             {action === 'restore' && <p>Przywrócenie włączy konto i podkonta, które nie zostały zarchiwizowane osobno.</p>}
             {restoreBlocked && <p role="alert">Najpierw przywróć zarchiwizowane konto nadrzędne.</p>}
             {action === 'balance' && <>
-              <p>Aktualne saldo z aktywnymi podkontami: {formatPln(financeMinorUnitsToMoney(data.display_balance_minor))}. Podkonta: {formatPln(financeMinorUnitsToMoney(data.active_children_balance_minor))}.</p>
+              <p>Saldo łączne z aktywnymi podkontami: {formatPln(financeMinorUnitsToMoney(data.display_balance_minor))}. Suma podkont: {formatPln(financeMinorUnitsToMoney(data.active_children_balance_minor))}.</p>
               <p>Korekta zmieni saldo początkowe tego konta. Zachowa historię transakcji i nie zwiększy miesięcznych oszczędności.</p>
-              <label>Nowe saldo z aktywnymi podkontami<input required inputMode="decimal" value={balance} onChange={event => setBalance(event.target.value)} disabled={apply.isPending} /></label>
+              <label>Nowe saldo łączne z aktywnymi podkontami<input required inputMode="decimal" value={balance} onChange={event => setBalance(event.target.value)} disabled={apply.isPending} /></label>
               {balanceBlocked && <p role="alert">Przywróć konto i jego przodków przed korektą.</p>}
             </>}
             {action === 'visibility' && <>
               <p>{nextVisibility === 'household'
-                ? 'Całe drzewo kont oraz jego dotychczasowa historia, salda, cele i powiązane szablony planów staną się dostępne dla domowników.'
-                : 'Całe drzewo kont oraz jego historia, salda, cele i powiązane szablony planów będą dostępne tylko dla właściciela. Domownicy utracą do nich dostęp.'}</p>
+                ? 'To konto, jego podkonta oraz powiązana historia, salda, cele i szablony planów staną się dostępne dla domowników.'
+                : 'To konto, jego podkonta oraz powiązana historia, salda, cele i szablony planów będą dostępne tylko dla właściciela. Domownicy utracą do nich dostęp.'}</p>
               <p>Zmiana obejmie {data.account_count} kont i {data.linked_plan_count} powiązanych planów.</p>
-              {data.external_transfer_count > 0 && <p role="alert">Przelewy do kont poza tym drzewem blokują zmianę widoczności. Liczba powiązań: {data.external_transfer_count}.</p>}
+              {data.external_transfer_count > 0 && <p role="alert">Przelewy do kont spoza tej grupy kont blokują zmianę widoczności. Liczba powiązań: {data.external_transfer_count}.</p>}
               <label className="finance-checkbox-label"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} disabled={apply.isPending} /> Rozumiem wpływ zmiany na dostęp do całej historii.</label>
             </>}
           </>}

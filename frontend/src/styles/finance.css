@@ -1339,10 +1339,13 @@
 .finance-workspace .finance-savings-transaction-form > label:has(input[maxlength]) { grid-column: span 2; }
 .finance-workspace .finance-savings-transaction-form .finance-checkbox-label { grid-column: 1 / -2; }
 .finance-workspace .finance-savings-account-card { grid-template-columns: minmax(0, 1fr) auto; }
-.finance-workspace .finance-savings-account-select > strong { white-space: nowrap; }
+.finance-workspace .finance-savings-account-select > .finance-savings-account-total { white-space: normal; }
 .finance-savings-layout .finance-savings-account-card { display: block; }
 .finance-savings-layout .finance-savings-account-select { width: 100%; }
-.finance-subaccount-card { margin-left: 18px; border-left: 3px solid var(--color-line); }
+.finance-subaccount-card { margin-left: 0; border-left: 3px solid var(--color-line); }
+.finance-account-management-children { display: grid; gap: 9px; margin-left: 16px; padding-left: 12px; border-left: 1px solid var(--color-line); }
+.finance-savings-account-total { display: grid; justify-items: end; gap: 3px; text-align: right; line-height: 1.2; }
+.finance-savings-account-total small { color: var(--color-muted); font-size: 11px; font-weight: 500; }
 .finance-goal-progress { display: block; width: 100%; height: 7px; margin: 14px 0 6px; border: 0; border-radius: 10px; accent-color: var(--color-blue); overflow: hidden; }
 .finance-goal-progress::-webkit-progress-bar { background: var(--color-blue-soft); border-radius: 10px; }
 .finance-goal-progress::-webkit-progress-value { background: var(--color-blue); border-radius: 10px; }
