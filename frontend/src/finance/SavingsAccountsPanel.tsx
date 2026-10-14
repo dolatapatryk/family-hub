@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   calculateActiveSavingsTreeBalance,
+  calculateSavingsAccountTreeBalance,
   calculateSavingsBalance,
   isSavingsAccountArchived,
   getActiveSavingsAccounts,
@@ -664,6 +665,7 @@ export function SavingsAccountsPanel({
       account,
       ownBalance: calculateSavingsBalance(balanceAccount, balanceTransactions),
       balance: calculateActiveSavingsTreeBalance(balanceAccount, balanceAccounts, balanceTransactions),
+      archivedBalance: calculateSavingsAccountTreeBalance(balanceAccount, balanceAccounts, balanceTransactions),
     }
   })
   const accountRowsById = new Map(accountRows.map(row => [row.account.id, row] as const))
@@ -766,30 +768,41 @@ export function SavingsAccountsPanel({
       {saveAccount.isError && <p className="error-message finance-error" role="alert">{errorText(saveAccount.error)}</p>}
 
 </>
-  const visibleAccountRows = accountRows.filter(({ account }) => mode === 'accounts' || !isSavingsAccountArchived(account, accountList))
-  const visibleAccountIds = new Set(visibleAccountRows.map(({ account }) => account.id))
   const activeAccountIds = new Set(activeAccounts.map(account => account.id))
-  const rootAccountRows = visibleAccountRows.filter(({ account }) => !account.parent_id || !visibleAccountIds.has(account.parent_id))
+  const archivedAccountRows = accountRows.filter(({ account }) => !activeAccountIds.has(account.id))
+  const archivedAccountIds = new Set(archivedAccountRows.map(({ account }) => account.id))
+  const rootAccountRows = accountRows.filter(({ account }) => activeAccountIds.has(account.id)
+    && (!account.parent_id || !activeAccountIds.has(account.parent_id)))
+  const archivedRootAccountRows = archivedAccountRows.filter(({ account }) => !account.parent_id || !archivedAccountIds.has(account.parent_id))
 
-  function renderAccountManagementCard(account: FinanceSavingsAccount, ancestors = new Set<string>()) {
+  function renderAccountManagementCard(
+    account: FinanceSavingsAccount,
+    visibleAccountIds: ReadonlySet<string>,
+    ancestors = new Set<string>(),
+  ) {
     if (ancestors.has(account.id)) return null
     const row = accountRowsById.get(account.id)
     if (!row) return null
     const nextAncestors = new Set([...ancestors, account.id])
     const children = (accountsByParentId.get(account.id) ?? []).filter(child => visibleAccountIds.has(child.id))
     const hasActiveChildren = children.some(child => activeAccountIds.has(child.id))
+    const accountArchived = isSavingsAccountArchived(account, accountList)
+    const displayedBalance = accountArchived ? row.archivedBalance : row.balance
+    const balanceLabel = accountArchived
+      ? children.length > 0 ? 'Saldo archiwalne z podkontami' : 'Saldo archiwalne'
+      : hasActiveChildren ? 'Aktywne saldo z podkontami' : 'Aktywne saldo'
     return <div className="finance-account-tree-node" key={account.id}>
       <div className={`finance-savings-account-card${account.parent_id ? ' finance-subaccount-card' : ''}`}>
         <button className="finance-savings-account-select" type="button" onClick={() => setSelectedAccountId(account.id)} aria-pressed={selectedAccountId === account.id}>
           <span className="finance-savings-account-copy">
             <strong>{account.name}</strong>
-            <span>{accountTypeNames[account.account_type]} · {privacyLabel(account.visibility)}{isSavingsAccountArchived(account, accountList) ? ' · Archiwalne (konto lub przodek)' : ''}</span>
+            <span>{accountTypeNames[account.account_type]} · {privacyLabel(account.visibility)}{accountArchived ? ' · Zarchiwizowane' : ''}</span>
             <span>Saldo własne: {formatPln(row.ownBalance)}</span>
             {account.target_amount && <span>Cel: {formatPln(financeMinorUnitsToMoney(account.target_amount))}</span>}
           </span>
           <strong className="finance-savings-account-total">
-            {formatPln(row.balance)}
-            <small>{hasActiveChildren ? 'Aktywne saldo z podkontami' : 'Aktywne saldo'}</small>
+            {formatPln(displayedBalance)}
+            <small>{balanceLabel}</small>
           </strong>
         </button>
         {mode === 'accounts' && <button className="button-quiet finance-edit-button" type="button" onClick={() => startAccountEdit(account)} disabled={saveAccount.isPending}>Edytuj</button>}
@@ -811,16 +824,22 @@ export function SavingsAccountsPanel({
         )}
       </div>
       {children.length > 0 && <div className="finance-account-management-children" role="group" aria-label={'Subkonta konta ' + account.name}>
-        {children.map(child => renderAccountManagementCard(child, nextAncestors))}
+        {children.map(child => renderAccountManagementCard(child, visibleAccountIds, nextAncestors))}
       </div>}
     </div>
   }
 
   const accountListContent = <>
-    {accountRows.length === 0 && !accounts.isPending && <p className="panel-message">Nie ma jeszcze dostępnych kont oszczędnościowych.</p>}
+    {rootAccountRows.length === 0 && !accounts.isPending && <p className="panel-message">{archivedAccountRows.length > 0 ? 'Brak aktywnych kont.' : 'Nie ma jeszcze dostępnych kont oszczędnościowych.'}</p>}
     <div className="finance-savings-account-list">
-      {rootAccountRows.map(({ account }) => renderAccountManagementCard(account))}
+      {rootAccountRows.map(({ account }) => renderAccountManagementCard(account, activeAccountIds))}
     </div>
+    {archivedAccountRows.length > 0 && <section className="finance-archived-savings-accounts" aria-label="Zarchiwizowane konta">
+      <h3 className="finance-subheading">Zarchiwizowane konta</h3>
+      <div className="finance-savings-account-list">
+        {archivedRootAccountRows.map(({ account }) => renderAccountManagementCard(account, archivedAccountIds))}
+      </div>
+    </section>}
   </>
   const transactionForm = <details className="panel finance-panel finance-savings-accordion">
     <summary className="finance-savings-accordion-summary"><span><strong>Nowa transakcja</strong><small>Dodaj wpłatę lub wypłatę na wybranym koncie.</small></span></summary>
