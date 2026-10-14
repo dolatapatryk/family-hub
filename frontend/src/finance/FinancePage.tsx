@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
+import { TransactionsPage } from './transactions/TransactionsPage'
 import { PageHeader } from '../components/PageHeader'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
@@ -76,6 +77,11 @@ function makeLines(
 }
 
 export function FinancePage() {
+  const location = useLocation()
+  return resolveFinanceRoute(location.pathname)?.view === 'transactions' ? <TransactionsPage /> : <LegacyFinancePage />
+}
+
+function LegacyFinancePage() {
   const { profile } = useAuth()
   const queryClient = useQueryClient()
   const api = useMemo(() => createFinanceApi(profile.household_id, profile.id), [profile.household_id, profile.id])
@@ -318,6 +324,7 @@ export function FinancePage() {
         ) : undefined}
       />
 
+      {view === 'savings' && <p className="panel-kicker">Cele oszczędnościowe są na razie prowadzone niezależnie od portfeli.</p>}
       {view === 'savings' && <nav className="finance-tabs" aria-label="Zakładki oszczędności">
         {savingsNavigation.map(tab => <Link className={`finance-tab${savingsView === tab.id ? ' active' : ''}`} aria-current={savingsView === tab.id ? 'page' : undefined} key={tab.id} to={tab.to}>{tab.label}</Link>)}
       </nav>}

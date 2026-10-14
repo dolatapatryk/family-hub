@@ -1,7 +1,7 @@
 # Finance transactions, physical wallets, and savings goals
 
-Prepared: 2026-10-13. Updated: 2026-10-14.
-Status: Milestones 1–2 implemented; Milestone 2 verified against local Supabase. Milestones 3–5 remain planned.
+Prepared: 2026-10-13. Updated: 2026-10-15.
+Status: Milestones 1–3 implemented. Milestone 3 verified with frontend tests, mocked desktop/mobile browser checks, and the local Supabase regression suite. Milestones 4–5 remain planned.
 
 ## 1. Outcome and agreed domain model
 
@@ -173,7 +173,9 @@ reserve/allocation controls needed for that distinction.
 ### 3.3 Monthly calculations
 
 Month is a date range `[month_start, next_month_start)`, independent of
-`finance_months`. Use date-only transaction dates, not UTC midnight timestamps.
+`finance_months`. Use date-only transaction dates, not UTC midnight timestamps. Release 1 uses
+the `Europe/Warsaw` business calendar for today in both the frontend and wallet
+RPCs, independently of browser and database session timezones.
 Disallow future actual transactions in Release 1; planned transactions remain
 outside this feature. Allow backdating on/after the wallet's opening date.
 
@@ -793,9 +795,43 @@ and the current router rather than introducing additional state infrastructure.
 
 ### Milestone 3 — usable transaction tracking
 
-- [ ] Integrate routes, scope/month selection, wallets, and entry/edit dialogs.
-- [ ] Deliver searchable, filtered, paginated history including paired transfers.
-- [ ] Complete empty/error/offline/conflict states and responsive layouts.
+- [x] Integrate routes, scope/month selection, wallets, and entry/edit dialogs.
+- [x] Deliver searchable, filtered, paginated history including paired transfers.
+- [x] Complete empty/error/offline/conflict states and responsive layouts.
+
+Milestone 3 implementation notes (2026-10-15):
+
+- The transaction routes load independently of legacy budget months and savings.
+  Until Milestone 4, Przegląd shows monthly transaction activity; KPI cards and
+  category charts remain deferred.
+- Month, scope, wallet, category, kind, and description search persist in the URL.
+  History uses the existing 50-record keyset API, with transfers displayed once.
+- Entry/edit, delete confirmation, wallet creation/details, archive/restore,
+  opening correction, and dated reconciliation use the Milestone 2 RPCs.
+  Snapshot conflicts (SQLSTATE 40001) follow the same review flow as row-version
+  conflicts. Mutation retries preserve request IDs and form values.
+- User/household-scoped transaction caches are cleared when the audience changes.
+  Offline writes are disabled. Native modal dialogs trap and restore focus and
+  confirm discarding edits; mobile forms retain a reachable action footer.
+- Checks run: `npm test` (72 passing); `npm run build` (passes; Vite reports the
+  application bundle size advisory); `supabase test db --local` (334 passing
+  checks across 14 files, including authenticated/RLS wallet tests).
+- `frontend/scripts/test-transactions-ui.mjs` passed in headless Chrome at desktop
+  and 390px mobile sizes with all Supabase requests mocked. It covers routes without
+  budget reads, pagination, filter persistence, savings refunds, request-ID reuse,
+  explicit existing-savings transfers, conflicts, offline input retention,
+  focus/discard behavior, correction previews, deletion, past months, scope changes,
+  history retry, archive/restore, and wallet creation from the empty state.
+  Run against Vite at `http://127.0.0.1:5176` (or `TRANSACTIONS_TEST_URL`) with
+  Playwright available; optionally set `PLAYWRIGHT_MODULE` to its module path and
+  `PLAYWRIGHT_CHANNEL=chrome` to use installed Chrome. No real household records
+  are created by this browser test. A real-device software-keyboard and deployed
+  scoped-account smoke test remain Release 1 checks in Milestone 4.
+- The follow-up midnight fix adds `20261014223657_finance_wallet_business_timezone.sql`
+  and applies it locally. It pins the seven date-sensitive wallet RPCs to the Warsaw
+  calendar while keeping the database session in UTC. This prevents local today
+  from being rejected as future before UTC midnight. No production deployment or
+  legacy Savings balance changes were performed.
 
 ### Milestone 4 — monthly overview and Release 1
 
@@ -853,7 +889,7 @@ Inspect the CLI's current help and target before migration commands. Verify
 database access with authenticated test users, not only a privileged SQL session.
 Do not reset a database containing user data as a routine verification step.
 
-No tests or migrations have been run for this document-only change.
+The original document-only change ran no tests or migrations. See the Milestone 3 notes above for the implementation checks run on 2026-10-15.
 
 ## 11. Deferred scope and implementation-time decisions
 

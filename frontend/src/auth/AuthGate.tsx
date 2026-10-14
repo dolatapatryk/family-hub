@@ -31,12 +31,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const previousUserId = useRef<string | null>(null)
+  const previousFinanceAudience = useRef<{ userId: string; householdId: string } | null>(null)
+
+  useEffect(() => {
+    const previous = previousFinanceAudience.current
+    if (previous && (previous.userId !== profile?.id || previous.householdId !== profile?.household_id)) {
+      const queryKey = ['financeTransactions', previous.householdId, previous.userId]
+      void queryClient.cancelQueries({ queryKey }).then(() => queryClient.removeQueries({ queryKey }))
+    }
+    previousFinanceAudience.current = profile ? { userId: profile.id, householdId: profile.household_id } : null
+  }, [profile, queryClient])
 
   useEffect(() => {
     const nextUserId = session?.user.id ?? null
     if (previousUserId.current !== null && previousUserId.current !== nextUserId) {
       for (const queryKey of [
-        ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'], ['gym'],
+        ['financeTransactions'], ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'], ['gym'],
       ]) {
         void queryClient.cancelQueries({ queryKey }).then(() => queryClient.removeQueries({ queryKey }))
       }

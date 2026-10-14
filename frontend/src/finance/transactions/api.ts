@@ -23,7 +23,7 @@ import type {
   FinanceWalletWithBalance,
 } from './types.ts'
 
-type RpcResponse<T> = PromiseLike<{ data: T | null; error: { message: string } | null }>
+type RpcResponse<T> = PromiseLike<{ data: T | null; error: { message: string; code?: string } | null }>
 
 type MutationResult = {
   conflict?: true
@@ -43,9 +43,13 @@ function normalizeError(error: unknown): Error {
   return new Error(message || 'Could not complete the finance request. Please try again.')
 }
 
-async function resolve<T>(request: RpcResponse<T>): Promise<T> {
+async function resolve<T>(request: RpcResponse<T>, snapshotVersion?: number): Promise<T> {
   try {
     const { data, error } = await request
+    if (error?.code === '40001' && snapshotVersion !== undefined) {
+      // Wallet history can change without changing the wallet row version.
+      throw new FinanceVersionConflictError(snapshotVersion, snapshotVersion)
+    }
     if (error) throw new Error(error.message)
     if (data === null) throw new Error('Family Hub returned an empty finance response. Please try again.')
     return data
@@ -198,6 +202,7 @@ export function createFinanceTransactionsApi(
         p_observed_balance_minor: moneyToFinanceMinorUnits(input.observed_balance),
         p_reason: input.reason.trim(),
       }) as unknown as RpcResponse<MutationResult & FinanceWalletBalanceCorrectionResult>,
+      input.expected_version,
     )
     throwIfConflict(result, input.expected_version)
     return { ...result, version: Number(result.version) }
@@ -237,6 +242,7 @@ export function createFinanceTransactionsApi(
         p_opened_on: input.opened_on,
         p_opening_balance_minor: moneyToFinanceMinorUnits(input.opening_balance),
       }) as unknown as RpcResponse<MutationResult & FinanceWalletOpeningCorrectionResult>,
+      input.expected_version,
     )
     throwIfConflict(result, input.expected_version)
     return { ...result, version: Number(result.version) }

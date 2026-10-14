@@ -1,5 +1,8 @@
 begin;
 
+-- Relative dates follow the same business calendar as wallet RPCs.
+set local timezone = 'Europe/Warsaw';
+
 create extension if not exists pgtap with schema extensions;
 select no_plan();
 
