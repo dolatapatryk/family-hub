@@ -325,7 +325,7 @@ so `transferPeerAccountId` is not duplicated in the new model.
 
 | Table | Proposed columns / keys |
 | --- | --- |
-| `private.finance_legacy_id_map` | `household_id`, `source_namespace`, `entity_type`, `legacy_id text`, `target_id uuid`, `imported_by`, `source_sha256`; unique source entity key. Retained for the repair importer; it no longer depends on a run ledger. |
+| `private.finance_legacy_id_map` | Removed after the repair importer no longer needs the legacy ID map. |
 | `private.finance_operation_receipts` | `household_id`, `actor_id`, `operation_name`, `request_id uuid`, `request_sha256`, `result jsonb`, `completed_at`; unique `(household_id, actor_id, operation_name, request_id)`. Same key/different arguments is a conflict. |
 
 JSON is appropriate for bounded receipts/reports; it is not the authoritative

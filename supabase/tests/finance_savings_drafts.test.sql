@@ -28,9 +28,7 @@ select ok(exists (select 1 from information_schema.columns where table_schema = 
 select ok(exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_savings_plans' and column_name = 'version'), 'saved templates retain optimistic concurrency versions');
 select ok(exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'finance_scenario_items' and column_name = 'version'), 'scenario items retain optimistic concurrency versions');
 
-select ok(exists (select 1 from information_schema.columns where table_schema = 'private' and table_name = 'finance_legacy_id_map' and column_name = 'source_sha256'), 'the repair importer retains its source fingerprint map');
-select ok(exists (select 1 from information_schema.columns where table_schema = 'private' and table_name = 'finance_legacy_id_map' and column_name = 'imported_by'), 'the repair importer retains its original actor');
-select ok(not exists (select 1 from information_schema.columns where table_schema = 'private' and table_name = 'finance_legacy_id_map' and column_name = 'import_run_id'), 'the legacy map no longer depends on import runs');
+select ok(to_regclass('private.finance_legacy_id_map') is null, 'the legacy ID map is removed');
 
 select ok(not exists (
     select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
