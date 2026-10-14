@@ -16,7 +16,7 @@ Completed:
 
 - Agreed on the read-only, future/ongoing one-off event MVP contract in this
   plan.
-- Added `supabase/migrations/20260929000000_google_calendar_integration.sql`
+- Added `../supabase/migrations/20260929000000_google_calendar_integration.sql`
   with private connection/calendar metadata, the normalized imported-event
   mirror, constraints, grants, and RLS policies.
 - Applied the migration and manually checked the imported-event access rules
@@ -26,13 +26,13 @@ Completed:
   read; authenticated users cannot write imported rows.
 
 The user reports that the Google integration was manually tested and works on
-the test database. The pgTAP suites in `supabase/tests/` add repeatable local
+the test database. The pgTAP suites in `../supabase/tests` add repeatable local
 RLS and sync-lifecycle checks. Repeat those checks in staging/production as
 part of rollout.
 
 Added in the current OAuth and selection batch:
 
-- Added `supabase/migrations/20260930000000_google_calendar_oauth_management.sql`
+- Added `../supabase/migrations/20260930000000_google_calendar_oauth_management.sql`
   with service-role-only RPCs for OAuth state, connection credentials, calendar
   list metadata, owner choices, and serialized token refresh leases. The
   migration has been applied and manually exercised on the test database.
@@ -46,7 +46,7 @@ Added in the current OAuth and selection batch:
 
 Added in the user-triggered import batch:
 
-- Added `supabase/migrations/20261001000000_google_calendar_event_sync.sql` with
+- Added `../supabase/migrations/20261001000000_google_calendar_event_sync.sql` with
   service-role-only sync start, lease, page-commit, failure, `410` rebuild, and
   lost-calendar RPCs. The migration has been applied and manually exercised on
   the test database.
@@ -75,18 +75,18 @@ the connection owner chooses what their household can see.
 
 ## Existing foundation
 
-- Native calendar schema: `supabase/migrations/20260928000000_create_calendar_schema.sql`.
+- Native calendar schema: `../supabase/migrations/20260928000000_create_calendar_schema.sql`.
 - Google connection/calendar tables and imported-event RLS:
-  `supabase/migrations/20260929000000_google_calendar_integration.sql` (applied
+  `../supabase/migrations/20260929000000_google_calendar_integration.sql` (applied
   and manually verified in the current test database; repeatable automated RLS
   tests are in `supabase/tests/rls.test.sql`; staging/production verification
   remains rollout work).
-- Shared Calendar/Today queries: `frontend/src/calendar/queries.ts`.
-- Shared agenda construction: `frontend/src/calendar/agenda.ts`.
-- Calendar presentation: `frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
-- Today presentation: `frontend/src/dashboard/DashboardPage.tsx`.
-- Google settings UI: `frontend/src/googleCalendar/GoogleCalendarSettings.tsx`.
-- Google Edge Functions and private-schema RPC bridge: `supabase/functions/`
+- Shared Calendar/Today queries: `../frontend/src/calendar/queries.ts`.
+- Shared agenda construction: `../frontend/src/calendar/agenda.ts`.
+- Calendar presentation: `../frontend/src/calendar/CalendarPage.tsx` and `AgendaComponents.tsx`.
+- Today presentation: `../frontend/src/dashboard/DashboardPage.tsx`.
+- Google settings UI: `../frontend/src/googleCalendar/GoogleCalendarSettings.tsx`.
+- Google Edge Functions and private-schema RPC bridge: `../supabase/functions`
   and `supabase/migrations/20260930000000_google_calendar_oauth_management.sql`.
 
 ## 1. Fix the integration contract and keep the MVP to future one-off events
@@ -149,11 +149,11 @@ Edge Functions need an explicit route to private storage: a server-only database
 Completion: the migration is applied and manual owner/private, household
 sharing, cross-household, and browser-write checks have passed on the test
 database, according to the user. Repeatable pgTAP coverage is in
-`supabase/tests/rls.test.sql`; run it in staging before production rollout.
+`../supabase/tests/rls.test.sql`; run it in staging before production rollout.
 
 ## 4. Implement OAuth and credential lifecycle
 
-Create separate Edge Function entry points for authenticated management, the Google callback, and user-requested synchronization, with shared modules under `supabase/functions/_shared/google-calendar/`.
+Create separate Edge Function entry points for authenticated management, the Google callback, and user-requested synchronization, with shared modules under `../supabase/functions/_shared/google-calendar`.
 
 1. An authenticated connect action resolves the current member, stores the hash and expiry of a random state on their connection, and returns the consent URL. Allow one pending authorization attempt per connection.
 2. Request offline access. The callback atomically validates and clears the matching state fields, rechecks the member's eligibility, and exchanges the code server-side.
@@ -216,7 +216,7 @@ manual test-database pass has been reported complete.
 
 ## 8. Integrate Calendar and Today
 
-Add `frontend/src/googleCalendar/` with types, a small Supabase/Edge Function adapter, query keys, management UI, and imported-event details.
+Add `../frontend/src/googleCalendar` with types, a small Supabase/Edge Function adapter, query keys, management UI, and imported-event details.
 
 - Extend `useCalendarSources` with an independent imported-events query.
 - Include household, viewer user ID, range, and viewer timezone in its query key. The parent plan's abbreviated imported key should be expanded to protect private cached data across account switches.
@@ -255,15 +255,15 @@ Completion: disconnected data cannot reappear through an in-flight job or remain
 Manual verification on the test database and on phone and desktop has been
 reported complete by the user. Current automated coverage includes:
 
-- `frontend/tests/calendar.test.mjs`: annual dates, date/time boundaries, DST,
+- `../frontend/tests/calendar.test.mjs`: annual dates, date/time boundaries, DST,
   and agenda merging.
-- `frontend/tests/google-calendar.test.mjs`: Google request parameters,
+- `../frontend/tests/google-calendar.test.mjs`: Google request parameters,
   pagination cursors, event normalization, cancellations, and recurring rows.
-- `frontend/tests/google-requests.test.mjs`: retries, `Retry-After`, terminal
+- `../frontend/tests/google-requests.test.mjs`: retries, `Retry-After`, terminal
   error classification, and expired sync tokens.
-- `supabase/tests/rls.test.sql`: 38 assertions for household isolation,
+- `../supabase/tests/rls.test.sql`: 38 assertions for household isolation,
   calendar privacy, and browser write restrictions.
-- `supabase/tests/google_calendar_sync.test.sql`: 14 assertions for sync
+- `../supabase/tests/google_calendar_sync.test.sql`: 14 assertions for sync
   claims, lease expiry, `410` recovery, and rebuild retention/pruning.
 
 Useful follow-up coverage includes OAuth state expiry/replay/replacement,

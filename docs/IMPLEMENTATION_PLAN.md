@@ -178,7 +178,7 @@ Do not add yet:
 
 ## Supabase data model
 
-The current schema is recorded in `supabase/migrations`. Household-owned
+The current schema is recorded in `../supabase/migrations`. Household-owned
 application rows include `household_id` and are protected by RLS.
 
 ### households
@@ -522,7 +522,7 @@ session.
 The frontend suite covers task behavior, annual-date recurrence, calendar
 date/time rules and agenda merging, Google request parameters and event
 normalization, and sync request retries/error handling. The pgTAP suites at
-`supabase/tests/rls.test.sql` and `supabase/tests/google_calendar_sync.test.sql`
+`../supabase/tests/rls.test.sql` and `supabase/tests/google_calendar_sync.test.sql`
 cover household isolation, calendar privacy, lease claims/recovery, and `410`
 rebuild behavior. OAuth end-to-end and truly simultaneous worker tests remain
 follow-up coverage. Keep the reported test-database manual pass as the

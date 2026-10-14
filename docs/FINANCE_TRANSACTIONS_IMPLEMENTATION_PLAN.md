@@ -62,16 +62,16 @@ calculations are not silently reinterpreted as a formal planning system.
 
 | Existing code/data | Use in this feature |
 | --- | --- |
-| `frontend/src/finance/navigation.ts` | Add Transactions routes and secondary navigation |
-| `frontend/src/finance/FinancePage.tsx` | Integrate the feature without requiring a budget month |
-| `frontend/src/finance/categories.ts` | Reuse category sections, parent relationships, and labels |
-| `frontend/src/finance/types.ts`, `money.ts` | Exact minor-unit money and browser decimal-string contracts |
-| `frontend/src/finance/api.ts`, `useFinanceAction.ts` | API/error/version-conflict conventions |
+| `../frontend/src/finance/navigation.ts` | Add Transactions routes and secondary navigation |
+| `../frontend/src/finance/FinancePage.tsx` | Integrate the feature without requiring a budget month |
+| `../frontend/src/finance/categories.ts` | Reuse category sections, parent relationships, and labels |
+| `../frontend/src/finance/types.ts`, `money.ts` | Exact minor-unit money and browser decimal-string contracts |
+| `../frontend/src/finance/api.ts`, `useFinanceAction.ts` | API/error/version-conflict conventions |
 | `FinanceCharts.tsx` and existing styles | Reuse card, chart, dialog, and responsive patterns where suitable |
 | `finance_categories` | Shared category definitions; do not create a duplicate taxonomy |
 | `finance_savings_accounts`, `finance_savings_transactions` | Legacy goals/history; unchanged in Release 1 |
 | `private.finance_operation_receipts` and household locks | Idempotent mutations and concurrency conventions |
-| `supabase/tests/` and `frontend/tests/` | Database and frontend regression suites |
+| `../supabase/tests` and `frontend/tests/` | Database and frontend regression suites |
 
 The checked-in source already supports savings-account hierarchies, shared and
 private visibility, signed movements, and paired savings transfers. These do
@@ -844,7 +844,7 @@ PLN 200 from B as a savings expense for one PLN 500 purchase. Physical balances
 fall by PLN 500 in total; monthly balance falls by PLN 300; savings-funded
 spending rises by PLN 200. There is no partial-funding amount on either record.
 
-Run the relevant frontend suite and build from `frontend/` (`npm test`,
+Run the relevant frontend suite and build from `../frontend` (`npm test`,
 `npm run build`) and database tests from the repository root (`npx supabase test db`)
 against the intended local test database after applying the new migrations.
 Inspect the CLI's current help and target before migration commands. Verify

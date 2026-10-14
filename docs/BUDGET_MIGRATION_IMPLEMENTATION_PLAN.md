@@ -15,7 +15,7 @@ notes, flags and sections. Import, export/restore and production cutover remain
 outside this work. Amounts are stored as bounded bigint minor units.
 
 The 2026-10-13 schema simplification is in
-`supabase/migrations/20261013170000_simplify_finance_history.sql`; it is source
+`../supabase/migrations/20261013170000_simplify_finance_history.sql`; it is source
 only until applied. It merges skipped bill cycles into `bill_payments`, removes
 database-backed monthly savings drafts and their provenance, removes
 `sort_order` and savings-account `color`, removes `finance_months.version`, and
@@ -152,7 +152,7 @@ Family Hub already has the target infrastructure:
 - Household RLS, restricted column grants, and server validation triggers.
 - Calendar's shared/private access rules and creator-controlled visibility.
 - Feature-specific Supabase adapters, React Query, and React Router.
-- SQL migrations in `supabase/migrations/` and pgTAP in `supabase/tests/`.
+- SQL migrations in `../supabase/migrations` and pgTAP in `supabase/tests/`.
 - Node frontend regression tests and a PWA shell. Offline data writes are not
   currently implemented.
 
@@ -686,8 +686,8 @@ Repository findings:
 
 - Home Budget: `src/storage/types.ts`, `budgetStore.ts`, `supabaseSync.ts`,
   `seedData.ts`, `src/shared/utils/budgetCalculations.ts`, `money.ts`,
-  `src/app/App.tsx`, feature pages, and `README.md`.
-- Family Hub: `frontend/src/App.tsx`, `layout/AppShell.tsx`, `auth/AuthGate.tsx`,
+  `src/app/App.tsx`, feature pages, and `../README.md`.
+- Family Hub: `../frontend/src/App.tsx`, `layout/AppShell.tsx`, `auth/AuthGate.tsx`,
   `tasks/api.ts`, `calendar/queries.ts`, shopping/task/calendar SQL migrations,
   `supabase/tests/rls.test.sql`, `supabase/config.toml`, `IMPLEMENTATION_PLAN.md`,
   and `README.md`.

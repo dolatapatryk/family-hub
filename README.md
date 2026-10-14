@@ -322,4 +322,4 @@ according to the user. Disconnect code and its migration are implemented but
 have not yet been manually verified there. Production OAuth credentials,
 function secrets, migrations, deployment, and a production smoke test remain
 environment-specific rollout work. The detailed roadmap is in
-[GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).
+[GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md](docs/GOOGLE_CALENDAR_IMPLEMENTATION_PLAN.md).

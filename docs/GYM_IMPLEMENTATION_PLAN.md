@@ -303,14 +303,14 @@ Proposed routes:
 - `/gym/plans/:planId/workouts/:week/:day`: start/resume/complete a workout.
 - `/gym/history`: previous plans and completed workouts.
 
-Keep code in `frontend/src/gym/`: `types.ts`, `gym.ts` (pure validation and
+Keep code in `../frontend/src/gym`: `types.ts`, `gym.ts` (pure validation and
 progress helpers), `api.ts`, `queries.ts`, pages, and small template/workout
 editor components. Use the existing Supabase adapter, `PageHeader`,
 `ToastProvider`, form styles, loading/error/empty states, and navigation icon
 conventions. Add `frontend/src/styles/gym.css` via `styles.css` only for feature
 layout that existing styles cannot cover.
 
-Integrate routes in `frontend/src/App.tsx` and **Siłownia** in
+Integrate routes in `../frontend/src/App.tsx` and **Siłownia** in
 `frontend/src/layout/AppShell.tsx`. Query keys begin with `['gym', userId]`
 and include relevant plan/template/workout IDs. Clear/cancel gym queries on
 account changes in `AuthGate.tsx`. Invalidate affected plan/workout/history
@@ -388,7 +388,7 @@ template and confirm prior prescriptions/results are unchanged. Also check
 failed submissions, lost-response retries, stale tabs, account switching,
 mobile form layout, and keyboard operation.
 
-Implementation checks: `npm test` and `npm run build` in `frontend/`, then
+Implementation checks: `npm test` and `npm run build` in `../frontend`, then
 `npx supabase test db` from the repository root with local Supabase available.
 No tests need to run for this planning-only change.
 
