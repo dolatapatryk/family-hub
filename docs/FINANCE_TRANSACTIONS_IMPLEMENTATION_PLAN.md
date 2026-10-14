@@ -1,7 +1,7 @@
 # Finance transactions, physical wallets, and savings goals
 
 Prepared: 2026-10-13. Updated: 2026-10-14.
-Status: implementation proposal; no application or database changes have been made for this feature.
+Status: Milestones 1–2 implemented; Milestone 2 verified against local Supabase. Milestones 3–5 remain planned.
 
 ## 1. Outcome and agreed domain model
 
@@ -785,11 +785,11 @@ and the current router rather than introducing additional state infrastructure.
 
 ### Milestone 2 — persistence and API
 
-- [ ] Create additive migrations for wallets/transactions, constraints, indexes,
+- [x] Create additive migrations for wallets/transactions, constraints, indexes,
   RLS/grants, mutation contracts, and aggregation reads.
-- [ ] Implement atomic wallet creation/opening, transaction CRUD, archive/restore,
+- [x] Implement atomic wallet creation/opening, transaction CRUD, archive/restore,
   balance reconciliation, idempotency, and optimistic version conflicts.
-- [ ] Add database tests and API types/adapters; verify against local Supabase.
+- [x] Add database tests and API types/adapters; verify against local Supabase.
 
 ### Milestone 3 — usable transaction tracking
 

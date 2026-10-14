@@ -1,4 +1,6 @@
 import type {
+  FinanceAllocationRole,
+  FinanceBudgetType,
   FinanceId,
   FinanceMinorUnits,
   FinanceMoney,
@@ -57,6 +59,12 @@ export interface FinanceWallet extends FinanceRow {
 export interface FinanceWalletBalance {
   wallet_id: FinanceId
   as_of_date: FinanceDateOnly
+  balance_minor: FinanceMinorUnits
+}
+
+/** A wallet row with its physical balance calculated through the requested date. */
+export interface FinanceWalletWithBalance extends FinanceWallet {
+  balance_as_of_date: FinanceDateOnly
   balance_minor: FinanceMinorUnits
 }
 
@@ -211,16 +219,68 @@ export interface FinanceTransactionPage {
 export interface FinanceTransactionMonthSummary {
   income_minor: FinanceMinorUnits
   regular_expenses_minor: FinanceMinorUnits
+  regular_refunds_minor: FinanceMinorUnits
   monthly_balance_minor: FinanceMinorUnits
   savings_contributions_minor: FinanceMinorUnits
   savings_spending_minor: FinanceMinorUnits
+  savings_refunds_minor: FinanceMinorUnits
   savings_change_minor: FinanceMinorUnits
   total_spending_minor: FinanceMinorUnits
   transaction_count: number
+  regular_category_totals: FinanceTransactionCategoryTotal[]
+  savings_category_totals: FinanceTransactionCategoryTotal[]
+  income_category_totals: FinanceTransactionCategoryTotal[]
 }
 
 export interface FinanceTransactionCategoryTotal {
   category_id: FinanceId
+  category_name: string
+  budget_type: FinanceBudgetType
+  allocation_role: FinanceAllocationRole
+  parent_id: FinanceId | null
   amount_minor: FinanceMinorUnits
   transaction_count: number
+}
+
+export interface FinanceWalletBalanceCorrectionPreview {
+  wallet_id: FinanceId
+  wallet_version: number
+  effective_date: FinanceDateOnly
+  current_balance_minor: FinanceMinorUnits
+  snapshot_token: string
+}
+
+export interface FinanceWalletBalanceCorrectionResult {
+  wallet_id: FinanceId
+  transaction_id: FinanceId | null
+  adjustment_minor: FinanceMinorUnits
+  observed_balance_minor: FinanceMinorUnits
+  version: number
+}
+
+export interface FinanceWalletOpeningCorrectionPreview {
+  wallet_id: FinanceId
+  wallet_version: number
+  opening_transaction_id: FinanceId
+  opening_transaction_version: number
+  opened_on: FinanceDateOnly
+  opening_balance_minor: FinanceMinorUnits
+  snapshot_token: string
+}
+
+export interface FinanceCorrectWalletOpeningInput {
+  request_id: FinanceId
+  wallet_id: FinanceId
+  expected_version: number
+  snapshot_token: string
+  opened_on: FinanceDateOnly
+  opening_balance: FinanceMoney
+}
+
+export interface FinanceWalletOpeningCorrectionResult {
+  wallet_id: FinanceId
+  opening_transaction_id: FinanceId
+  opened_on: FinanceDateOnly
+  opening_balance_minor: FinanceMinorUnits
+  version: number
 }
