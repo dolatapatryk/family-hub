@@ -73,8 +73,14 @@
   font-size: 12px;
 }
 
-.finance-category-row {
+.finance-management-row.finance-category-row {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.finance-category-row > .finance-edit-actions {
+  grid-column: auto;
+  flex-wrap: nowrap;
+  justify-self: end;
 }
 
 .finance-category-name {
