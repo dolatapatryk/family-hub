@@ -3,6 +3,7 @@ import { supabase } from '../auth/supabase.ts'
 import { moneyToFinanceMinorUnits } from './money.ts'
 import { financeSections } from './categories.ts'
 import type {
+  FinanceAccountLifecycleAction,
   FinanceAccountLifecycleInput,
   FinanceAccountLifecyclePreview,
   FinanceBudgetItem,
@@ -579,8 +580,14 @@ export function createFinanceApi(
     }))
   }
 
-  async function applyAccountLifecycle(input: FinanceAccountLifecycleInput): Promise<void> {
-    const result = await resolve<{ conflict?: boolean; current_version?: number }>(() => requireSupabase(client).rpc('finance_apply_account_lifecycle', {
+  async function applyAccountLifecycle(input: FinanceAccountLifecycleInput): Promise<{ account_id: FinanceId; version: number; action: FinanceAccountLifecycleAction }> {
+    const result = await resolve<{
+      account_id?: FinanceId
+      version?: number
+      action?: FinanceAccountLifecycleAction
+      conflict?: boolean
+      current_version?: number
+    }>(() => requireSupabase(client).rpc('finance_apply_account_lifecycle', {
       p_household_id: householdId,
       p_request_id: input.request_id,
       p_account_id: input.account_id,
@@ -591,6 +598,11 @@ export function createFinanceApi(
       p_visibility: input.visibility ?? null,
     }))
     if (result.conflict) throw new FinanceVersionConflictError(input.expected_version, result.current_version ?? null)
+    return {
+      account_id: result.account_id ?? input.account_id,
+      version: Number(result.version ?? input.expected_version),
+      action: result.action ?? input.action,
+    }
   }
 
   async function saveSavingsAccount(input: FinanceSaveSavingsAccountInput): Promise<void> {

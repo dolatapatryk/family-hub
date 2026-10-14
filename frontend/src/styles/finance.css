@@ -49,11 +49,7 @@
 }
 
 .finance-management-form p,
-.finance-management-form .finance-edit-actions,
-.finance-account-lifecycle,
-.finance-account-lifecycle .finance-savings-edit-form > p,
-.finance-account-lifecycle .finance-savings-edit-form > h3,
-.finance-account-lifecycle .finance-checkbox-label {
+.finance-management-form .finance-edit-actions {
   grid-column: 1 / -1;
 }
 
@@ -347,12 +343,24 @@
   }
 }
 
-.finance-account-lifecycle .finance-edit-actions {
-  flex-wrap: wrap;
+.finance-account-action-icon {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
 }
 
-.finance-account-lifecycle .finance-savings-edit-form > p {
-  margin-block: 4px;
+.finance-savings-account-actions {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.finance-account-archive-icon {
+  color: var(--color-muted);
 }
 
 @media (max-width: 760px) {
@@ -368,6 +376,11 @@
   .finance-savings-account-card .finance-savings-account-select {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .finance-savings-account-card .finance-savings-account-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
   }
 }
 
@@ -413,6 +426,7 @@
 .finance-savings-accordion-summary small { color: var(--color-muted); font-size: 12px; }
 .finance-savings-accordion-content { padding-bottom: 18px; }
 .finance-savings-form-content { padding-bottom: 0; }
+.finance-savings-account-create .finance-savings-accordion-content { padding-top: 2px; }
 .finance-savings-feedback { margin-inline: 19px; }
 
 .finance-month-select,
@@ -519,9 +533,16 @@
   font-size: 12px;
 }
 
-.finance-savings-account-card > .finance-edit-button {
+.finance-savings-account-card > .finance-savings-account-actions {
   grid-column: 2;
   grid-row: 1;
+}
+
+@media (max-width: 760px) {
+  .finance-savings-account-card > .finance-savings-account-actions {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
 }
 
 .finance-savings-edit-form,
@@ -714,7 +735,8 @@
   z-index: 2;
 }
 
-.finance-transaction-dialog {
+.finance-transaction-dialog,
+.finance-account-dialog {
   position: fixed;
   width: min(560px, calc(100vw - 32px));
   height: min(620px, 88vh);
@@ -732,12 +754,14 @@
   box-shadow: 0 24px 72px rgba(16, 47, 54, .24);
 }
 
-.finance-transaction-dialog::backdrop {
+.finance-transaction-dialog::backdrop,
+.finance-account-dialog::backdrop {
   background: rgba(10, 24, 27, .48);
   backdrop-filter: blur(2px);
 }
 
-.finance-transaction-dialog-form {
+.finance-transaction-dialog-form,
+.finance-account-dialog-form {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
@@ -745,7 +769,8 @@
   min-height: 0;
 }
 
-.finance-transaction-dialog-header {
+.finance-transaction-dialog-header,
+.finance-account-dialog-header {
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) 42px;
   align-items: center;
@@ -754,13 +779,15 @@
   padding: 14px 18px;
 }
 
-.finance-transaction-dialog-header h2 {
+.finance-transaction-dialog-header h2,
+.finance-account-dialog-header h2 {
   margin: 0;
   font-size: 17px;
   text-align: center;
 }
 
-.finance-transaction-dialog-close {
+.finance-transaction-dialog-close,
+.finance-account-dialog-close {
   display: grid;
   width: 40px;
   height: 40px;
@@ -768,12 +795,14 @@
   padding: 0;
 }
 
-.finance-transaction-dialog-close svg {
+.finance-transaction-dialog-close svg,
+.finance-account-dialog-close svg {
   width: 20px;
   height: 20px;
 }
 
-.finance-transaction-dialog-body {
+.finance-transaction-dialog-body,
+.finance-account-dialog-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
@@ -785,7 +814,8 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.finance-transaction-dialog-body > label {
+.finance-transaction-dialog-body > label,
+.finance-account-dialog-body > label {
   display: grid;
   min-width: 0;
   gap: 6px;
@@ -795,23 +825,31 @@
 }
 
 .finance-transaction-dialog-body input:not([type="checkbox"]),
-.finance-transaction-dialog-body select {
+.finance-transaction-dialog-body select,
+.finance-account-dialog-body input:not([type="checkbox"]),
+.finance-account-dialog-body select {
   width: 100%;
   min-width: 0;
   min-height: 44px;
 }
 
 .finance-transaction-dialog-monthly-toggle,
-.finance-transaction-dialog-body > .finance-error {
+.finance-transaction-dialog-body > .finance-error,
+.finance-account-dialog-full,
+.finance-account-dialog-body > p,
+.finance-account-dialog-body > .finance-error,
+.finance-account-dialog-body > .finance-checkbox-label {
   grid-column: 1 / -1;
 }
 
-.finance-transaction-dialog-body > .finance-transaction-dialog-monthly-toggle {
+.finance-transaction-dialog-body > .finance-transaction-dialog-monthly-toggle,
+.finance-account-dialog-body > .finance-checkbox-label {
   display: flex;
   align-items: center;
 }
 
-.finance-transaction-dialog-actions {
+.finance-transaction-dialog-actions,
+.finance-account-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
@@ -1178,7 +1216,8 @@
     height: 34px;
   }
 
-  .finance-transaction-dialog {
+  .finance-transaction-dialog,
+  .finance-account-dialog {
     top: auto;
     right: 0;
     bottom: 0;
@@ -1193,27 +1232,35 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  .finance-transaction-dialog-form {
+  .finance-transaction-dialog-form,
+  .finance-account-dialog-form {
     height: 100%;
   }
 
-  .finance-transaction-dialog-header {
+  .finance-transaction-dialog-header,
+  .finance-account-dialog-header {
     grid-template-columns: 40px minmax(0, 1fr) 40px;
     padding: 10px 14px;
   }
 
-  .finance-transaction-dialog-body {
+  .finance-transaction-dialog-body,
+  .finance-account-dialog-body {
     grid-template-columns: 1fr;
     gap: 12px;
     padding: 16px;
   }
 
   .finance-transaction-dialog-monthly-toggle,
-  .finance-transaction-dialog-body > .finance-error {
+  .finance-transaction-dialog-body > .finance-error,
+  .finance-account-dialog-full,
+  .finance-account-dialog-body > p,
+  .finance-account-dialog-body > .finance-error,
+  .finance-account-dialog-body > .finance-checkbox-label {
     grid-column: auto;
   }
 
-  .finance-transaction-dialog-actions {
+  .finance-transaction-dialog-actions,
+  .finance-account-dialog-actions {
     padding: 12px 16px;
   }
 
@@ -1345,7 +1392,6 @@
 .finance-subaccount-card { margin-left: 0; border-left: 3px solid var(--color-line); }
 .finance-account-management-children { display: grid; gap: 9px; margin-left: 16px; padding-left: 12px; border-left: 1px solid var(--color-line); }
 .finance-savings-account-total { display: grid; justify-items: end; gap: 3px; text-align: right; line-height: 1.2; }
-.finance-savings-account-total small { color: var(--color-muted); font-size: 11px; font-weight: 500; }
 .finance-goal-progress { display: block; width: 100%; height: 7px; margin: 14px 0 6px; border: 0; border-radius: 10px; accent-color: var(--color-blue); overflow: hidden; }
 .finance-goal-progress::-webkit-progress-bar { background: var(--color-blue-soft); border-radius: 10px; }
 .finance-goal-progress::-webkit-progress-value { background: var(--color-blue); border-radius: 10px; }
@@ -1422,6 +1468,101 @@
 .finance-account-summary > summary > span { display: grid; gap: 5px; }
 .finance-account-summary > summary > span::before { content: '⌄'; }
 .finance-account-summary small { color: var(--color-muted); font-size: 12px; }
+
+@media (max-width: 760px) {
+  .finance-archived-savings-accounts .finance-savings-account-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .finance-archived-savings-accounts .finance-savings-account-select {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .finance-archived-savings-accounts .finance-savings-account-copy {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .finance-archived-savings-accounts .finance-savings-account-copy strong,
+  .finance-archived-savings-accounts .finance-savings-account-copy span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .finance-archived-savings-accounts .finance-savings-account-total {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .finance-archived-savings-accounts .finance-savings-account-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 11px;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) > .finance-savings-account-select {
+    width: 100%;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) .finance-savings-account-copy {
+    width: 100%;
+    gap: 3px;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) .finance-savings-account-copy strong,
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) .finance-savings-account-copy span {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) .finance-savings-account-total {
+    justify-items: start;
+    align-self: flex-start;
+    text-align: left;
+    white-space: nowrap;
+    font-size: 15px;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) > .finance-savings-account-actions {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    gap: 4px;
+  }
+
+  .finance-savings-account-list .finance-savings-account-card:not(.is-archived) .finance-account-action-icon {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+  }
+}
 .finance-account-summary .finance-goal-progress { width: calc(100% - 28px); margin-inline: 14px; }
 .finance-subaccount-list { display: grid; gap: 8px; margin: 0 14px 12px 28px; }
 .finance-close-editor { margin: 14px 19px 0; }
