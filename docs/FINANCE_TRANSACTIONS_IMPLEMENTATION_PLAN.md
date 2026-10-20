@@ -1,7 +1,7 @@
 # Finance transactions, physical wallets, and savings goals
 
-Prepared: 2026-10-13. Updated: 2026-10-15.
-Status: Milestones 1–3 implemented. Milestone 3 verified with frontend tests, mocked desktop/mobile browser checks, and the local Supabase regression suite. Milestones 4–5 remain planned.
+Prepared: 2026-10-13. Updated: 2026-10-20.
+Status: Milestones 1–4 implemented locally. Release 1 hosted rollout checks remain; Milestone 5 is planned.
 
 ## 1. Outcome and agreed domain model
 
@@ -802,8 +802,8 @@ and the current router rather than introducing additional state infrastructure.
 Milestone 3 implementation notes (2026-10-15):
 
 - The transaction routes load independently of legacy budget months and savings.
-  Until Milestone 4, Przegląd shows monthly transaction activity; KPI cards and
-  category charts remain deferred.
+  At the Milestone 3 handoff, Przegląd showed monthly transaction activity while
+  KPI cards and category charts were deferred to Milestone 4.
 - Month, scope, wallet, category, kind, and description search persist in the URL.
   History uses the existing 50-record keyset API, with transfers displayed once.
 - Entry/edit, delete confirmation, wallet creation/details, archive/restore,
@@ -835,12 +835,37 @@ Milestone 3 implementation notes (2026-10-15):
 
 ### Milestone 4 — monthly overview and Release 1
 
-- [ ] Add KPIs, full-dataset category aggregates, accessible chart/table, and
+- [x] Add KPIs, full-dataset category aggregates, accessible chart/table, and
   recent transactions with drill-down.
-- [ ] Verify totals, privacy, mobile entry, and unchanged legacy Savings behavior.
-- [ ] Update README and release status with checks actually run.
+- [x] Verify totals, privacy, mobile entry, and unchanged legacy Savings behavior.
+- [x] Update README and release status with checks actually run.
 - [ ] Deploy additive schema before enabling the feature; smoke-test with scoped
   accounts. Feature rollback hides the new UI and preserves newly recorded data.
+
+Milestone 4 implementation notes (2026-10-20):
+
+- The overview calls `finance_transaction_month_summary` for full-month totals
+  and category aggregates, independent of history page size. The existing
+  summary RPC remains authoritative for income, regular expenses/refunds,
+  monthly balance, contributions, savings-funded spending/refunds, total
+  spending, and category totals.
+- Added four primary KPIs, separate physical balance and savings activity
+  details, current-category group/detail views, a positive-net donut with an
+  accessible category table, and the five latest transactions. Category rows
+  open the filtered history while retaining month, scope, and wallet.
+- The wallet balance shown in the overview is read for the selected month end,
+  or Warsaw-today for the current month. The UI labels it separately from the
+  operating monthly balance.
+- Verification on 2026-10-20: `npm test` passed (75 tests); `npm run build`
+  passed with the existing Vite bundle-size advisory; the mocked Playwright
+  transaction UI flow passed at desktop and 390px mobile widths; and
+  `npx supabase test db --local` passed (334 checks across 14 files). The
+  browser check covers full-month KPIs, category drill-down, scoped summary
+  requests, mobile overview and entry, and isolation from legacy Savings reads.
+- No schema migration was needed for this milestone; the local database
+  reported every checked-in migration applied. No production deployment or
+  hosted scoped-account smoke test was performed. The deployed-account smoke
+  test and real-device software-keyboard check remain before hosted Release 1.
 
 ### Milestone 5 — optional integrations
 

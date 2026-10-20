@@ -7,12 +7,14 @@ import { createFinanceApi } from '../api'
 import { transactionsNavigation } from '../navigation'
 import { createFinanceTransactionsApi } from './api'
 import { readTransactionFilters, todayDate, transactionKindLabels } from './filters'
+import { transactionBalanceDate, transactionBalanceMinor } from './reporting'
 import { useOnline } from './useTransactionAction'
 import { TransactionForm } from './TransactionForm'
 import { WalletForm, type WalletAction } from './WalletForm'
 import { WalletsPanel } from './WalletsPanel'
 import { TransactionHistory } from './TransactionHistory'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
+import { TransactionsOverview } from './TransactionsOverview'
 import type { FinanceTransaction, FinanceTransactionCursor, FinanceWalletWithBalance } from './types'
 import './transactions.css'
 
@@ -38,8 +40,15 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
   const [notice, setNotice] = useState('')
   const online = useOnline()
   const today = todayDate()
+  const balanceDate = transactionBalanceDate(filters.month_start, today)
   const wallets = useQuery({ queryKey: [...queryKey, 'wallets', filters.scope, today], queryFn: ({ signal }) => api.listWallets(filters.scope, today, signal) })
+  const historicalBalances = useQuery({ queryKey: [...queryKey, 'walletBalances', filters.scope, balanceDate], queryFn: ({ signal }) => api.listWallets(filters.scope, balanceDate, signal), enabled: tab === 'overview' && balanceDate !== today })
   const categories = useQuery({ queryKey: ['financeCategories', householdId], queryFn: ({ signal }) => categoryApi.listCategories(signal) })
+  const summary = useQuery({
+    queryKey: [...queryKey, 'summary', filters.month_start, filters.scope, filters.wallet_id, filters.category_id],
+    queryFn: ({ signal }) => api.getTransactionMonthSummary(filters, signal),
+    enabled: tab === 'overview',
+  })
   const history = useInfiniteQuery({
     queryKey: [...queryKey, 'history', filters],
     initialPageParam: null as FinanceTransactionCursor | null,
@@ -65,6 +74,9 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
   const filtered = Boolean(filters.wallet_id || filters.category_id || filters.kinds || filters.search)
   const ready = wallets.isSuccess && categories.isSuccess && !wallets.isError && !categories.isError
   const items = history.data?.pages.flatMap(page => page.items) ?? []
+  const balanceMinor = transactionBalanceMinor(balanceDate === today ? wallets.data : historicalBalances.data, filters.wallet_id)
+  const balancePending = balanceDate === today ? wallets.isPending : historicalBalances.isPending
+  const balanceError = balanceDate === today ? wallets.isError : historicalBalances.isError
   const navSearch = new URLSearchParams(params)
   navSearch.set('month', filters.month_start.slice(0, 7)); navSearch.set('scope', filters.scope)
   if (/^\/finance\/transactions\/?$/.test(location.pathname)) return <Navigate to={`/finance/transactions/overview?${navSearch}`} replace />
@@ -90,8 +102,34 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     {(wallets.isPending || categories.isPending) && <p role="status">{online ? 'Wczytuję portfele i kategorie…' : 'Połącz się z internetem, aby wczytać dane.'}</p>}
     {([wallets, categories] as const).map((query, index) => query.isError && <p role="alert" className="error-message" key={index}>Nie udało się wczytać {index === 0 ? 'portfeli' : 'kategorii'}. <button className="button-quiet" disabled={!online} onClick={() => void query.refetch()}>Spróbuj ponownie</button></p>)}
     {wallets.isSuccess && (tab === 'wallets' || walletList.length === 0) && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} onHistory={walletId => { const next = new URLSearchParams(navSearch); next.set('wallet', walletId); next.delete('category'); next.delete('kind'); next.delete('search'); navigate(`/finance/transactions/history?${next}`) }} />}
-    {tab !== 'wallets' && <section className="panel finance-panel">
-      <div className="panel-head"><div><h2 className="panel-title">{tab === 'overview' ? 'Transakcje miesiąca' : 'Historia transakcji'}</h2><p className="panel-kicker">{filtered ? 'Wyniki dla wybranych filtrów.' : 'Wszystkie rodzaje transakcji w wybranym miesiącu.'} Przelew jest jednym wpisem z dwoma portfelami.</p></div></div>
+    {tab === 'overview' && summary.isPending && <p role="status">Wczytuję podsumowanie miesiąca…</p>}
+    {tab === 'overview' && summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
+    {tab === 'overview' && ready && summary.isSuccess && <TransactionsOverview
+      monthStart={filters.month_start}
+      balanceDate={balanceDate}
+      today={today}
+      summary={summary.data}
+      categories={categoryList}
+      recent={items}
+      wallets={walletList}
+      walletSelected={Boolean(filters.wallet_id)}
+      balanceMinor={balanceMinor}
+      balancePending={balancePending}
+      balanceError={balanceError}
+      recentPending={history.isPending}
+      recentError={history.isError}
+      filtered={filtered}
+      online={online}
+      onRetryBalance={() => void (balanceDate === today ? wallets.refetch() : historicalBalances.refetch())}
+      onRetryRecent={() => void history.refetch()}
+      onCategoryClick={categoryId => { const next = new URLSearchParams(params); next.set('category', categoryId); navigate(`/finance/transactions/history?${next}`) }}
+      onHistoryClick={() => navigate(`/finance/transactions/history?${navSearch}`)}
+      onEdit={entry => open({ type: 'transaction', entry })}
+      onDelete={entry => open({ type: 'delete', entry })}
+      onOpening={wallet => open({ type: 'wallet', mode: 'opening', wallet })}
+    />}
+    {tab === 'history' && <section className="panel finance-panel">
+      <div className="panel-head"><div><h2 className="panel-title">Historia transakcji</h2><p className="panel-kicker">{filtered ? 'Wyniki dla wybranych filtrów.' : 'Wszystkie rodzaje transakcji w wybranym miesiącu.'} Przelew jest jednym wpisem z dwoma portfelami.</p></div></div>
       {history.isPending && <p role="status">{online ? 'Wczytuję historię…' : 'Historia będzie dostępna po połączeniu.'}</p>}
       {history.isError && <p role="alert" className="error-message">Nie udało się wczytać {history.isFetchNextPageError ? 'kolejnej strony' : 'historii'}. <button className="button-quiet" disabled={!online || history.isFetching} onClick={() => void (history.isFetchNextPageError ? history.fetchNextPage() : history.refetch())}>Spróbuj ponownie</button></p>}
       {ready && history.data && <TransactionHistory items={items} wallets={walletList} categories={categoryList} filtered={filtered} online={online} onEdit={entry => open({ type: 'transaction', entry })} onDelete={entry => open({ type: 'delete', entry })} onOpening={wallet => open({ type: 'wallet', mode: 'opening', wallet })} />}

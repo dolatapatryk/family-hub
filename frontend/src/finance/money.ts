@@ -88,8 +88,9 @@ export function moneyRatio(numerator: FinanceMoney, denominator: FinanceMoney): 
   return Number(negative ? -roundedRatio : roundedRatio) / 1_000_000
 }
 
-export function formatPln(value: FinanceMoney): string {
-  const minorUnits = parseMoney(value)
+/** Format aggregate minor units without the per-transaction persistence bound. */
+export function formatFinanceAggregatePln(value: FinanceMinorUnits | bigint): string {
+  const minorUnits = typeof value === 'bigint' ? value : BigInt(value)
   const negative = minorUnits < 0n
   const absolute = negative ? -minorUnits : minorUnits
   const whole = absolute / 100n
@@ -109,4 +110,8 @@ export function formatPln(value: FinanceMoney): string {
   const groupedWhole = new Intl.NumberFormat('pl-PL', { maximumFractionDigits: 0 }).format(whole)
 
   return `${prefixParts.map(part => part.value).join('')}${groupedWhole}${decimal}${fraction}${suffixParts.map(part => part.value).join('')}`
+}
+
+export function formatPln(value: FinanceMoney): string {
+  return formatFinanceAggregatePln(parseMoney(value))
 }

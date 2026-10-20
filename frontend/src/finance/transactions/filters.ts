@@ -23,8 +23,10 @@ export function readTransactionFilters(params: URLSearchParams, today = todayDat
   const month = params.get('month') ?? ''
   const scope = params.get('scope')
   const kind = params.get('kind')
+  const currentMonth = today.slice(0, 7)
+  const monthStart = validDate(`${month}-01`) && month <= currentMonth ? `${month}-01` : `${currentMonth}-01`
   return {
-    month_start: validDate(`${month}-01`) ? `${month}-01` : `${today.slice(0, 7)}-01`,
+    month_start: monthStart,
     scope: scope === 'personal' || scope === 'all_accessible' ? scope : 'household',
     wallet_id: params.get('wallet') || null,
     category_id: params.get('category') || null,

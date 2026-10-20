@@ -4,8 +4,8 @@ import type { FinanceBudgetLine, FinanceMoney, FinanceMonthSummary } from './typ
 
 const percent = (value: number) => new Intl.NumberFormat('pl-PL', { style: 'percent', maximumFractionDigits: 1 }).format(value)
 
-export function FinanceKpis({ values }: { values: Array<{ label: string; value: string; hint?: string }> }) {
-  return <div className="finance-kpi-grid">{values.map(item => <div className="finance-summary-card" key={item.label}>
+export function FinanceKpis({ values, className = '' }: { values: Array<{ label: string; value: string; hint?: string }>; className?: string }) {
+  return <div className={`finance-kpi-grid ${className}`.trim()}>{values.map(item => <div className="finance-summary-card" key={item.label}>
     <span>{item.label}</span><strong>{item.value}</strong>{item.hint && <small>{item.hint}</small>}
   </div>)}</div>
 }

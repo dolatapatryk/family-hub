@@ -16,8 +16,10 @@ const row = { household_id: household, created_by: user.id, created_at: '2026-01
 const a = { ...row, id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'Konto główne', wallet_type: 'bank', visibility: 'household', owner_user_id: user.id, opened_on: '2026-01-01', is_archived: false, currency: 'PLN', color: null, icon: null, as_of_date: '2026-10-15', balance_minor: '889000' }
 const b = { ...a, id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Oszczędności', balance_minor: '80000' }
 const privateWallet = { ...a, id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', name: 'Prywatny', visibility: 'private' }
-const food = { ...row, id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Żywność', budget_type: 'variable_expense', allocation_role: 'standard', parent_id: null }
+const foodParent = { ...row, id: 'abababab-abab-4bab-8bab-abababababab', name: 'Dom', budget_type: 'variable_expense', allocation_role: 'standard', parent_id: null }
+const food = { ...row, id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Żywność', budget_type: 'variable_expense', allocation_role: 'standard', parent_id: foodParent.id }
 const saving = { ...food, id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', name: 'Odkładanie', budget_type: 'saving' }
+const salary = { ...food, id: '77777777-7777-4777-8777-777777777777', name: 'Pensja', budget_type: 'income', parent_id: null }
 const transfer = { ...row, id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', kind: 'transfer', transaction_date: '2026-10-14', amount_minor: '100000', source_wallet_id: a.id, destination_wallet_id: b.id, category_id: saving.id, description: 'Przelew testowy', savings_effect: 'contribution' }
 const expense = { ...transfer, id: '99999999-9999-4999-8999-999999999999', kind: 'expense', transaction_date: '2026-10-12', amount_minor: '18000', destination_wallet_id: null, category_id: food.id, description: 'Zakupy testowe', savings_effect: 'none' }
 let wallets = [a, b]
@@ -25,6 +27,14 @@ let transactions = [transfer]
 let mutationMode = 'success'
 let historyFailure = false
 const calls = []
+const emptySummary = { income_minor: '0', regular_expenses_minor: '0', regular_refunds_minor: '0', monthly_balance_minor: '0', savings_contributions_minor: '0', savings_spending_minor: '0', savings_refunds_minor: '0', savings_change_minor: '0', total_spending_minor: '0', transaction_count: 0, regular_category_totals: [], savings_category_totals: [], income_category_totals: [] }
+const monthSummary = {
+  income_minor: '900000', regular_expenses_minor: '16000', regular_refunds_minor: '2000', monthly_balance_minor: '884000',
+  savings_contributions_minor: '100000', savings_spending_minor: '15000', savings_refunds_minor: '5000', savings_change_minor: '85000', total_spending_minor: '31000', transaction_count: 7,
+  regular_category_totals: [{ category_id: food.id, category_name: food.name, budget_type: food.budget_type, allocation_role: food.allocation_role, parent_id: food.parent_id, amount_minor: '16000', transaction_count: 2 }],
+  savings_category_totals: [{ category_id: food.id, category_name: food.name, budget_type: food.budget_type, allocation_role: food.allocation_role, parent_id: food.parent_id, amount_minor: '15000', transaction_count: 1 }],
+  income_category_totals: [{ category_id: salary.id, category_name: salary.name, budget_type: salary.budget_type, allocation_role: salary.allocation_role, parent_id: null, amount_minor: '900000', transaction_count: 1 }],
+}
 await context.addInitScript(({ user, origin }) => {
   const token = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })) + '.' + btoa(JSON.stringify({ sub: user.id, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 36000 })) + '.mock'
   localStorage.setItem(`sb-${new URL(origin).hostname.split('.')[0]}-auth-token`, JSON.stringify({ access_token: token, refresh_token: 'mock-refresh', expires_at: Math.floor(Date.now() / 1000) + 36000, expires_in: 36000, token_type: 'bearer', user }))
@@ -38,12 +48,13 @@ await context.route('**/supabase/**', async route => {
   let status = 200
   if (endpoint === 'profiles') body = { id: user.id, household_id: household, name: 'UI test' }
   else if (endpoint === 'user') body = user
-  else if (endpoint === 'finance_categories') body = [food, saving, { ...food, id: '77777777-7777-4777-8777-777777777777', name: 'Pensja', budget_type: 'income' }]
-  else if (endpoint === 'finance_list_wallets') body = args.p_scope === 'personal' ? [privateWallet] : args.p_scope === 'all_accessible' ? [...wallets, privateWallet] : wallets
+  else if (endpoint === 'finance_categories') body = [foodParent, food, saving, salary]
+  else if (endpoint === 'finance_list_wallets') body = (args.p_scope === 'personal' ? [privateWallet] : args.p_scope === 'all_accessible' ? [...wallets, privateWallet] : wallets).map(wallet => ({ ...wallet, as_of_date: args.p_as_of_date }))
   else if (endpoint === 'finance_list_transactions') {
     if (historyFailure) { body = { message: 'Test history failure' }; status = 500 }
     else body = args.p_cursor_id ? { items: [expense], next_cursor: null } : { items: args.p_month_start === '2026-09-01' ? [] : transactions, next_cursor: transactions.length ? { transaction_date: transfer.transaction_date, transaction_id: transfer.id } : null }
   }
+  else if (endpoint === 'finance_transaction_month_summary') body = args.p_scope === 'personal' || args.p_month_start === '2026-09-01' ? emptySummary : monthSummary
   else if (endpoint === 'finance_save_wallet_transaction') {
     if (mutationMode === 'error') { body = { message: 'Test transport failure' }; status = 500 }
     else if (mutationMode === 'conflict') body = { conflict: true, current_version: 2 }
@@ -63,8 +74,28 @@ await context.route('**/supabase/**', async route => {
 try {
   await page.goto(`${base}/finance/transactions?month=2026-10`)
   await page.getByText('Przelew testowy', { exact: true }).waitFor()
+  await page.getByText('Ostatnie transakcje', { exact: true }).waitFor()
   assert.match(page.url(), /transactions\/overview/)
+  const overviewKpis = await page.locator('.transaction-kpi-grid').innerText()
+  assert.match(overviewKpis, /9[\s\u00a0]?000,00\s?zł/)
+  assert.match(overviewKpis, /8[\s\u00a0]?840,00\s?zł/)
+  assert.ok(calls.some(call => call.endpoint === 'finance_transaction_month_summary' && call.args.p_scope === 'household' && call.args.p_wallet_id === null))
   assert.equal(calls.some(call => ['finance_months', 'finance_budget_items', 'finance_savings_accounts'].includes(call.endpoint)), false, 'Transactions do not load legacy budget or savings data')
+
+  await page.getByRole('button', { name: 'Pokaż szczegóły' }).click()
+  await page.getByRole('button', { name: 'Szczegółowe', exact: true }).click()
+  await page.setViewportSize({ width: 390, height: 844 })
+  const overviewColumns = await page.locator('.transaction-kpi-grid').evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length)
+  assert.equal(overviewColumns, 2, 'Overview KPIs use two columns on a phone')
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Overview fits a 390px viewport')
+  await page.screenshot({ path: '/tmp/finance-transactions-overview-mobile.png' })
+  await page.setViewportSize({ width: 1440, height: 1000 })
+  await page.getByRole('button', { name: /Dom → Żywność.*Otwórz historię/ }).click()
+  assert.match(page.url(), /transactions\/history.*category=dddddddd/)
+  await page.getByRole('link', { name: 'Przegląd', exact: true }).click()
+  assert.match(await page.locator('.transaction-kpi-grid').innerText(), /8[\s\u00a0]?840,00\s?zł/, 'Category drill-down preserves full-month KPIs')
+  assert.ok(calls.some(call => call.endpoint === 'finance_transaction_month_summary' && call.args.p_category_id === food.id))
+  await page.getByRole('button', { name: 'Wyczyść filtry' }).click()
   await page.getByRole('link', { name: 'Historia', exact: true }).click()
   await page.getByRole('button', { name: 'Pokaż kolejne 50' }).click()
   await page.getByText('Zakupy testowe', { exact: true }).waitFor()
@@ -168,6 +199,10 @@ try {
   assert.equal(calls.find(call => call.endpoint === 'finance_delete_wallet_transaction').args.p_transaction_id, transfer.id)
 
   await page.getByLabel('Miesiąc', { exact: true }).fill('2026-09')
+  await page.getByRole('link', { name: 'Przegląd', exact: true }).click()
+  await page.getByText('Brak transakcji w tym miesiącu.', { exact: true }).waitFor()
+  assert.ok(calls.some(call => call.endpoint === 'finance_list_wallets' && call.args.p_as_of_date === '2026-09-30'))
+  await page.getByRole('link', { name: 'Historia', exact: true }).click()
   await page.getByText('Brak transakcji w tym miesiącu. Dodaj pierwszą transakcję.').waitFor()
   await add.click()
   assert.equal(await dialog.getByLabel('Data', { exact: true }).inputValue(), '')
@@ -175,6 +210,10 @@ try {
   await page.getByRole('combobox', { name: 'Zakres', exact: true }).selectOption('personal')
   await page.getByRole('combobox', { name: 'Portfel', exact: true }).getByRole('option', { name: 'Prywatny' }).waitFor({ state: 'attached' })
   assert.equal(await page.getByRole('combobox', { name: 'Portfel', exact: true }).getByRole('option', { name: 'Konto główne', exact: true }).count(), 0)
+  await page.getByRole('link', { name: 'Przegląd', exact: true }).click()
+  await page.locator('.transaction-kpi-grid').waitFor()
+  assert.ok(calls.some(call => call.endpoint === 'finance_transaction_month_summary' && call.args.p_scope === 'personal'))
+  assert.match(await page.locator('.transaction-kpi-grid').innerText(), /0,00\s?zł/)
 
   wallets = [a, { ...b, balance_minor: '0' }]
   await page.getByRole('combobox', { name: 'Zakres', exact: true }).selectOption('household')
@@ -199,7 +238,7 @@ try {
   await dialog.waitFor({ state: 'hidden' })
   assert.ok(calls.some(call => call.endpoint === 'finance_save_wallet' && call.args.p_name === 'Nowy portfel'))
   assert.deepEqual(errors, [])
-  console.log('Transaction UI checks passed: routing, pagination, filters, savings refunds, retry identity, explicit transfers, conflict retention, offline/mobile, discard/focus, wallet corrections, delete, past month, scopes and empty wallets.')
+  console.log('Transaction UI checks passed: overview aggregates and category drill-down, privacy scope forwarding, mobile overview and entry, pagination, filters, legacy Savings isolation, refunds, request retries, transfers, conflicts, offline retention, focus/discard, wallet corrections, deletes, past months and empty wallets.')
 } catch (error) {
   await page.screenshot({ path: '/tmp/finance-transactions-failure.png' })
   console.error(await page.getByRole('dialog').ariaSnapshot().catch(() => 'No dialog'))

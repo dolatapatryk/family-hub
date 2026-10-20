@@ -220,6 +220,38 @@ Automated coverage includes task behavior, calendar and annual-date logic,
 Google request/event normalization, and database RLS. Worker retry, lease,
 concurrency, and expired-sync-token recovery still need dedicated tests.
 
+## Finance transactions and wallets
+
+**Finanse → Transakcje** records actual monthly income, regular expenses,
+refunds, transfers, and spending from savings. It includes a monthly overview
+with full-month totals, current-category summaries, recent activity, searchable
+history, and physical PLN wallets. Shared and private scopes are enforced by
+the database; selecting one wallet filters transactions that touch it. Transfers
+appear once in history and affect both wallet balances.
+
+The overview separates the monthly operating balance from physical wallet
+balances. It reports newly set-aside transfers and savings-funded spending as
+separate monthly activity. These figures do not reconcile the old savings-goal
+tree: **Oszczędności** remains independent, and the app explains that separation
+in its savings view. Release 1 does not copy legacy savings transactions into
+wallet history or add legacy goal balances to wallet balances.
+
+The additive wallet and transaction schema and RPCs are defined in
+`supabase/migrations/20261014215118_finance_wallet_transactions.sql` and its
+follow-up migrations. Apply the checked-in migrations in order to each hosted
+Supabase project before enabling the transaction UI there. The current local
+database has all migrations applied. No production deployment was performed as
+part of this implementation.
+
+Milestones 1–4 are implemented in the repository. Local verification on
+2026-10-20 passed: `npm test` (75 frontend tests), `npm run build`, the mocked
+desktop/390px mobile transaction UI flow, and `npx supabase test db --local`
+(334 pgTAP checks across 14 files). The browser flow covers overview arithmetic,
+category drill-down, scope forwarding, mobile entry, and isolation from legacy
+Savings reads. A deployed scoped-account smoke test and a real-device software
+keyboard check remain part of hosted release validation. Milestone 5’s optional
+savings-goal allocations remain planned.
+
 ## PWA and deployment
 
 The production build is an installable PWA. To inspect it locally, build and
@@ -291,11 +323,11 @@ Reset the local Supabase database when testing migration changes:
 
 The Finance feature, normalized database schema, shared/private savings
 account rules, and the historical Home Budget data migration sequence are documented in
-[BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md](BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md).
-The proposed monthly transaction register, physical wallets, UI design, and
-later savings-goal allocation model are described in
-[FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md](FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md).
-This is a staged implementation plan, not an already implemented feature.
+[BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md](docs/BUDGET_MIGRATION_IMPLEMENTATION_PLAN.md).
+The monthly transaction register, physical wallets, and Release 1 UI are
+implemented through Milestone 4. The later savings-goal allocation model is
+still planned in
+[FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md](docs/FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md).
 Categories select one of six budget sections, including individual accounts.
 Budget and forecast lines require a category and amount, with an optional
 description. Each section offers its own add action. Migration

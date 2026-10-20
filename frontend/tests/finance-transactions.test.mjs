@@ -2,9 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { initialDraft, sameWalletAudience, compatibleCategory, switchTab, draftKind, validateDraft, transactionInput, walletEffect } from '../src/finance/transactions/form.ts'
 import { readTransactionFilters, todayDate, validDate } from '../src/finance/transactions/filters.ts'
+import { buildTransactionCategoryRows, transactionBalanceDate, transactionBalanceMinor } from '../src/finance/transactions/reporting.ts'
 import { resolveFinanceRoute, transactionsNavigation } from '../src/finance/navigation.ts'
 import { createFinanceTransactionsApi } from '../src/finance/transactions/api.ts'
 import { FinanceVersionConflictError } from '../src/finance/api.ts'
+import { formatFinanceAggregatePln } from '../src/finance/money.ts'
 
 const today = '2026-10-15'
 const a = { id: 'a', household_id: 'home', visibility: 'household', owner_user_id: 'u', opened_on: '2026-01-01', is_archived: false }
@@ -32,7 +34,42 @@ test('date-only and URL filters validate leap days and preserve scope, month and
   })
   const invalid = readTransactionFilters(new URLSearchParams('month=2026-13&scope=outsider&kind=toString'), today)
   assert.equal(invalid.month_start, '2026-10-01'); assert.equal(invalid.scope, 'household'); assert.equal(invalid.kinds, undefined)
+  assert.equal(readTransactionFilters(new URLSearchParams('month=2027-01'), today).month_start, '2026-10-01')
   assert.equal(initialDraft(today, '2026-09', 'a').date, '')
+})
+test('overview groups current categories without duplicating parent and child amounts', () => {
+  const hierarchy = [
+    { id: 'home', name: 'Dom', parent_id: null },
+    { id: 'food', name: 'Żywność', parent_id: 'home' },
+    { id: 'restaurants', name: 'Restauracje', parent_id: 'food' },
+  ]
+  const totals = [
+    { category_id: 'home', category_name: 'Dom', parent_id: null, amount_minor: '3000', transaction_count: 1 },
+    { category_id: 'food', category_name: 'Żywność', parent_id: 'home', amount_minor: '10000', transaction_count: 2 },
+    { category_id: 'restaurants', category_name: 'Restauracje', parent_id: 'food', amount_minor: '-500', transaction_count: 1 },
+  ]
+  const main = buildTransactionCategoryRows(hierarchy, totals, 'main')
+  assert.equal(main.length, 1)
+  assert.equal(main[0].amount_minor, 12500n)
+  assert.equal(main[0].transaction_count, 4)
+  assert.equal(main[0].category_ids.length, 3)
+  const detailed = buildTransactionCategoryRows(hierarchy, totals, 'detailed')
+  assert.equal(detailed.reduce((sum, item) => sum + item.amount_minor, 0n), 12500n)
+  assert.deepEqual(detailed.map(item => item.path), ['Dom', 'Dom → Żywność', 'Dom → Żywność → Restauracje'])
+  assert.equal(detailed.find(item => item.id === 'restaurants').amount_minor, -500n)
+})
+test('overview balance uses the selected month end and sums wallet balances in exact cents', () => {
+  assert.equal(transactionBalanceDate('2026-09-01', today), '2026-09-30')
+  assert.equal(transactionBalanceDate('2024-02-01', today), '2024-02-29')
+  assert.equal(transactionBalanceDate('2026-10-01', today), today)
+  const values = [
+    { id: 'a', balance_minor: '889000' },
+    { id: 'b', balance_minor: '80000' },
+  ]
+  assert.equal(transactionBalanceMinor(values, null), 969000n)
+  assert.equal(transactionBalanceMinor(values, 'b'), 80000n)
+  assert.equal(transactionBalanceMinor(values, 'missing'), null)
+  assert.match(formatFinanceAggregatePln(1000000000000000000n), /10[\s\u00a0]?000[\s\u00a0]?000[\s\u00a0]?000[\s\u00a0]?000[\s\u00a0]?000,00/)
 })
 test('funding and refunds select the correct kind and one endpoint without floating point conversion', () => {
   const current = draft()
@@ -100,6 +137,15 @@ test('history API passes stable cursors and all filters on every page', async ()
     assert.equal(call.args.p_scope, 'personal'); assert.equal(call.args.p_wallet_id, 'a'); assert.equal(call.args.p_category_id, 'food')
     assert.equal(call.args.p_page_size, 50); assert.equal(call.args.p_search, 'book'); assert.deepEqual(call.args.p_kinds, ['refund'])
   }
+})
+test('month summary API sends its month, visibility, wallet and category scope', async () => {
+  const result = { income_minor: '900000', regular_expenses_minor: '16000', regular_refunds_minor: '2000', monthly_balance_minor: '884000', savings_contributions_minor: '100000', savings_spending_minor: '15000', savings_refunds_minor: '5000', savings_change_minor: '85000', total_spending_minor: '31000', transaction_count: 7, regular_category_totals: [], savings_category_totals: [], income_category_totals: [] }
+  const client = fakeClient([{ data: result, error: null }])
+  const api = createFinanceTransactionsApi('home', client)
+  const summary = await api.getTransactionMonthSummary({ month_start: '2026-10-01', scope: 'personal', wallet_id: 'wallet-b', category_id: 'food' })
+  assert.equal(summary.monthly_balance_minor, '884000')
+  assert.equal(client.calls[0].endpoint ?? client.calls[0].name, 'finance_transaction_month_summary')
+  assert.deepEqual(client.calls[0].args, { p_household_id: 'home', p_month_start: '2026-10-01', p_scope: 'personal', p_wallet_id: 'wallet-b', p_category_id: 'food' })
 })
 test('transaction API converts exact amounts and exposes conflicts without silent overwrites', async () => {
   const client = fakeClient([{ data: { transaction_id: 'tx' }, error: null }, { data: { conflict: true, current_version: 8 }, error: null }])
