@@ -52,9 +52,15 @@
   .text-button,
   .link-button,
   .task-archive,
+  .item-actions .task-action-icon,
   .agenda-switch button,
   .calendar-tools button {
     min-height: 44px;
+  }
+
+  .item-actions .task-action-icon {
+    width: 44px;
+    min-width: 44px;
   }
 
   .signout-button {
