@@ -69,6 +69,12 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
   }
   function open(next: Dialog) { setNotice(''); setDialog(next) }
   function saved(message: string) { setDialog(null); setNotice(message) }
+  function openWalletHistory(walletId: string) {
+    const next = new URLSearchParams(navSearch)
+    next.set('wallet', walletId); next.delete('category'); next.delete('kind'); next.delete('search')
+    setDialog(null)
+    navigate(`/finance/transactions/history?${next}`)
+  }
   const walletList = wallets.data ?? []
   const categoryList = categories.data ?? []
   const filtered = Boolean(filters.wallet_id || filters.category_id || filters.kinds || filters.search)
@@ -101,7 +107,7 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     {notice && <p role="status" className="transaction-preview">{notice}</p>}
     {(wallets.isPending || categories.isPending) && <p role="status">{online ? 'Wczytuję portfele i kategorie…' : 'Połącz się z internetem, aby wczytać dane.'}</p>}
     {([wallets, categories] as const).map((query, index) => query.isError && <p role="alert" className="error-message" key={index}>Nie udało się wczytać {index === 0 ? 'portfeli' : 'kategorii'}. <button className="button-quiet" disabled={!online} onClick={() => void query.refetch()}>Spróbuj ponownie</button></p>)}
-    {wallets.isSuccess && (tab === 'wallets' || walletList.length === 0) && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} onHistory={walletId => { const next = new URLSearchParams(navSearch); next.set('wallet', walletId); next.delete('category'); next.delete('kind'); next.delete('search'); navigate(`/finance/transactions/history?${next}`) }} />}
+    {wallets.isSuccess && (tab === 'wallets' || walletList.length === 0) && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} />}
     {tab === 'overview' && summary.isPending && <p role="status">Wczytuję podsumowanie miesiąca…</p>}
     {tab === 'overview' && summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
     {tab === 'overview' && ready && summary.isSuccess && <TransactionsOverview
@@ -136,7 +142,7 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
       {history.hasNextPage && <button className="button-quiet transaction-load-more" disabled={!online || history.isFetching} onClick={() => void history.fetchNextPage()}>{history.isFetchingNextPage ? 'Wczytuję…' : 'Pokaż kolejne 50'}</button>}
     </section>}
     {dialog?.type === 'transaction' && <TransactionForm api={api} queryKey={queryKey} wallets={walletList} categories={categoryList} month={filters.month_start.slice(0, 7)} userId={userId} entry={dialog.entry} saving={dialog.saving} onClose={() => setDialog(null)} onSaved={() => saved(dialog.entry ? 'Zapisano zmiany transakcji.' : 'Dodano transakcję.')} />}
-    {dialog?.type === 'wallet' && <WalletForm api={api} queryKey={queryKey} wallet={dialog.wallet} mode={dialog.mode} defaultVisibility={filters.scope === 'personal' ? 'private' : 'household'} onClose={() => setDialog(null)} onSaved={() => saved('Zapisano portfel. Jeśli nie jest widoczny, sprawdź wybrany zakres.')} />}
+    {dialog?.type === 'wallet' && <WalletForm api={api} queryKey={queryKey} wallet={dialog.wallet} mode={dialog.mode} defaultVisibility={filters.scope === 'personal' ? 'private' : 'household'} scope={filters.scope} monthStart={`${today.slice(0, 7)}-01`} categories={categoryList} userId={userId} onTransition={(mode, wallet) => open({ type: 'wallet', mode, wallet })} onHistory={openWalletHistory} onClose={() => setDialog(null)} onSaved={() => saved('Zapisano portfel. Jeśli nie jest widoczny, sprawdź wybrany zakres.')} />}
     {dialog?.type === 'delete' && <DeleteTransactionDialog entry={dialog.entry} wallets={walletList} api={api} queryKey={queryKey} onClose={() => setDialog(null)} onSaved={() => saved('Usunięto transakcję.')} />}
   </div>
 }

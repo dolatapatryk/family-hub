@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
-export function TransactionDialog({ title, busy, dirty, onClose, children }: {
-  title: string; busy: boolean; dirty: boolean; onClose: () => void; children: ReactNode
+export function TransactionDialog({ title, busy, dirty, onClose, children, className }: {
+  title: string; busy: boolean; dirty: boolean; onClose: () => void; children: ReactNode; className?: string
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -14,7 +14,7 @@ export function TransactionDialog({ title, busy, dirty, onClose, children }: {
   function close() {
     if (!busy && (!dirty || window.confirm('Odrzucić niezapisane zmiany?'))) onClose()
   }
-  return <dialog ref={ref} className="transaction-dialog" aria-labelledby={titleId} onCancel={event => { event.preventDefault(); close() }}>
+  return <dialog ref={ref} className={`transaction-dialog${className ? ` ${className}` : ''}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); close() }}>
     <header><h2 id={titleId}>{title}</h2><button type="button" className="button-quiet" aria-label="Zamknij okno" disabled={busy} onClick={close}>×</button></header>
     {children}
     <button type="button" className="button-quiet transaction-cancel" disabled={busy} onClick={close}>Anuluj</button>
