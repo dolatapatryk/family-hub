@@ -87,7 +87,7 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     </div>} />
     <nav className="finance-tabs" aria-label="Zakładki transakcji">{transactionsNavigation.map(item => <Link key={item.id} className={`finance-tab${tab === item.id ? ' active' : ''}`} aria-current={tab === item.id ? 'page' : undefined} to={`${item.to}?${navSearch}`}>{item.label}</Link>)}</nav>
     <div className="transaction-filters">
-      <label>Miesiąc<input type="month" value={filters.month_start.slice(0, 7)} max={today.slice(0, 7)} onChange={event => changeFilter('month', event.target.value)} /></label>
+      {tab !== 'wallets' && <label>Miesiąc<input type="month" value={filters.month_start.slice(0, 7)} max={today.slice(0, 7)} onChange={event => changeFilter('month', event.target.value)} /></label>}
       <label>Zakres<select value={filters.scope} onChange={event => changeFilter('scope', event.target.value)}><option value="household">Domowe</option><option value="personal">Moje</option><option value="all_accessible">Wszystkie dostępne</option></select></label>
       {tab !== 'wallets' && <>
         <label>Portfel<select value={filters.wallet_id ?? ''} onChange={event => changeFilter('wallet', event.target.value)}><option value="">Wszystkie portfele</option>{filters.wallet_id && !walletList.some(wallet => wallet.id === filters.wallet_id) && <option value={filters.wallet_id}>Portfel niedostępny — wyczyść filtr</option>}{walletList.map(wallet => <option value={wallet.id} key={wallet.id}>{wallet.name}{wallet.is_archived ? ' (archiwalny)' : ''}</option>)}</select></label>
