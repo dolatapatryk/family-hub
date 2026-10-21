@@ -572,6 +572,7 @@
 
 .task-dialog-form fieldset {
   display: grid;
+  align-content: start;
   min-height: 0;
   gap: 16px;
   overflow-y: auto;
@@ -1102,28 +1103,34 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: min(82vh, 760px);
-    height: min(82dvh, 760px);
-    max-height: 90dvh;
-    margin: 0;
-    border-radius: 18px 18px 0 0;
-  }
-
-  .task-dialog-form {
-    height: 100%;
-    max-height: none;
-  }
-
-  .task-confirm-dialog {
-    top: auto;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: 100%;
     height: auto;
     max-height: 90dvh;
     margin: 0;
     border-radius: 18px 18px 0 0;
+  }
+
+  .task-dialog > .task-dialog-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 90dvh;
+  }
+
+  .task-dialog > .task-dialog-form fieldset {
+    flex: 1 1 auto;
+  }
+
+  .task-confirm-dialog {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(560px, calc(100vw - 32px));
+    height: auto;
+    max-height: 90dvh;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    border-radius: 18px;
   }
 
   .task-confirm-dialog-form {
