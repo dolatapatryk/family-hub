@@ -11,6 +11,7 @@ import { FinanceSummariesPanel } from './FinanceSummariesPanel'
 import { FinanceKpis } from './FinanceCharts'
 import { SavingsTransfersPanel } from './SavingsTransfersPanel'
 import { SavingsAccountLifecycle } from './SavingsAccountLifecycle'
+import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import { financeMinorUnitsToMoney, formatPln, moneyToFinanceMinorUnits, moneyRatio, sumMoney, addMoney } from './money'
 import { createUuid } from '../utils/uuid'
 import type {
@@ -592,6 +593,8 @@ export function SavingsAccountsPanel({
     setTransactionEditFormError('')
   }
 
+  const swipeTransactionDialogRef = useMobileDialogSwipeDismiss(transactionDialogRef, closeTransactionEdit, !saveTransaction.isPending)
+
   function submitTransactionEdit(event: FormEvent<HTMLFormElement>, transaction: FinanceSavingsTransaction) {
     event.preventDefault()
     setTransactionToggleError('')
@@ -913,7 +916,7 @@ export function SavingsAccountsPanel({
           {deleteTransaction.isError && <p className="error-message finance-error" role="alert">{errorText(deleteTransaction.error)}</p>}
           {editingTransaction && (
             <dialog
-              ref={transactionDialogRef}
+              ref={swipeTransactionDialogRef}
               className="finance-transaction-dialog"
               aria-labelledby="finance-transaction-dialog-title"
               onCancel={event => {

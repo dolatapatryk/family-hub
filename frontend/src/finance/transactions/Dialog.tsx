@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useMobileDialogSwipeDismiss } from '../../components/useMobileDialogSwipeDismiss'
 
 export function TransactionDialog({ title, busy, dirty, onClose, children, className }: {
   title: string; busy: boolean; dirty: boolean; onClose: () => void; children: ReactNode; className?: string
@@ -14,7 +15,8 @@ export function TransactionDialog({ title, busy, dirty, onClose, children, class
   function close() {
     if (!busy && (!dirty || window.confirm('Odrzucić niezapisane zmiany?'))) onClose()
   }
-  return <dialog ref={ref} className={`transaction-dialog${className ? ` ${className}` : ''}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); close() }}>
+  const swipeDialogRef = useMobileDialogSwipeDismiss(ref, close, !busy)
+  return <dialog ref={swipeDialogRef} className={`transaction-dialog${className ? ` ${className}` : ''}`} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); close() }}>
     <header><h2 id={titleId}>{title}</h2><button type="button" className="button-quiet" aria-label="Zamknij okno" disabled={busy} onClick={close}>×</button></header>
     {children}
     <button type="button" className="button-quiet transaction-cancel" disabled={busy} onClick={close}>Anuluj</button>

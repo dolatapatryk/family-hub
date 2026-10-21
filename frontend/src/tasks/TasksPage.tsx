@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
 import { useToast } from '../components/ToastProvider'
+import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import { createHouseholdMembersApi, type HouseholdMember } from '../household/api'
 import { createTasksApi, type CreateRecurringTaskInput, type CreateTaskInput } from './api'
 import { TaskItem } from './TaskItem'
@@ -112,6 +113,8 @@ export function TasksPage() {
     setFormOpen(false)
   }
 
+  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, closeTaskDialog, !create.isPending)
+
   const tasksBySection = tasks.data?.length ? groupTasks(tasks.data) : undefined
   const openCount = tasks.data?.filter(task => !task.completed).length ?? 0
 
@@ -142,7 +145,7 @@ export function TasksPage() {
       </div>}
       <dialog
         id="add-task-dialog"
-        ref={dialog}
+        ref={swipeDialogRef}
         className="task-dialog"
         aria-labelledby={dialogTitleId}
         onCancel={event => {

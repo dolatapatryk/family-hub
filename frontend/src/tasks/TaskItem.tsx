@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '../components/ToastProvider'
+import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import type { HouseholdMember } from '../household/api'
 import { formatDueDate, type Task } from './tasks'
 import type { CreateTasksApi, UpdateTaskInput } from './types'
@@ -74,6 +75,8 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
     onError: error => showToast({ kind: 'error', title: 'Nie udało się usunąć zadania', description: error.message, action: { label: 'Spróbuj ponownie', onClick: () => remove.mutate() } }),
   })
   const busy = mutation.isPending || update.isPending || remove.isPending
+
+  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, closeDialog, !busy && dialogAction === 'edit')
 
   function openEditor() {
     mutation.reset()
@@ -156,7 +159,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
         </div>
       </div>
       <dialog
-        ref={dialog}
+        ref={swipeDialogRef}
         className={dialogAction === 'edit' ? 'task-dialog' : 'task-confirm-dialog'}
         aria-labelledby={dialogAction ? dialogTitleId : undefined}
         onCancel={event => {

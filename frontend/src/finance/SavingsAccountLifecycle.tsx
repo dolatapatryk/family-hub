@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { financeMinorUnitsToMoney, formatPln } from './money'
 import type {
@@ -203,6 +204,7 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive, onSave
   const title = action === 'edit' ? 'Edycja konta' : action ? `${actionNames[action]} · ${account.name}` : ''
   const titleId = `finance-account-dialog-title-${account.id}`
   const busy = editSaving || apply.isPending
+  const swipeDialogRef = useMobileDialogSwipeDismiss(dialogRef, cancelDialog, !busy)
 
   return <>
     <div className="finance-savings-account-actions">
@@ -222,7 +224,7 @@ export function SavingsAccountLifecycle({ api, account, userId, inactive, onSave
       </button>}
     </div>
     <dialog
-      ref={dialogRef}
+      ref={swipeDialogRef}
       className="finance-account-dialog"
       aria-labelledby={titleId}
       onCancel={event => {

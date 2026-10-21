@@ -1,0 +1,80 @@
+@keyframes mobile-bottom-sheet-enter {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes mobile-modal-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.mobile-dialog-dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mobile-dialog-settling {
+  transition: translate 180ms cubic-bezier(.2, .75, .25, 1);
+}
+
+@media (max-width: 620px) {
+  .task-dialog[open] {
+    animation: mobile-bottom-sheet-enter 420ms cubic-bezier(.2, .75, .25, 1) both;
+  }
+
+  .task-dialog[open]::backdrop {
+    animation: mobile-modal-backdrop-enter 280ms ease-out both;
+  }
+}
+
+@media (max-width: 680px) {
+  .finance-transaction-dialog[open],
+  .finance-account-dialog[open] {
+    animation: mobile-bottom-sheet-enter 420ms cubic-bezier(.2, .75, .25, 1) both;
+  }
+
+  .finance-transaction-dialog[open]::backdrop,
+  .finance-account-dialog[open]::backdrop {
+    animation: mobile-modal-backdrop-enter 280ms ease-out both;
+  }
+}
+
+@media (max-width: 600px) {
+  .transaction-dialog[open] {
+    animation: mobile-bottom-sheet-enter 420ms cubic-bezier(.2, .75, .25, 1) both;
+  }
+
+  .transaction-dialog[open]::backdrop {
+    animation: mobile-modal-backdrop-enter 280ms ease-out both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-dialog[open],
+  .finance-transaction-dialog[open],
+  .finance-account-dialog[open],
+  .transaction-dialog[open] {
+    animation: none;
+  }
+
+  .task-dialog[open]::backdrop,
+  .finance-transaction-dialog[open]::backdrop,
+  .finance-account-dialog[open]::backdrop,
+  .transaction-dialog[open]::backdrop {
+    animation: none;
+  }
+
+  .mobile-dialog-settling {
+    transition: none;
+  }
+}
