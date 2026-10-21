@@ -544,13 +544,13 @@ h1 {
   }
 
   .page-head .primary-button {
+    gap: 0;
     padding: 10px 11px;
     font-size: 13px;
   }
 
   .page-head .primary-button span {
-    max-width: 0;
-    overflow: hidden;
+    display: none;
   }
 
   .page-head .primary-button svg {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
@@ -47,6 +47,8 @@ export function TasksPage() {
   const [assignedTo, setAssignedTo] = useState('')
   const [cadence, setCadence] = useState<RecurrenceCadence | ''>('')
   const addButton = useRef<HTMLButtonElement>(null)
+  const dialogTitleId = useId()
+  const dialog = useRef<HTMLDialogElement>(null)
   const titleInput = useRef<HTMLInputElement>(null)
   const householdMembersApi = createHouseholdMembersApi(profile.household_id)
   const householdMembers = useQuery({
@@ -95,11 +97,33 @@ export function TasksPage() {
     }
   }
 
+  function openTaskDialog() {
+    create.reset()
+    setFormOpen(true)
+  }
+
+  function closeTaskDialog() {
+    if (create.isPending) return
+    setTitle('')
+    setDueDate('')
+    setAssignedTo('')
+    setCadence('')
+    create.reset()
+    setFormOpen(false)
+  }
+
   const tasksBySection = tasks.data?.length ? groupTasks(tasks.data) : undefined
   const openCount = tasks.data?.filter(task => !task.completed).length ?? 0
 
   useEffect(() => {
-    if (formOpen) titleInput.current?.focus()
+    const element = dialog.current
+    if (!element) return
+    if (formOpen) {
+      if (!element.open) element.showModal()
+      titleInput.current?.focus()
+    } else if (element.open) {
+      element.close()
+    }
   }, [formOpen])
 
   return (
@@ -108,7 +132,7 @@ export function TasksPage() {
         eyebrow="Wspólny plan"
         title="Zadania"
         description="Zbierz drobne sprawy w jednym, wspólnym planie."
-        action={<button className="primary-button" type="button" ref={addButton} aria-label={formOpen ? 'Anuluj dodawanie zadania' : 'Dodaj zadanie'} aria-expanded={formOpen} aria-controls="add-task-form" onClick={() => { if (!formOpen) create.reset(); setFormOpen(open => !open) }}>
+        action={<button className="primary-button" type="button" ref={addButton} aria-label={formOpen ? 'Zamknij dodawanie zadania' : 'Dodaj zadanie'} aria-expanded={formOpen} aria-controls="add-task-dialog" onClick={() => formOpen ? closeTaskDialog() : openTaskDialog()}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{formOpen ? <path d="m18 6-12 12M6 6l12 12" /> : <path d="M12 5v14M5 12h14" />}</svg>
           <span>{formOpen ? 'Anuluj' : 'Dodaj zadanie'}</span>
         </button>}
@@ -116,22 +140,39 @@ export function TasksPage() {
       {tasks.data && <div className="tasks-toolbar">
         <span className="small-muted">{openCount} otwartych · {tasks.data.length - openCount} ukończonych</span>
       </div>}
-      <form id="add-task-form" className="panel task-form" hidden={!formOpen} onSubmit={submit}>
-        <div className="panel-head"><div><h2 className="panel-title">Dodaj zadanie</h2><p className="panel-kicker">Dodaj termin lub przypisz je do domownika.</p></div></div>
-        <fieldset disabled={create.isPending}>
-          <label>Tytuł<input ref={titleInput} required value={title} onChange={event => setTitle(event.target.value)} placeholder="Co trzeba zrobić?" /></label>
-          <div className="task-form-options">
-            <label>Termin {!cadence && <span className="optional">(opcjonalnie)</span>}<input type="date" required={Boolean(cadence)} value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
-            <label>Przypisz do<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)}><option value="">Wspólne</option>{householdMembers.data?.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+      <dialog
+        id="add-task-dialog"
+        ref={dialog}
+        className="task-dialog"
+        aria-labelledby={dialogTitleId}
+        onCancel={event => {
+          event.preventDefault()
+          closeTaskDialog()
+        }}
+        onClick={event => {
+          if (event.target === event.currentTarget) closeTaskDialog()
+        }}
+      >
+        <form id="add-task-form" className="task-form task-dialog-form" onSubmit={submit}>
+          <div className="task-dialog-header">
+            <div><h2 className="panel-title" id={dialogTitleId}>Dodaj zadanie</h2><p className="panel-kicker">Dodaj termin lub przypisz je do domownika.</p></div>
+            <button className="button-quiet task-dialog-close" type="button" aria-label="Zamknij okno dodawania zadania" disabled={create.isPending} onClick={closeTaskDialog}>×</button>
           </div>
-          <label className="task-repeat-field">Powtarzanie<select value={cadence} onChange={event => setCadence(event.target.value as RecurrenceCadence | '')}><option value="">Jednorazowo</option><option value="weekly">Co tydzień</option><option value="monthly">Co miesiąc</option></select></label>
-          <p className="task-repeat-note">Rachunki z miesięczną kwotą i historią płatności dodaj w sekcji Rachunki.</p>
-          {cadence && <p className="task-repeat-note">Następny termin utworzy się po ukończeniu lub pominięciu tego wystąpienia. Rytm liczy się od poprzedniego terminu; dla końca miesiąca data dopasuje się do ostatniego dnia.</p>}
-          {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
-          {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}
-          <div className="form-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate)}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" onClick={() => { setFormOpen(false); addButton.current?.focus() }}>Anuluj</button></div>
-        </fieldset>
-      </form>
+          <fieldset disabled={create.isPending}>
+            <label>Tytuł<input ref={titleInput} required value={title} onChange={event => setTitle(event.target.value)} placeholder="Co trzeba zrobić?" /></label>
+            <div className="task-form-options">
+              <label>Termin {!cadence && <span className="optional">(opcjonalnie)</span>}<input type="date" required={Boolean(cadence)} value={dueDate} onChange={event => setDueDate(event.target.value)} /></label>
+              <label>Przypisz do<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)}><option value="">Wspólne</option>{householdMembers.data?.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+            </div>
+            <label className="task-repeat-field">Powtarzanie<select value={cadence} onChange={event => setCadence(event.target.value as RecurrenceCadence | '')}><option value="">Jednorazowo</option><option value="weekly">Co tydzień</option><option value="monthly">Co miesiąc</option></select></label>
+            <p className="task-repeat-note">Rachunki z miesięczną kwotą i historią płatności dodaj w sekcji Rachunki.</p>
+            {cadence && <p className="task-repeat-note">Następny termin utworzy się po ukończeniu lub pominięciu tego wystąpienia. Rytm liczy się od poprzedniego terminu; dla końca miesiąca data dopasuje się do ostatniego dnia.</p>}
+            {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
+            {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}
+          </fieldset>
+          <div className="task-dialog-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate) || create.isPending}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" disabled={create.isPending} onClick={closeTaskDialog}>Anuluj</button></div>
+        </form>
+      </dialog>
       {recurringTasks.isPending && <p className="task-meta" role="status">Ładuję stałe zadania…</p>}
       {recurringTasks.isError && <p className="error-message" role="alert">Nie udało się pobrać stałych zadań: {recurringTasks.error.message}</p>}
       {recurringTasks.data && recurringTasks.data.length > 0 && <section className="panel recurring-panel" aria-labelledby="recurring-tasks-title">
