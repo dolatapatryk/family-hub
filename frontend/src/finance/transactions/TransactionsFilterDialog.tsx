@@ -45,7 +45,7 @@ export function TransactionsFilterDialog({
     onApply({ month, scope, walletIds, categoryIds, kinds })
   }
 
-  return <TransactionDialog title="Filtry przeglądu" busy={false} dirty={false} onClose={onClose} className="transaction-filter-dialog">
+  return <TransactionDialog title="Filtry transakcji" busy={false} dirty={false} onClose={onClose} className="transaction-filter-dialog">
     <form onSubmit={submit}>
       <div className="transaction-dialog-body">
         <label className="transaction-filter-month">Miesiąc

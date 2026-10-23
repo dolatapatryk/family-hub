@@ -4,6 +4,7 @@ import type { FinanceCategory } from '../types'
 import { formatFinanceAggregatePln } from '../money'
 import { buildTransactionCategoryRows, type TransactionCategoryView } from './reporting'
 import type { FinanceTransactionMonthSummary } from './types'
+import { TransactionPeriodControl } from './TransactionPeriodControl'
 
 type ReportKind = 'regular' | 'savings' | 'income'
 
@@ -12,16 +13,6 @@ const reportOptions: Array<{ id: ReportKind; label: string }> = [
   { id: 'savings', label: 'Z oszczędności' },
   { id: 'income', label: 'Przychody' },
 ]
-
-function monthLabel(monthStart: string): string {
-  return new Intl.DateTimeFormat('pl-PL', { month: 'long', year: 'numeric' })
-    .format(new Date(`${monthStart}T12:00:00`))
-}
-
-function moveMonth(monthStart: string, offset: number): string {
-  const [year, month] = monthStart.slice(0, 7).split('-').map(Number)
-  return new Date(Date.UTC(year, month - 1 + offset, 1)).toISOString().slice(0, 7)
-}
 
 export function TransactionsOverview({
   monthStart,
@@ -110,16 +101,7 @@ export function TransactionsOverview({
   }
 
   return <div className="transaction-overview">
-    <div className="transaction-period-control" aria-label="Wybór miesiąca">
-      <button className="transaction-period-arrow" type="button" aria-label="Poprzedni miesiąc" onClick={() => onMonthChange(moveMonth(monthStart, -1))}>‹</button>
-      <button className="transaction-period-title" type="button" aria-haspopup="dialog" onClick={onOpenFilters}>
-        <strong>{monthLabel(monthStart)}</strong>
-        <span>{summary.transaction_count} {summary.transaction_count === 1 ? 'transakcja' : 'transakcji'}{filtered ? ' · aktywne filtry' : ''}
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M7.5 3v4M16.5 3v4M4 9h16" /></svg>
-        </span>
-      </button>
-      <button className="transaction-period-arrow" type="button" aria-label="Następny miesiąc" disabled={monthStart.slice(0, 7) >= today.slice(0, 7)} onClick={() => onMonthChange(moveMonth(monthStart, 1))}>›</button>
-    </div>
+    <TransactionPeriodControl monthStart={monthStart} today={today} transactionCount={summary.transaction_count} filtered={filtered} onOpenFilters={onOpenFilters} onMonthChange={onMonthChange} />
     <FinanceKpis className="transaction-kpi-grid" values={[
       { label: 'Przychody', value: formatFinanceAggregatePln(summary.income_minor) },
       { label: 'Wydatki', value: formatFinanceAggregatePln(summary.regular_expenses_minor) },

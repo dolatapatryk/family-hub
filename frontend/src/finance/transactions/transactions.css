@@ -23,6 +23,8 @@
 .transaction-dialog fieldset label, .transaction-dialog .transaction-checkbox { display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 32px; }
 .transaction-dialog legend { font-size: 13px; font-weight: 600; padding: 0 5px; }
 .transaction-dialog input[type=checkbox], .transaction-dialog input[type=radio] { width: 18px; height: 18px; flex-shrink: 0; }
+.transaction-amount-display { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; }
+.transaction-amount-display > strong { color: var(--color-muted); font-size: 14px; font-weight: 500; }
 .transaction-dialog-body input.transaction-amount-input { font-size: 26px; font-weight: 650; }
 .transaction-preview { padding: 16px; border: 1px solid var(--color-line); border-radius: 10px; background: color-mix(in srgb, var(--color-blue) 5%, var(--color-card)); display: grid; gap: 8px; font-size: 13px; line-height: 1.6; }
 .transaction-warning { color: #975111; }
@@ -282,4 +284,90 @@
   .wallet-edit-dialog > form > footer { padding: 11px 20px max(15px, env(safe-area-inset-bottom)); }
   .wallet-edit-dialog > form > footer .primary-button { min-height: 54px; }
   .wallet-edit-destructive { padding-inline: 22px; }
+}
+
+/* Transaction history follows the month overview and groups entries by day. */
+.transaction-history-page { display: grid; gap: 14px; }
+.transaction-history-panel { padding: 18px !important; border-radius: 20px; }
+.transaction-history-panel > .transaction-history-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; padding: 8px; margin-bottom: 22px; border-radius: 15px; background: var(--color-sidebar); }
+.transaction-history-kpi-grid .finance-summary-card { min-height: 76px; align-content: center; gap: 5px; padding: 9px 5px; border: 0; background: transparent; box-shadow: none; text-align: center; }
+.transaction-history-kpi-grid .finance-summary-card span { color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.transaction-history-kpi-grid .finance-summary-card strong { color: var(--color-ink); font-size: clamp(13px, 2.3vw, 19px); font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+/* Finance-wide KPI rules may load after this page's stylesheet. Keep the light cards readable either way. */
+.transactions-workspace .transaction-history-panel .transaction-history-kpi-grid .finance-summary-card { background: var(--color-card); }
+.transactions-workspace .transaction-history-panel .transaction-history-kpi-grid .finance-summary-card span { color: var(--color-muted); }
+.transactions-workspace .transaction-history-panel .transaction-history-kpi-grid .finance-summary-card strong { color: var(--color-ink); font-size: clamp(14px, 2.3vw, 19px); line-height: 1.25; }
+.transaction-history-panel > .panel-head { padding-bottom: 10px !important; }
+.transaction-history { display: grid; gap: 8px; }
+.transaction-history-empty { padding: 18px 0; color: var(--color-muted); }
+.transaction-history-day + .transaction-history-day { margin-top: 18px; }
+.transaction-history h3.transaction-history-day-heading { display: grid; grid-template-columns: max-content minmax(8px, 1fr) max-content; align-items: center; gap: 10px; margin: 12px 0 6px !important; color: var(--color-ink) !important; font-size: 17px; font-weight: 700; }
+.transaction-history-day-heading i { border-bottom: 1px dotted var(--color-muted); opacity: .55; }
+.transaction-history-day-heading strong { color: var(--color-muted); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.transaction-history-item { display: grid; grid-template-columns: minmax(0, 1fr); }
+.transaction-history-entry { display: grid; grid-template-columns: 44px minmax(0, 1fr) max-content; align-items: center; gap: 12px; width: 100%; min-height: 68px !important; padding: 9px 2px; border: 0; border-bottom: 1px solid var(--color-line); border-radius: 0; background: transparent; color: var(--color-ink); text-align: left; cursor: pointer; }
+.transaction-history-entry:hover:not(:disabled) .transaction-history-copy > strong { color: var(--color-blue); }
+.transaction-history-entry:disabled { cursor: not-allowed; opacity: .64; }
+.transaction-history-entry.is-static { cursor: default; }
+.transaction-history-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: var(--color-blue-soft); color: #fff; font-size: 15px; font-weight: 700; }
+.transaction-history-copy { display: grid; gap: 3px; min-width: 0; }
+.transaction-history-copy > strong { overflow: hidden; font-size: 15px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-history-copy > small { overflow: hidden; color: var(--color-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-history-copy > .transaction-history-wallet { font-size: 11px; }
+.transaction-history-amount { color: var(--color-ink); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.transaction-history-amount.is-transfer { color: var(--color-muted); }
+.transaction-history-note { padding: 5px 0 8px 56px; color: var(--color-muted); font-size: 11px; }
+
+/* Editing a transaction uses a compact, sectioned sheet with deletion beside save. */
+.transaction-edit-dialog { width: min(540px, calc(100vw - 32px)); max-height: min(calc(100dvh - 32px), 860px); overflow: hidden; border: 1px solid var(--color-line); border-radius: 27px; background: var(--color-card); box-shadow: var(--shadow-float); }
+.transaction-edit-dialog::backdrop { background: rgba(16, 47, 54, .32); backdrop-filter: blur(4px); }
+.transaction-edit-dialog > header { position: relative; justify-content: center; min-height: 74px; padding: 12px 72px; border: 0; background: var(--color-card); }
+.transaction-edit-dialog > header h2 { color: var(--color-ink); font-size: 18px; font-weight: 600; text-align: center; }
+.transaction-edit-dialog > header .button-quiet { position: absolute; left: 18px; top: 50%; display: grid; place-items: center; width: 46px; height: 46px; min-height: 46px; padding: 0; transform: translateY(-50%); border: 1px solid var(--color-line); border-radius: 50%; background: var(--color-blue-soft); color: var(--color-ink); font-size: 27px; font-weight: 300; }
+.transaction-edit-dialog .transaction-dialog-body { gap: 0; padding: 0 22px 14px; background: var(--color-paper); }
+.transaction-edit-dialog .transaction-amount-field { align-items: center; gap: 2px; padding: 8px 0 17px; border-bottom: 1px solid var(--color-line); color: var(--color-muted); font-size: 11px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.transaction-edit-dialog .transaction-amount-display { display: flex; align-items: baseline; justify-content: center; gap: 9px; width: 100%; }
+.transaction-edit-dialog .transaction-dialog-body .transaction-amount-input { width: min(100%, 380px); min-height: 82px; padding: 0 4px; border: 0; border-radius: 0; background: transparent; color: var(--color-ink); font-size: clamp(42px, 11vw, 62px); font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.055em; text-align: center; }
+.transaction-edit-dialog .transaction-amount-display > strong { color: var(--color-muted); font-size: 22px; font-weight: 500; }
+.transaction-edit-dialog .transaction-tabs { gap: 5px; padding: 13px 0; border-bottom: 1px solid var(--color-line); }
+.transaction-edit-dialog .transaction-tabs button { min-height: 42px; padding: 6px 9px; border: 0; border-radius: 24px; background: transparent; color: var(--color-muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.transaction-edit-dialog .transaction-tabs button[aria-pressed=true] { background: var(--color-sidebar); color: #fff; }
+.transaction-edit-dialog .transaction-dialog-body > label:not(.transaction-amount-field), .transaction-edit-dialog .transaction-fields > label { gap: 6px; padding: 13px 4px; border-bottom: 1px solid var(--color-line); color: var(--color-muted); font-size: 12px; font-weight: 500; }
+.transaction-edit-dialog .transaction-dialog-body > label:not(.transaction-amount-field) input, .transaction-edit-dialog .transaction-dialog-body > label:not(.transaction-amount-field) select, .transaction-edit-dialog .transaction-dialog-body > label:not(.transaction-amount-field) textarea, .transaction-edit-dialog .transaction-fields input, .transaction-edit-dialog .transaction-fields select { min-height: 38px; padding: 5px 0; border: 0; border-radius: 0; border-bottom: 1px solid transparent; background: transparent; color: var(--color-ink); font-size: 15px; }
+.transaction-edit-dialog .transaction-dialog-body > label:not(.transaction-amount-field) textarea { padding: 8px 0; }
+.transaction-edit-dialog .transaction-fields { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.transaction-edit-dialog .transaction-fields > label { margin: 0; }
+.transaction-edit-dialog .transaction-dialog-body > fieldset { margin: 12px 0; padding: 11px 13px; border-color: var(--color-line); border-radius: 11px; background: var(--color-card); }
+.transaction-edit-dialog .transaction-dialog-body > .transaction-checkbox { display: flex; min-height: 54px; flex-direction: row; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--color-line); color: var(--color-ink); }
+.transaction-edit-dialog .transaction-dialog-body > .panel-kicker { padding: 8px 4px; color: var(--color-muted); font-size: 12px; line-height: 1.5; }
+.transaction-edit-dialog > form > footer { justify-content: flex-start; align-items: center; gap: 14px; padding: 13px 22px max(14px, env(safe-area-inset-bottom)); border-top: 1px solid var(--color-line); background: var(--color-card); }
+.transaction-edit-dialog > form > footer .primary-button { flex: 1; min-height: 58px; border: 0; border-radius: 30px; background: var(--color-sidebar); color: #fff; font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.transaction-edit-delete { display: grid; place-items: center; flex: 0 0 58px; width: 58px; height: 58px; padding: 0; border: 0; border-radius: 50%; background: var(--color-blue-soft); color: var(--color-blue); cursor: pointer; }
+.transaction-edit-delete svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.transaction-edit-delete:disabled { opacity: .5; cursor: not-allowed; }
+.transaction-edit-dialog .transaction-cancel { display: none; }
+
+@media (max-width: 600px) {
+  .transaction-history-panel { padding: 14px !important; }
+  .transaction-history-panel > .transaction-history-kpi-grid { gap: 0; padding: 5px; margin-bottom: 18px; }
+  .transaction-history-kpi-grid .finance-summary-card { min-height: 66px; padding: 6px 3px; }
+  .transaction-history-kpi-grid .finance-summary-card span { font-size: 8px; letter-spacing: .08em; }
+  .transaction-history-kpi-grid .finance-summary-card strong { font-size: clamp(10px, 2.8vw, 14px); }
+  .transactions-workspace .transaction-history-panel .transaction-history-kpi-grid .finance-summary-card strong { font-size: clamp(12px, 2.8vw, 16px); }
+  .transaction-history-day-heading { gap: 7px; font-size: 15px !important; }
+  .transaction-history-day-heading strong { font-size: 12px; }
+  .transaction-history-entry { grid-template-columns: 40px minmax(0, 1fr) max-content; gap: 9px; min-height: 64px !important; }
+  .transaction-history-icon { width: 38px; height: 38px; }
+  .transaction-history-copy > strong { font-size: 14px; }
+  .transaction-history-copy > small { font-size: 11px; }
+  .transaction-history-amount { font-size: 14px; }
+  .transaction-edit-dialog { inset: max(20px, env(safe-area-inset-top)) 0 0; width: 100%; height: auto; max-height: none; max-width: 100%; margin: 0; border: 0; border-radius: 29px 29px 0 0; }
+  .transaction-edit-dialog > header { min-height: 68px; padding-inline: 72px; }
+  .transaction-edit-dialog > header .button-quiet { left: 16px; }
+  .transaction-edit-dialog .transaction-dialog-body { padding: 0 18px 12px; }
+  .transaction-edit-dialog .transaction-amount-field { padding-top: 4px; }
+  .transaction-edit-dialog .transaction-dialog-body .transaction-amount-input { min-height: 72px; font-size: clamp(40px, 12vw, 57px); }
+  .transaction-edit-dialog > form > footer { padding: 11px 18px max(14px, env(safe-area-inset-bottom)); }
+  .transaction-edit-dialog > form > footer .primary-button, .transaction-edit-delete { min-height: 54px; height: 54px; }
+  .transaction-edit-delete { flex-basis: 54px; width: 54px; }
 }
