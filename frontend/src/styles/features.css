@@ -973,8 +973,15 @@
   gap: 8px;
 }
 
-.shopping-check {
-  gap: 12px;
+.shopping-item-open:hover:not(:disabled) .shopping-name {
+  color: #20494e;
+}
+
+.shopping-name {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .shopping-detail {
@@ -982,6 +989,7 @@
   margin-top: 3px;
   color: var(--color-muted);
   font-size: 11px;
+  overflow-wrap: anywhere;
 }
 
 .shopping-purchased {
@@ -1227,6 +1235,10 @@
 
   .task-item .item-actions {
     display: none;
+  }
+
+  .shopping-item .item-actions {
+    display: flex;
   }
 
   .item-actions {

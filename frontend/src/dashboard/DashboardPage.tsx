@@ -158,7 +158,7 @@ export function DashboardPage() {
           {shopping.isPending && <p className="panel-message" role="status">Ładuję listę…</p>}
           {shopping.isError && <p className="panel-message error-message" role="alert">Nie udało się pobrać listy zakupów.</p>}
           {shopping.data && <ul className="task-list dashboard-list">
-            {visibleShopping.length ? visibleShopping.map(item => <ShoppingItemRow key={item.id} item={item} api={shoppingApi} queryKey={shoppingKey} />) : <li className="empty-state">Lista jest pusta. Dodaj produkt.</li>}
+            {visibleShopping.length ? visibleShopping.map(item => <ShoppingItemRow key={item.id} item={item} api={shoppingApi} queryKey={shoppingKey} showStore />) : <li className="empty-state">Lista jest pusta. Dodaj produkt.</li>}
           </ul>}
         </section>
         <section className="panel" aria-labelledby="dashboard-bills-title">
