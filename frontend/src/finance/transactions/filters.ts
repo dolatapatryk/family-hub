@@ -22,15 +22,20 @@ export function validDate(value: string): boolean {
 export function readTransactionFilters(params: URLSearchParams, today = todayDate()): FinanceTransactionFilters {
   const month = params.get('month') ?? ''
   const scope = params.get('scope')
-  const kind = params.get('kind')
+  const selectedKinds = [...new Set(params.getAll('kind'))]
+    .filter((kind): kind is FinanceTransactionKind => Object.hasOwn(transactionKindLabels, kind))
+  const walletIds = [...new Set(params.getAll('wallet').filter(Boolean))]
+  const categoryIds = [...new Set(params.getAll('category').filter(Boolean))]
   const currentMonth = today.slice(0, 7)
   const monthStart = validDate(`${month}-01`) && month <= currentMonth ? `${month}-01` : `${currentMonth}-01`
   return {
     month_start: monthStart,
     scope: scope === 'personal' || scope === 'all_accessible' ? scope : 'household',
-    wallet_id: params.get('wallet') || null,
-    category_id: params.get('category') || null,
-    kinds: kind && Object.hasOwn(transactionKindLabels, kind) ? [kind as FinanceTransactionKind] : undefined,
+    wallet_id: walletIds.length === 1 ? walletIds[0] : null,
+    ...(walletIds.length > 1 ? { wallet_ids: walletIds } : {}),
+    category_id: categoryIds.length === 1 ? categoryIds[0] : null,
+    ...(categoryIds.length > 1 ? { category_ids: categoryIds } : {}),
+    kinds: selectedKinds.length ? selectedKinds : undefined,
     search: (params.get('search') ?? '').slice(0, 200),
   }
 }

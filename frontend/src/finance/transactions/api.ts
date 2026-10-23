@@ -103,6 +103,24 @@ export function createFinanceTransactionsApi(
     signal?: AbortSignal,
   ): Promise<FinanceTransactionPage> {
     const supabaseClient = requireSupabase(client)
+    const walletIds = filters.wallet_ids ?? (filters.wallet_id ? [filters.wallet_id] : [])
+    const categoryIds = filters.category_ids ?? (filters.category_id ? [filters.category_id] : [])
+    if (walletIds.length > 1 || categoryIds.length > 1) {
+      let multiRequest = supabaseClient.rpc('finance_list_transactions_multi', {
+        p_household_id: householdId,
+        p_month_start: filters.month_start,
+        p_scope: filters.scope,
+        p_wallet_ids: walletIds.length ? walletIds : null,
+        p_category_ids: categoryIds.length ? categoryIds : null,
+        p_kinds: filters.kinds ?? null,
+        p_search: filters.search?.trim() || null,
+        p_cursor_date: cursor?.transaction_date ?? null,
+        p_cursor_id: cursor?.transaction_id ?? null,
+        p_page_size: pageSize,
+      }) as unknown as ReturnType<SupabaseClient['rpc']>
+      if (signal) multiRequest = multiRequest.abortSignal(signal) as typeof multiRequest
+      return resolve<FinanceTransactionPage>(multiRequest as unknown as RpcResponse<FinanceTransactionPage>)
+    }
     let request = supabaseClient.rpc('finance_list_transactions', {
       p_household_id: householdId,
       p_month_start: filters.month_start,
@@ -120,10 +138,24 @@ export function createFinanceTransactionsApi(
   }
 
   async function getTransactionMonthSummary(
-    filters: Pick<FinanceTransactionFilters, 'month_start' | 'scope' | 'wallet_id' | 'category_id'>,
+    filters: Pick<FinanceTransactionFilters, 'month_start' | 'scope' | 'wallet_id' | 'wallet_ids' | 'category_id' | 'category_ids' | 'kinds'>,
     signal?: AbortSignal,
   ): Promise<FinanceTransactionMonthSummary> {
     const supabaseClient = requireSupabase(client)
+    const walletIds = filters.wallet_ids ?? (filters.wallet_id ? [filters.wallet_id] : [])
+    const categoryIds = filters.category_ids ?? (filters.category_id ? [filters.category_id] : [])
+    if (walletIds.length > 1 || categoryIds.length > 1 || filters.kinds?.length) {
+      let multiRequest = supabaseClient.rpc('finance_transaction_month_summary_multi', {
+        p_household_id: householdId,
+        p_month_start: filters.month_start,
+        p_scope: filters.scope,
+        p_wallet_ids: walletIds.length ? walletIds : null,
+        p_category_ids: categoryIds.length ? categoryIds : null,
+        p_kinds: filters.kinds ?? null,
+      }) as unknown as ReturnType<SupabaseClient['rpc']>
+      if (signal) multiRequest = multiRequest.abortSignal(signal) as typeof multiRequest
+      return resolve<FinanceTransactionMonthSummary>(multiRequest as unknown as RpcResponse<FinanceTransactionMonthSummary>)
+    }
     let request = supabaseClient.rpc('finance_transaction_month_summary', {
       p_household_id: householdId,
       p_month_start: filters.month_start,

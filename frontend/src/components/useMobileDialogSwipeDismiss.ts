@@ -23,26 +23,27 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
 
   useEffect(() => {
     if (!dialog) return
+    const activeDialog = dialog
 
     const mobile = window.matchMedia('(max-width: 680px)')
     let swipe: Swipe | null = null
 
     function reset(settle = false) {
-      const wasDragged = dialog.style.getPropertyValue('translate') !== ''
+      const wasDragged = activeDialog.style.getPropertyValue('translate') !== ''
       swipe = null
-      dialog.classList.remove('mobile-dialog-dragging')
-      dialog.style.removeProperty('translate')
-      if (settle && wasDragged && dialog.isConnected) {
-        dialog.classList.add('mobile-dialog-settling')
-        window.setTimeout(() => dialog.classList.remove('mobile-dialog-settling'), 180)
+      activeDialog.classList.remove('mobile-dialog-dragging')
+      activeDialog.style.removeProperty('translate')
+      if (settle && wasDragged && activeDialog.isConnected) {
+        activeDialog.classList.add('mobile-dialog-settling')
+        window.setTimeout(() => activeDialog.classList.remove('mobile-dialog-settling'), 180)
       } else {
-        dialog.classList.remove('mobile-dialog-settling')
+        activeDialog.classList.remove('mobile-dialog-settling')
       }
     }
 
     function findScrollContainer(target: Element) {
       let current = target instanceof HTMLElement ? target : target.parentElement
-      while (current && current !== dialog) {
+      while (current && current !== activeDialog) {
         const { overflowY } = window.getComputedStyle(current)
         if (/(auto|scroll|overlay)/.test(overflowY) && current.scrollHeight > current.clientHeight + 1) return current
         current = current.parentElement
@@ -51,7 +52,7 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
     }
 
     function onTouchStart(event: TouchEvent) {
-      if (!enabledRef.current || !mobile.matches || !dialog.open || event.touches.length !== 1) return
+      if (!enabledRef.current || !mobile.matches || !activeDialog.open || event.touches.length !== 1) return
       if (!(event.target instanceof Element)) return
       if (event.target.closest('button, input, textarea, select, a, [contenteditable="true"]')) return
 
@@ -90,8 +91,8 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
       }
 
       if (event.cancelable) event.preventDefault()
-      dialog.classList.add('mobile-dialog-dragging')
-      dialog.style.setProperty('translate', `0 ${Math.min(deltaY, window.innerHeight)}px`)
+      activeDialog.classList.add('mobile-dialog-dragging')
+      activeDialog.style.setProperty('translate', `0 ${Math.min(deltaY, window.innerHeight)}px`)
     }
 
     function onTouchEnd(event: TouchEvent) {
@@ -114,18 +115,18 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
       reset()
     }
 
-    dialog.addEventListener('touchstart', onTouchStart, { passive: true })
-    dialog.addEventListener('touchmove', onTouchMove, { passive: false })
-    dialog.addEventListener('touchend', onTouchEnd)
-    dialog.addEventListener('touchcancel', onTouchCancel)
-    dialog.addEventListener('close', onDialogClose)
+    activeDialog.addEventListener('touchstart', onTouchStart, { passive: true })
+    activeDialog.addEventListener('touchmove', onTouchMove, { passive: false })
+    activeDialog.addEventListener('touchend', onTouchEnd)
+    activeDialog.addEventListener('touchcancel', onTouchCancel)
+    activeDialog.addEventListener('close', onDialogClose)
 
     return () => {
-      dialog.removeEventListener('touchstart', onTouchStart)
-      dialog.removeEventListener('touchmove', onTouchMove)
-      dialog.removeEventListener('touchend', onTouchEnd)
-      dialog.removeEventListener('touchcancel', onTouchCancel)
-      dialog.removeEventListener('close', onDialogClose)
+      activeDialog.removeEventListener('touchstart', onTouchStart)
+      activeDialog.removeEventListener('touchmove', onTouchMove)
+      activeDialog.removeEventListener('touchend', onTouchEnd)
+      activeDialog.removeEventListener('touchcancel', onTouchCancel)
+      activeDialog.removeEventListener('close', onDialogClose)
       reset()
     }
   }, [dialog])

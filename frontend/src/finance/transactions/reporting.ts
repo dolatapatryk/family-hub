@@ -90,15 +90,16 @@ export function transactionBalanceDate(monthStart: string, today: string): strin
   return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
 }
 
-/** Sum exact wallet balance strings, optionally for one selected wallet. */
+/** Sum exact wallet balance strings for all wallets or the selected wallets. */
 export function transactionBalanceMinor(
   wallets: FinanceWalletWithBalance[] | undefined,
-  walletId?: string | null,
+  walletIds?: string | string[] | null,
 ): bigint | null {
   if (!wallets) return null
-  if (walletId) {
-    const selected = wallets.find(wallet => wallet.id === walletId)
-    return selected ? BigInt(selected.balance_minor) : null
+  const selectedIds = typeof walletIds === 'string' ? [walletIds] : walletIds
+  if (selectedIds?.length) {
+    const selected = wallets.filter(wallet => selectedIds.includes(wallet.id))
+    return selected.length ? selected.reduce((sum, wallet) => sum + BigInt(wallet.balance_minor), 0n) : null
   }
   return wallets.reduce((sum, wallet) => sum + BigInt(wallet.balance_minor), 0n)
 }

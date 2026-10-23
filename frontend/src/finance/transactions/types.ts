@@ -200,7 +200,11 @@ export interface FinanceTransactionFilters {
   month_start: FinanceDateOnly
   scope: FinanceTransactionScope
   wallet_id?: FinanceId | null
+  /** Present when the URL selects more than one wallet. */
+  wallet_ids?: FinanceId[]
   category_id?: FinanceId | null
+  /** Present when the URL selects more than one category. */
+  category_ids?: FinanceId[]
   kinds?: FinanceTransactionKind[]
   search?: string
 }
