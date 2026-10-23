@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { PageHeader } from '../components/PageHeader'
 import { useToast } from '../components/ToastProvider'
-import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
+import { dismissMobileDialog, useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import { createHouseholdMembersApi, type HouseholdMember } from '../household/api'
 import { createTasksApi, type CreateRecurringTaskInput, type CreateTaskInput } from './api'
 import { TaskItem } from './TaskItem'
@@ -74,12 +74,13 @@ export function TasksPage() {
         title: input.cadence ? 'Dodano stałe zadanie' : 'Dodano zadanie',
         description: input.cadence ? 'Następny termin pojawi się po ukończeniu lub pominięciu bieżącego.' : input.title,
       })
-      setTitle('')
-      setDueDate('')
-      setAssignedTo('')
-      setCadence('')
-      setFormOpen(false)
-      addButton.current?.focus()
+      dismissMobileDialog(dialog.current, () => {
+        setTitle('')
+        setDueDate('')
+        setAssignedTo('')
+        setCadence('')
+        setFormOpen(false)
+      })
       await client.invalidateQueries({ queryKey })
       await client.invalidateQueries({ queryKey: recurringQueryKey })
     },
@@ -103,17 +104,21 @@ export function TasksPage() {
     setFormOpen(true)
   }
 
-  function closeTaskDialog() {
+  function closeTaskDialog(afterSwipeAnimation = false) {
     if (create.isPending) return
-    setTitle('')
-    setDueDate('')
-    setAssignedTo('')
-    setCadence('')
-    create.reset()
-    setFormOpen(false)
+    const dismiss = () => {
+      setTitle('')
+      setDueDate('')
+      setAssignedTo('')
+      setCadence('')
+      create.reset()
+      setFormOpen(false)
+    }
+    if (afterSwipeAnimation) dismiss()
+    else dismissMobileDialog(dialog.current, dismiss)
   }
 
-  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, closeTaskDialog, !create.isPending)
+  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, () => closeTaskDialog(true), !create.isPending)
 
   const tasksBySection = tasks.data?.length ? groupTasks(tasks.data) : undefined
   const openCount = tasks.data?.filter(task => !task.completed).length ?? 0
@@ -122,8 +127,19 @@ export function TasksPage() {
     const element = dialog.current
     if (!element) return
     if (formOpen) {
-      if (!element.open) element.showModal()
-      titleInput.current?.focus()
+      if (!element.open) {
+        element.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling', 'mobile-dialog-dismissing')
+        element.style.removeProperty('translate')
+        const form = element.querySelector<HTMLElement>('.task-dialog-form')
+        form?.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling')
+        form?.style.removeProperty('translate')
+        element.showModal()
+      }
+      if (window.matchMedia('(max-width: 680px)').matches) {
+        element.focus({ preventScroll: true })
+      } else {
+        titleInput.current?.focus()
+      }
     } else if (element.open) {
       element.close()
     }
@@ -132,9 +148,7 @@ export function TasksPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Wspólny plan"
         title="Zadania"
-        description="Zbierz drobne sprawy w jednym, wspólnym planie."
         action={<button className="primary-button" type="button" ref={addButton} aria-label={formOpen ? 'Zamknij dodawanie zadania' : 'Dodaj zadanie'} aria-expanded={formOpen} aria-controls="add-task-dialog" onClick={() => formOpen ? closeTaskDialog() : openTaskDialog()}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{formOpen ? <path d="m18 6-12 12M6 6l12 12" /> : <path d="M12 5v14M5 12h14" />}</svg>
           <span>{formOpen ? 'Anuluj' : 'Dodaj zadanie'}</span>
@@ -147,6 +161,7 @@ export function TasksPage() {
         id="add-task-dialog"
         ref={swipeDialogRef}
         className="task-dialog"
+        tabIndex={-1}
         aria-labelledby={dialogTitleId}
         onCancel={event => {
           event.preventDefault()
@@ -168,7 +183,6 @@ export function TasksPage() {
               <label>Przypisz do<select value={assignedTo} onChange={event => setAssignedTo(event.target.value)}><option value="">Wspólne</option>{householdMembers.data?.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             </div>
             <label className="task-repeat-field">Powtarzanie<select value={cadence} onChange={event => setCadence(event.target.value as RecurrenceCadence | '')}><option value="">Jednorazowo</option><option value="weekly">Co tydzień</option><option value="monthly">Co miesiąc</option></select></label>
-            <p className="task-repeat-note">Rachunki z miesięczną kwotą i historią płatności dodaj w sekcji Rachunki.</p>
             {cadence && <p className="task-repeat-note">Następny termin utworzy się po ukończeniu lub pominięciu tego wystąpienia. Rytm liczy się od poprzedniego terminu; dla końca miesiąca data dopasuje się do ostatniego dnia.</p>}
             {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
             {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}

@@ -6,8 +6,50 @@ type Swipe = {
   touchId: number
   startX: number
   startY: number
-  startedAt: number
   scrollContainer: HTMLElement | null
+}
+
+const dismissAnimationDuration = 260
+
+function getDialogDragTarget(dialog: HTMLDialogElement) {
+  return dialog.querySelector<HTMLElement>('.task-dialog-form') ?? dialog
+}
+
+export function dismissMobileDialog(dialog: HTMLDialogElement | null, onDismiss: () => void) {
+  if (!dialog?.open || !window.matchMedia('(max-width: 680px)').matches || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    onDismiss()
+    return
+  }
+  if (dialog.classList.contains('mobile-dialog-dismissing')) return
+
+  const dragTarget = getDialogDragTarget(dialog)
+  dialog.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling')
+  dragTarget.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling')
+  dialog.classList.add('mobile-dialog-dismissing')
+
+  let timeout = 0
+  let finished = false
+  const finish = () => {
+    if (finished) return
+    finished = true
+    window.clearTimeout(timeout)
+    dialog.removeEventListener('transitionend', onTransitionEnd)
+    // Clear the dragged layer while it is invisible, then let Safari paint it
+    // once before closing the native dialog to avoid leaving a composited edge.
+    window.requestAnimationFrame(() => {
+      dragTarget.style.removeProperty('translate')
+      window.requestAnimationFrame(() => {
+        if (dialog.open) dialog.close()
+        dialog.classList.remove('mobile-dialog-dismissing')
+        onDismiss()
+      })
+    })
+  }
+  const onTransitionEnd = (event: TransitionEvent) => {
+    if (event.target === dialog && event.propertyName === 'opacity') finish()
+  }
+  dialog.addEventListener('transitionend', onTransitionEnd)
+  timeout = window.setTimeout(finish, dismissAnimationDuration + 80)
 }
 
 export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () => void, enabled = true) {
@@ -29,15 +71,19 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
     let swipe: Swipe | null = null
 
     function reset(settle = false) {
-      const wasDragged = activeDialog.style.getPropertyValue('translate') !== ''
+      const dragTarget = getDialogDragTarget(activeDialog)
+      const wasDragged = dragTarget.style.getPropertyValue('translate') !== ''
       swipe = null
       activeDialog.classList.remove('mobile-dialog-dragging')
-      activeDialog.style.removeProperty('translate')
+      if (activeDialog.open) activeDialog.classList.remove('mobile-dialog-dismissing')
+      dragTarget.classList.remove('mobile-dialog-dragging')
+      dragTarget.style.removeProperty('translate')
       if (settle && wasDragged && activeDialog.isConnected) {
-        activeDialog.classList.add('mobile-dialog-settling')
-        window.setTimeout(() => activeDialog.classList.remove('mobile-dialog-settling'), 180)
+        dragTarget.classList.add('mobile-dialog-settling')
+        window.setTimeout(() => dragTarget.classList.remove('mobile-dialog-settling'), 180)
       } else {
         activeDialog.classList.remove('mobile-dialog-settling')
+        dragTarget.classList.remove('mobile-dialog-settling')
       }
     }
 
@@ -64,7 +110,6 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
         touchId: touch.identifier,
         startX: touch.clientX,
         startY: touch.clientY,
-        startedAt: performance.now(),
         scrollContainer,
       }
     }
@@ -91,8 +136,10 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
       }
 
       if (event.cancelable) event.preventDefault()
+      const dragTarget = getDialogDragTarget(activeDialog)
       activeDialog.classList.add('mobile-dialog-dragging')
-      activeDialog.style.setProperty('translate', `0 ${Math.min(deltaY, window.innerHeight)}px`)
+      dragTarget.classList.add('mobile-dialog-dragging')
+      dragTarget.style.setProperty('translate', `0 ${Math.min(deltaY, window.innerHeight)}px`)
     }
 
     function onTouchEnd(event: TouchEvent) {
@@ -101,10 +148,13 @@ export function useMobileDialogSwipeDismiss(dialogRef: DialogRef, onDismiss: () 
       if (!touch) return
 
       const deltaY = touch.clientY - swipe.startY
-      const elapsed = Math.max(1, performance.now() - swipe.startedAt)
-      const shouldDismiss = deltaY >= 110 || (deltaY >= 56 && deltaY / elapsed >= 0.65)
-      reset(!shouldDismiss)
-      if (shouldDismiss && enabledRef.current) onDismissRef.current()
+      const shouldDismiss = deltaY > activeDialog.getBoundingClientRect().height / 2
+      if (shouldDismiss && enabledRef.current) {
+        swipe = null
+        dismissMobileDialog(activeDialog, () => onDismissRef.current())
+      } else {
+        reset(true)
+      }
     }
 
     function onTouchCancel() {

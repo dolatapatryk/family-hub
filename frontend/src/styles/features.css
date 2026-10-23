@@ -527,6 +527,11 @@
   box-shadow: 0 24px 72px rgba(16, 47, 54, .24);
 }
 
+.task-dialog:focus,
+.task-confirm-dialog:focus {
+  outline: none;
+}
+
 .task-dialog[open],
 .task-confirm-dialog[open] {
   display: flex;

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useToast } from '../components/ToastProvider'
-import { useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
+import { dismissMobileDialog, useMobileDialogSwipeDismiss } from '../components/useMobileDialogSwipeDismiss'
 import type { HouseholdMember } from '../household/api'
 import { formatDueDate, type Task } from './tasks'
 import type { CreateTasksApi, UpdateTaskInput } from './types'
@@ -76,7 +76,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
   })
   const busy = mutation.isPending || update.isPending || remove.isPending
 
-  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, closeDialog, !busy && dialogAction === 'edit')
+  const swipeDialogRef = useMobileDialogSwipeDismiss(dialog, () => closeDialog(true), !busy && dialogAction === 'edit')
 
   function openEditor() {
     mutation.reset()
@@ -95,14 +95,13 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
     setDialogAction(action)
   }
 
-  function dismissDialog() {
-    const element = dialog.current
-    if (element?.open) element.close()
-    setDialogAction(null)
+  function dismissDialog(afterSwipeAnimation = false) {
+    if (afterSwipeAnimation) setDialogAction(null)
+    else dismissMobileDialog(dialog.current, () => setDialogAction(null))
   }
 
-  function closeDialog() {
-    if (!busy) dismissDialog()
+  function closeDialog(afterSwipeAnimation = false) {
+    if (!busy) dismissDialog(afterSwipeAnimation)
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -122,8 +121,19 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
     const element = dialog.current
     if (!element) return
     if (dialogAction) {
-      if (!element.open) element.showModal()
-      if (dialogAction === 'edit') editTitleInput.current?.focus()
+      if (!element.open) {
+        element.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling', 'mobile-dialog-dismissing')
+        element.style.removeProperty('translate')
+        const form = element.querySelector<HTMLElement>('.task-dialog-form')
+        form?.classList.remove('mobile-dialog-dragging', 'mobile-dialog-settling')
+        form?.style.removeProperty('translate')
+        element.showModal()
+      }
+      if (window.matchMedia('(max-width: 680px)').matches) {
+        element.focus({ preventScroll: true })
+      } else if (dialogAction === 'edit') {
+        editTitleInput.current?.focus()
+      }
     } else if (element.open) {
       element.close()
     }
@@ -161,6 +171,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
       <dialog
         ref={swipeDialogRef}
         className={dialogAction === 'edit' ? 'task-dialog' : 'task-confirm-dialog'}
+        tabIndex={-1}
         aria-labelledby={dialogAction ? dialogTitleId : undefined}
         onCancel={event => {
           event.preventDefault()

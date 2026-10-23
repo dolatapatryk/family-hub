@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 
 interface PageHeaderProps {
-  eyebrow: string
+  eyebrow?: string
   title: string
-  description: string
+  description?: string
   action?: ReactNode
 }
 
@@ -11,9 +11,9 @@ export function PageHeader({ eyebrow, title, description, action }: PageHeaderPr
   return (
     <header className="page-head">
       <div className="page-head-copy">
-        <p className="eyebrow">{eyebrow}</p>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
         <h1>{title}</h1>
-        <p className="page-subtitle">{description}</p>
+        {description && <p className="page-subtitle">{description}</p>}
       </div>
       {action && <div className="page-head-action">{action}</div>}
     </header>

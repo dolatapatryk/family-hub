@@ -27,6 +27,41 @@
   transition: translate 180ms cubic-bezier(.2, .75, .25, 1);
 }
 
+@media (max-width: 680px) {
+  .mobile-dialog-dismissing {
+    pointer-events: none;
+    transition: opacity 260ms ease-out;
+    opacity: 0;
+  }
+
+  .mobile-dialog-dismissing::backdrop {
+    transition: opacity 260ms ease-out;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .task-dialog.mobile-dialog-dragging,
+  .task-dialog.mobile-dialog-dismissing {
+    overflow: visible;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .task-dialog.mobile-dialog-dragging > .task-dialog-form,
+  .task-dialog.mobile-dialog-dismissing > .task-dialog-form {
+    border: 1px solid var(--color-line);
+    border-radius: 18px 18px 0 0;
+    background: var(--color-card);
+    box-shadow: 0 24px 72px rgba(16, 47, 54, .24);
+  }
+
+  .task-dialog.mobile-dialog-dismissing::backdrop {
+    backdrop-filter: none;
+  }
+}
+
 @media (max-width: 620px) {
   .task-dialog[open] {
     animation: mobile-bottom-sheet-enter 420ms cubic-bezier(.2, .75, .25, 1) both;
@@ -75,6 +110,11 @@
   }
 
   .mobile-dialog-settling {
+    transition: none;
+  }
+
+  .mobile-dialog-dismissing,
+  .mobile-dialog-dismissing::backdrop {
     transition: none;
   }
 }
