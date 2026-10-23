@@ -608,6 +608,13 @@
   background: var(--color-card);
 }
 
+.task-dialog-secondary-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 20px 14px;
+}
+
 .task-dialog-content {
   min-height: 0;
   overflow-y: auto;
@@ -745,11 +752,12 @@
 
 .task-check {
   display: flex;
-  min-width: 0;
+  width: 40px;
+  min-width: 40px;
   min-height: 44px;
-  flex: 1;
+  flex: 0 0 40px;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   cursor: pointer;
 }
 
@@ -766,6 +774,25 @@
   display: block;
   min-width: 0;
   flex: 1;
+}
+
+.task-open-button {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  flex: 1 1 auto;
+  align-self: stretch;
+  align-items: center;
+  padding: 7px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.task-open-button:hover:not(:disabled) .task-title {
+  color: #20494e;
 }
 
 .task-title,
@@ -1158,6 +1185,14 @@
     padding: 12px 16px max(12px, env(safe-area-inset-bottom));
   }
 
+  .task-dialog-secondary-actions {
+    padding: 0 16px 12px;
+  }
+
+  .task-dialog-secondary-actions .button-quiet {
+    flex: 1;
+  }
+
   .task-dialog-actions .primary-button {
     flex: 1;
   }
@@ -1190,6 +1225,10 @@
     gap: 8px;
   }
 
+  .task-item .item-actions {
+    display: none;
+  }
+
   .item-actions {
     gap: 6px;
   }
@@ -1205,10 +1244,6 @@
 
   .item-edit-fields {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .task-check {
-    gap: 9px;
   }
 
   .shopping-form-fields {

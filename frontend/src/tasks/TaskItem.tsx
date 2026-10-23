@@ -146,6 +146,8 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
           <input type="checkbox" checked={task.completed} disabled={busy}
             onChange={() => mutation.mutate(task.completed ? 'reopen' : 'complete')}
             aria-label={`${task.completed ? 'Przywróć' : 'Ukończ'}: ${task.title}`} />
+        </label>
+        <button className="task-open-button" type="button" disabled={busy} onClick={openEditor} aria-label={`Edytuj zadanie: ${task.title}`}>
           <span className="task-details">
             <span className="task-title">{task.title}</span>
             <span className="task-meta">
@@ -153,7 +155,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
               {assignedLabel && <><span aria-hidden="true"> · </span>{assignedLabel}</>}
             </span>
           </span>
-        </label>
+        </button>
         <div className="item-actions">
           <button className="button-quiet task-action-icon" type="button" disabled={busy} onClick={openEditor} aria-label={`Edytuj: ${task.title}`} title="Edytuj">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
@@ -219,6 +221,14 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
                     ? <p>Pominąć bieżący termin zadania „{task.title}”?</p>
                     : <p>Przenieść zadanie „{task.title}” do archiwum?</p>}
               </div>}
+            {dialogAction === 'edit' && <div className="task-dialog-secondary-actions">
+              {showArchive && <button className="button-quiet" type="button" disabled={busy} onClick={() => openConfirmation('archive')}>
+                {task.recurringActive ? 'Pomiń termin' : 'Archiwizuj'}
+              </button>}
+              {!task.recurringActive && <button className="button-quiet task-action-confirm-delete" type="button" disabled={busy} onClick={() => openConfirmation('delete')}>
+                Usuń
+              </button>}
+            </div>}
             <div className="task-dialog-actions">
               {dialogAction === 'edit'
                 ? <button className="primary-button" type="submit" disabled={!title.trim() || update.isPending}>{update.isPending ? 'Zapisuję…' : 'Zapisz'}</button>
