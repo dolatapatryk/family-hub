@@ -17,7 +17,7 @@ import { DeleteTransactionDialog } from './DeleteTransactionDialog'
 import { TransactionsOverview } from './TransactionsOverview'
 import { TransactionsFilterDialog, type TransactionFilterDraft } from './TransactionsFilterDialog'
 import { TransactionMultiSelect, type TransactionMultiSelectOption } from './TransactionMultiSelect'
-import type { FinanceTransaction, FinanceTransactionCursor, FinanceWalletWithBalance } from './types'
+import type { FinanceTransaction, FinanceTransactionCursor, FinanceTransactionScope, FinanceWalletWithBalance } from './types'
 import './transactions.css'
 
 type Dialog = { type: 'transaction'; entry?: FinanceTransaction; saving?: boolean }
@@ -47,6 +47,12 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
   const categoryIds = filters.category_ids ?? (filters.category_id ? [filters.category_id] : [])
   const balanceDate = transactionBalanceDate(filters.month_start, today)
   const wallets = useQuery({ queryKey: [...queryKey, 'wallets', filters.scope, today], queryFn: ({ signal }) => api.listWallets(filters.scope, today, signal) })
+  const filterWallets = useQuery({
+    queryKey: [...queryKey, 'filterWallets', today],
+    queryFn: ({ signal }) => api.listWallets('all_accessible', today, signal),
+    enabled: filterDialogOpen && tab === 'overview',
+    staleTime: 60_000,
+  })
   const historicalBalances = useQuery({ queryKey: [...queryKey, 'walletBalances', filters.scope, balanceDate], queryFn: ({ signal }) => api.listWallets(filters.scope, balanceDate, signal), enabled: tab === 'overview' && balanceDate !== today })
   const categories = useQuery({ queryKey: ['financeCategories', householdId], queryFn: ({ signal }) => categoryApi.listCategories(signal) })
   const summary = useQuery({
@@ -81,6 +87,7 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     setParams(current => {
       const next = new URLSearchParams(current)
       next.set('month', nextFilters.month)
+      next.set('scope', nextFilters.scope)
       for (const [key, values] of [['wallet', nextFilters.walletIds], ['category', nextFilters.categoryIds], ['kind', nextFilters.kinds]] as const) {
         next.delete(key)
         values.forEach(value => next.append(key, value))
@@ -104,6 +111,18 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
   const categoryList = categories.data ?? []
   const walletOptions: TransactionMultiSelectOption[] = walletList.map(wallet => ({ value: wallet.id, label: `${wallet.name}${wallet.is_archived ? ' (archiwalny)' : ''}` }))
   for (const walletId of walletIds) if (!walletOptions.some(option => option.value === walletId)) walletOptions.push({ value: walletId, label: 'Portfel niedostępny' })
+  const walletFilterList = filterWallets.data ?? []
+  const walletOptionsFor = (scopeWallets: FinanceWalletWithBalance[]) => scopeWallets.map(wallet => ({ value: wallet.id, label: `${wallet.name}${wallet.is_archived ? ' (archiwalny)' : ''}` }))
+  const currentScopeWalletOptions = walletOptionsFor(walletList)
+  const walletOptionsByScope: Record<FinanceTransactionScope, TransactionMultiSelectOption[]> = {
+    household: walletOptionsFor(walletFilterList.filter(wallet => wallet.visibility === 'household')),
+    personal: walletOptionsFor(walletFilterList.filter(wallet => wallet.visibility === 'private' && wallet.owner_user_id === userId)),
+    all_accessible: walletOptionsFor(walletFilterList),
+  }
+  if (!filterWallets.data) walletOptionsByScope[filters.scope] = currentScopeWalletOptions
+  for (const walletId of walletIds) {
+    if (!walletOptionsByScope[filters.scope].some(option => option.value === walletId)) walletOptionsByScope[filters.scope].push({ value: walletId, label: 'Portfel niedostępny' })
+  }
   const categoryOptions: TransactionMultiSelectOption[] = categoryList.map(category => {
     const parentName = categoryList.find(parent => parent.id === category.parent_id)?.name
     return { value: category.id, label: parentName ? `${parentName} → ${category.name}` : category.name }
@@ -141,7 +160,7 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     {notice && <p role="status" className="transaction-preview">{notice}</p>}
     {(wallets.isPending || categories.isPending) && <p role="status">{online ? 'Wczytuję portfele i kategorie…' : 'Połącz się z internetem, aby wczytać dane.'}</p>}
     {([wallets, categories] as const).map((query, index) => query.isError && <p role="alert" className="error-message" key={index}>Nie udało się wczytać {index === 0 ? 'portfeli' : 'kategorii'}. <button className="button-quiet" disabled={!online} onClick={() => void query.refetch()}>Spróbuj ponownie</button></p>)}
-    {wallets.isSuccess && (tab === 'wallets' || walletList.length === 0) && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} />}
+    {tab === 'wallets' && wallets.isSuccess && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} />}
     {tab === 'overview' && summary.isPending && <p role="status">Wczytuję podsumowanie miesiąca…</p>}
     {tab === 'overview' && summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
     {tab === 'overview' && ready && summary.isSuccess && <TransactionsOverview
@@ -150,7 +169,6 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
       today={today}
       summary={summary.data}
       categories={categoryList}
-      scope={filters.scope}
       walletIds={walletIds}
       walletSelected={walletIds.length > 0}
       balanceMinor={balanceMinor}
@@ -162,7 +180,6 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
       onCategoryClick={categoryId => { const next = new URLSearchParams(params); next.delete('category'); next.append('category', categoryId); navigate(`/finance/transactions/history?${next}`) }}
       onOpenFilters={() => setFilterDialogOpen(true)}
       onMonthChange={month => changeFilter('month', month)}
-      onScopeChange={scope => changeFilter('scope', scope)}
     />}
     {tab === 'history' && <section className="panel finance-panel">
       <div className="panel-head"><div><h2 className="panel-title">Historia transakcji</h2><p className="panel-kicker">{filtered ? 'Wyniki dla wybranych filtrów.' : 'Wszystkie rodzaje transakcji w wybranym miesiącu.'} Przelew jest jednym wpisem z dwoma portfelami.</p></div></div>
@@ -175,9 +192,12 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     {dialog?.type === 'wallet' && <WalletForm api={api} queryKey={queryKey} wallet={dialog.wallet} mode={dialog.mode} defaultVisibility={filters.scope === 'personal' ? 'private' : 'household'} scope={filters.scope} monthStart={`${today.slice(0, 7)}-01`} categories={categoryList} userId={userId} onTransition={(mode, wallet) => open({ type: 'wallet', mode, wallet })} onHistory={openWalletHistory} onClose={() => setDialog(null)} onSaved={() => saved('Zapisano portfel. Jeśli nie jest widoczny, sprawdź wybrany zakres.')} />}
     {dialog?.type === 'delete' && <DeleteTransactionDialog entry={dialog.entry} wallets={walletList} api={api} queryKey={queryKey} onClose={() => setDialog(null)} onSaved={() => saved('Usunięto transakcję.')} />}
     {filterDialogOpen && tab === 'overview' && <TransactionsFilterDialog
-      initial={{ month: filters.month_start.slice(0, 7), walletIds, categoryIds, kinds: filters.kinds ?? [] }}
+      initial={{ month: filters.month_start.slice(0, 7), scope: filters.scope, walletIds, categoryIds, kinds: filters.kinds ?? [] }}
       maxMonth={today.slice(0, 7)}
-      walletOptions={walletOptions}
+      walletOptionsByScope={walletOptionsByScope}
+      walletOptionsLoading={filterWallets.isPending}
+      walletOptionsError={filterWallets.isError}
+      onRetryWalletOptions={() => void filterWallets.refetch()}
       categoryOptions={categoryOptions}
       onApply={applyOverviewFilters}
       onClose={() => setFilterDialogOpen(false)}

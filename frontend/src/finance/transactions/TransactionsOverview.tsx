@@ -3,7 +3,7 @@ import { FinanceKpis } from '../FinanceCharts'
 import type { FinanceCategory } from '../types'
 import { formatFinanceAggregatePln } from '../money'
 import { buildTransactionCategoryRows, type TransactionCategoryView } from './reporting'
-import type { FinanceTransactionMonthSummary, FinanceTransactionScope } from './types'
+import type { FinanceTransactionMonthSummary } from './types'
 
 type ReportKind = 'regular' | 'savings' | 'income'
 
@@ -29,7 +29,6 @@ export function TransactionsOverview({
   today,
   summary,
   categories,
-  scope,
   walletIds,
   walletSelected,
   balanceMinor,
@@ -41,14 +40,12 @@ export function TransactionsOverview({
   onCategoryClick,
   onOpenFilters,
   onMonthChange,
-  onScopeChange,
 }: {
   monthStart: string
   balanceDate: string
   today: string
   summary: FinanceTransactionMonthSummary
   categories: FinanceCategory[]
-  scope: FinanceTransactionScope
   walletIds: string[]
   walletSelected: boolean
   balanceMinor: bigint | null
@@ -60,7 +57,6 @@ export function TransactionsOverview({
   onCategoryClick: (categoryId: string) => void
   onOpenFilters: () => void
   onMonthChange: (month: string) => void
-  onScopeChange: (scope: FinanceTransactionScope) => void
 }) {
   const [kind, setKind] = useState<ReportKind>('regular')
   const [categoryView, setCategoryView] = useState<TransactionCategoryView>('main')
@@ -124,12 +120,6 @@ export function TransactionsOverview({
       </button>
       <button className="transaction-period-arrow" type="button" aria-label="Następny miesiąc" disabled={monthStart.slice(0, 7) >= today.slice(0, 7)} onClick={() => onMonthChange(moveMonth(monthStart, 1))}>›</button>
     </div>
-    <label className="transaction-overview-scope">Zakres
-      <select value={scope} onChange={event => onScopeChange(event.target.value as FinanceTransactionScope)}>
-        <option value="household">Domowe</option><option value="personal">Moje</option><option value="all_accessible">Wszystkie dostępne</option>
-      </select>
-    </label>
-
     <FinanceKpis className="transaction-kpi-grid" values={[
       { label: 'Przychody', value: formatFinanceAggregatePln(summary.income_minor) },
       { label: 'Wydatki', value: formatFinanceAggregatePln(summary.regular_expenses_minor) },
