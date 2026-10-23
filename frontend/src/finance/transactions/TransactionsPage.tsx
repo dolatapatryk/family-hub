@@ -18,6 +18,7 @@ import { TransactionHistory } from './TransactionHistory'
 import { DeleteTransactionDialog } from './DeleteTransactionDialog'
 import { TransactionsOverview } from './TransactionsOverview'
 import { TransactionPeriodControl } from './TransactionPeriodControl'
+import { TransactionHistorySkeleton, TransactionHistorySummarySkeleton, TransactionOverviewSkeleton } from './TransactionLoadingSkeletons'
 import { TransactionsFilterDialog, type TransactionFilterDraft } from './TransactionsFilterDialog'
 import type { TransactionMultiSelectOption } from './TransactionMultiSelect'
 import type { FinanceTransaction, FinanceTransactionCursor, FinanceTransactionScope, FinanceWalletWithBalance } from './types'
@@ -144,42 +145,41 @@ function TransactionsWorkspace({ householdId, userId }: { householdId: string; u
     </div>}
     {!online && <p role="status" className="transaction-preview">Brak połączenia. Zapis i usuwanie są niedostępne. Dane mogą być nieaktualne; po połączeniu możesz ponowić próbę.</p>}
     {notice && <p role="status" className="transaction-preview">{notice}</p>}
-    {(wallets.isPending || categories.isPending) && <p role="status">{online ? 'Wczytuję portfele i kategorie…' : 'Połącz się z internetem, aby wczytać dane.'}</p>}
+    {tab !== 'overview' && tab !== 'history' && (wallets.isPending || categories.isPending) && <p role="status">{online ? 'Wczytuję portfele i kategorie…' : 'Połącz się z internetem, aby wczytać dane.'}</p>}
     {([wallets, categories] as const).map((query, index) => query.isError && <p role="alert" className="error-message" key={index}>Nie udało się wczytać {index === 0 ? 'portfeli' : 'kategorii'}. <button className="button-quiet" disabled={!online} onClick={() => void query.refetch()}>Spróbuj ponownie</button></p>)}
     {tab === 'wallets' && wallets.isSuccess && <WalletsPanel wallets={walletList} online={online} onAction={(mode, wallet) => open({ type: 'wallet', mode, wallet })} />}
-    {tab === 'overview' && summary.isPending && <p role="status">Wczytuję podsumowanie miesiąca…</p>}
-    {tab === 'overview' && summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
-    {tab === 'overview' && ready && summary.isSuccess && <TransactionsOverview
-      monthStart={filters.month_start}
-      balanceDate={balanceDate}
-      today={today}
-      summary={summary.data}
-      categories={categoryList}
-      walletIds={walletIds}
-      walletSelected={walletIds.length > 0}
-      balanceMinor={balanceMinor}
-      balancePending={balancePending}
-      balanceError={balanceError}
-      filtered={reportFiltered}
-      online={online}
-      onRetryBalance={() => void (balanceDate === today ? wallets.refetch() : historicalBalances.refetch())}
-      onCategoryClick={categoryId => { const next = new URLSearchParams(params); next.delete('category'); next.append('category', categoryId); navigate(`/finance/transactions/history?${next}`) }}
-      onOpenFilters={() => setFilterDialogOpen(true)}
-      onMonthChange={month => changeFilter('month', month)}
-    />}
+    {tab === 'overview' && <div className="transaction-overview-page">
+      <TransactionPeriodControl monthStart={filters.month_start} today={today} transactionCount={summary.data?.transaction_count} loading={summary.isPending} filtered={filtered} onOpenFilters={() => setFilterDialogOpen(true)} onMonthChange={month => changeFilter('month', month)} />
+      {(summary.isPending || wallets.isPending || categories.isPending) && <TransactionOverviewSkeleton />}
+      {summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
+      {ready && summary.isSuccess && <div key={filters.month_start} className="transaction-month-loaded"><TransactionsOverview
+        monthStart={filters.month_start}
+        balanceDate={balanceDate}
+        today={today}
+        summary={summary.data}
+        categories={categoryList}
+        walletIds={walletIds}
+        walletSelected={walletIds.length > 0}
+        balanceMinor={balanceMinor}
+        balancePending={balancePending}
+        balanceError={balanceError}
+        online={online}
+        onRetryBalance={() => void (balanceDate === today ? wallets.refetch() : historicalBalances.refetch())}
+        onCategoryClick={categoryId => { const next = new URLSearchParams(params); next.delete('category'); next.append('category', categoryId); navigate(`/finance/transactions/history?${next}`) }}
+      /></div>}
+    </div>}
     {tab === 'history' && <div className="transaction-history-page">
       <TransactionPeriodControl monthStart={filters.month_start} today={today} transactionCount={summary.data?.transaction_count} loading={summary.isPending} filtered={filtered} onOpenFilters={() => setFilterDialogOpen(true)} onMonthChange={month => changeFilter('month', month)} />
       {filtered && <p className="transaction-filter-status">Historia z aktywnymi filtrami <button className="button-quiet" onClick={resetFilters}>Wyczyść filtry</button></p>}
-      <section className="panel finance-panel transaction-history-panel">
-        <FinanceKpis className="transaction-history-kpi-grid" values={[
+      <section key={filters.month_start} className="panel finance-panel transaction-history-panel">
+        {summary.isPending ? <TransactionHistorySummarySkeleton /> : summary.data && <FinanceKpis className="transaction-history-kpi-grid transaction-month-loaded" values={[
           { label: 'Przychody', value: summary.data ? formatFinanceAggregatePln(BigInt(summary.data.income_minor)) : '—' },
           { label: 'Wydatki', value: summary.data ? formatFinanceAggregatePln(BigInt(summary.data.regular_expenses_minor)) : '—' },
           { label: 'Saldo', value: summary.data ? formatFinanceAggregatePln(BigInt(summary.data.monthly_balance_minor)) : '—' },
-        ]} />
-        {summary.isPending && <p role="status">Wczytuję podsumowanie miesiąca…</p>}
+        ]} />}
         {summary.isError && <p role="alert" className="error-message">Nie udało się wczytać podsumowania miesiąca. <button className="button-quiet" disabled={!online || summary.isFetching} onClick={() => void summary.refetch()}>Spróbuj ponownie</button></p>}
         <div className="panel-head"><div><h2 className="panel-title">Historia transakcji</h2><p className="panel-kicker">{filtered ? 'Wyniki dla wybranych filtrów.' : 'Transakcje w wybranym miesiącu.'} Dotknij wpisu, aby go edytować.</p></div></div>
-      {history.isPending && <p role="status">{online ? 'Wczytuję historię…' : 'Historia będzie dostępna po połączeniu.'}</p>}
+      {(history.isPending || (!ready && !wallets.isError && !categories.isError)) && <TransactionHistorySkeleton />}
       {history.isError && <p role="alert" className="error-message">Nie udało się wczytać {history.isFetchNextPageError ? 'kolejnej strony' : 'historii'}. <button className="button-quiet" disabled={!online || history.isFetching} onClick={() => void (history.isFetchNextPageError ? history.fetchNextPage() : history.refetch())}>Spróbuj ponownie</button></p>}
       {ready && history.data && <TransactionHistory items={items} wallets={walletList} categories={categoryList} filtered={filtered} online={online} today={today} onEdit={entry => open({ type: 'transaction', entry })} onOpening={wallet => open({ type: 'wallet', mode: 'opening', wallet })} />}
       {history.hasNextPage && <button className="button-quiet transaction-load-more" disabled={!online || history.isFetching} onClick={() => void history.fetchNextPage()}>{history.isFetchingNextPage ? 'Wczytuję…' : 'Pokaż kolejne 50'}</button>}

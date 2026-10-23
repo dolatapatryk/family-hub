@@ -318,6 +318,49 @@
 .transaction-history-amount.is-transfer { color: var(--color-muted); }
 .transaction-history-note { padding: 5px 0 8px 56px; color: var(--color-muted); font-size: 11px; }
 
+/* Stable month loading states and a restrained entrance for refreshed data. */
+.transaction-overview-page { display: grid; gap: 18px; }
+.transaction-month-loaded { animation: transaction-month-enter 180ms ease-out both; }
+.transaction-skeleton-bar { display: block; width: 100%; height: 10px; border-radius: 999px; background: linear-gradient(100deg, color-mix(in srgb, var(--color-line) 75%, var(--color-card)) 20%, color-mix(in srgb, var(--color-card) 78%, var(--color-blue-soft)) 44%, color-mix(in srgb, var(--color-line) 75%, var(--color-card)) 68%); background-size: 220% 100%; animation: transaction-skeleton-shimmer 1.25s ease-in-out infinite; }
+.transaction-overview-kpi-skeleton .finance-summary-card { min-height: 100px; }
+.transaction-overview-kpi-skeleton .is-value { width: 72%; height: 22px; margin-top: 5px; }
+.transaction-skeleton-tabs { display: flex; gap: 6px; }
+.transaction-skeleton-tabs .transaction-skeleton-bar { width: 86px; height: 44px; border: 1px solid var(--color-line); border-radius: 8px; }
+.transaction-skeleton-view-tabs .transaction-skeleton-bar { width: 105px; }
+.transaction-skeleton-chart { gap: 12px; }
+.transaction-skeleton-donut { display: block; width: clamp(190px, 34vw, 270px); aspect-ratio: 1; border: 30px solid color-mix(in srgb, var(--color-line) 72%, var(--color-card)); border-radius: 50%; box-sizing: border-box; }
+.transaction-skeleton-chart .is-total { width: min(165px, 48%); height: 18px; margin-top: -84px; }
+.transaction-skeleton-chart .is-caption { width: min(225px, 65%); height: 11px; margin-bottom: 67px; }
+.transaction-skeleton-table { display: grid; }
+.transaction-skeleton-table-head, .transaction-skeleton-table-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px 54px; align-items: center; gap: 10px; min-height: 43px; padding: 8px; border-bottom: 1px solid var(--color-line); }
+.transaction-skeleton-table-head { min-height: 34px; }
+.transaction-skeleton-table-head .transaction-skeleton-bar { height: 8px; }
+.transaction-skeleton-table-head .transaction-skeleton-bar:first-child { width: 58%; }
+.transaction-skeleton-table-head .transaction-skeleton-bar:nth-child(2), .transaction-skeleton-table-head .transaction-skeleton-bar:last-child { justify-self: end; width: 62%; }
+.transaction-skeleton-table-row .transaction-skeleton-bar:first-child { width: min(210px, 74%); }
+.transaction-skeleton-table-row .transaction-skeleton-bar:nth-child(2), .transaction-skeleton-table-row .transaction-skeleton-bar:last-child { justify-self: end; width: 64%; }
+.transaction-overview-skeleton .transaction-secondary-card { min-height: 110px; }
+.transaction-secondary-card .is-value { width: 74%; height: 18px; }
+.transaction-secondary-card .is-caption { width: 100%; height: 9px; margin-top: 3px; }
+.transaction-history-kpi-skeleton .finance-summary-card { position: relative; }
+.transaction-history-kpi-skeleton .transaction-skeleton-bar.is-value { width: min(112px, 78%); height: 19px; margin: 2px auto 0; }
+.transaction-history-skeleton { min-height: 470px; }
+.transaction-history-skeleton .transaction-history-day-heading { min-height: 23px; }
+.transaction-history-skeleton .is-day { width: 125px; height: 13px; }
+.transaction-history-skeleton .is-day-total { width: 62px; height: 12px; }
+.transaction-history-skeleton-entry { cursor: default; }
+.transaction-history-skeleton .is-icon { width: 42px; height: 42px; border-radius: 50%; }
+.transaction-history-skeleton .transaction-history-copy { gap: 6px; }
+.transaction-history-skeleton .is-name { width: min(190px, 55%); height: 12px; }
+.transaction-history-skeleton .is-description { width: min(280px, 82%); height: 9px; }
+.transaction-history-skeleton .is-wallet { width: min(145px, 45%); height: 8px; }
+.transaction-history-skeleton .is-amount { width: 74px; height: 14px; }
+@keyframes transaction-skeleton-shimmer { to { background-position: -220% 0; } }
+@keyframes transaction-month-enter { from { opacity: .55; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .transaction-skeleton-bar, .transaction-month-loaded { animation: none; }
+}
+
 /* Editing a transaction uses a compact, sectioned sheet with deletion beside save. */
 .transaction-edit-dialog { width: min(540px, calc(100vw - 32px)); max-height: min(calc(100dvh - 32px), 860px); overflow: hidden; border: 1px solid var(--color-line); border-radius: 27px; background: var(--color-card); box-shadow: var(--shadow-float); }
 .transaction-edit-dialog::backdrop { background: rgba(16, 47, 54, .32); backdrop-filter: blur(4px); }
@@ -361,6 +404,12 @@
   .transaction-history-copy > strong { font-size: 14px; }
   .transaction-history-copy > small { font-size: 11px; }
   .transaction-history-amount { font-size: 14px; }
+  .transaction-overview-kpi-skeleton .finance-summary-card { min-height: 60px; gap: 4px; padding: 7px 4px; }
+  .transaction-overview-kpi-skeleton .is-value { height: 15px; }
+  .transaction-skeleton-table-head, .transaction-skeleton-table-row { grid-template-columns: minmax(0, 1fr) 64px 38px; gap: 6px; padding-inline: 5px; }
+  .transaction-history-skeleton { min-height: 440px; }
+  .transaction-history-skeleton .is-icon { width: 38px; height: 38px; }
+  .transaction-history-skeleton .is-amount { width: 62px; }
   .transaction-edit-dialog { inset: max(20px, env(safe-area-inset-top)) 0 0; width: 100%; height: auto; max-height: none; max-width: 100%; margin: 0; border: 0; border-radius: 29px 29px 0 0; }
   .transaction-edit-dialog > header { min-height: 68px; padding-inline: 72px; }
   .transaction-edit-dialog > header .button-quiet { left: 16px; }

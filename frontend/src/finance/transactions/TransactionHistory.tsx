@@ -44,7 +44,7 @@ export function TransactionHistory({ items, wallets, categories, filtered, onlin
   for (const entry of items) days.set(entry.transaction_date, [...(days.get(entry.transaction_date) ?? []), entry])
   const walletName = (id: string | null) => wallets.find(wallet => wallet.id === id)?.name ?? 'Portfel niedostępny'
 
-  return <div className="transaction-history">
+  return <div className="transaction-history transaction-month-loaded">
     {items.length === 0 && <p role="status" className="transaction-history-empty">{filtered ? 'Brak transakcji pasujących do filtrów. Zmień filtry lub je wyczyść.' : 'Brak transakcji w tym miesiącu. Dodaj pierwszą transakcję.'}</p>}
     {[...days].map(([day, entries]) => {
       const total = entries.reduce((sum, entry) => sum + walletMovement(entry), 0n)

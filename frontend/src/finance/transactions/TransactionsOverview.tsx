@@ -4,7 +4,6 @@ import type { FinanceCategory } from '../types'
 import { formatFinanceAggregatePln } from '../money'
 import { buildTransactionCategoryRows, type TransactionCategoryView } from './reporting'
 import type { FinanceTransactionMonthSummary } from './types'
-import { TransactionPeriodControl } from './TransactionPeriodControl'
 
 type ReportKind = 'regular' | 'savings' | 'income'
 
@@ -25,12 +24,9 @@ export function TransactionsOverview({
   balanceMinor,
   balancePending,
   balanceError,
-  filtered,
   online,
   onRetryBalance,
   onCategoryClick,
-  onOpenFilters,
-  onMonthChange,
 }: {
   monthStart: string
   balanceDate: string
@@ -42,12 +38,9 @@ export function TransactionsOverview({
   balanceMinor: bigint | null
   balancePending: boolean
   balanceError: boolean
-  filtered: boolean
   online: boolean
   onRetryBalance: () => void
   onCategoryClick: (categoryId: string) => void
-  onOpenFilters: () => void
-  onMonthChange: (month: string) => void
 }) {
   const [kind, setKind] = useState<ReportKind>('regular')
   const [categoryView, setCategoryView] = useState<TransactionCategoryView>('main')
@@ -101,7 +94,6 @@ export function TransactionsOverview({
   }
 
   return <div className="transaction-overview">
-    <TransactionPeriodControl monthStart={monthStart} today={today} transactionCount={summary.transaction_count} filtered={filtered} onOpenFilters={onOpenFilters} onMonthChange={onMonthChange} />
     <FinanceKpis className="transaction-kpi-grid" values={[
       { label: 'Przychody', value: formatFinanceAggregatePln(summary.income_minor) },
       { label: 'Wydatki', value: formatFinanceAggregatePln(summary.regular_expenses_minor) },
