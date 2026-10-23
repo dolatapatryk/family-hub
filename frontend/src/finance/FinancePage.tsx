@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../auth/AuthGate'
 import { TransactionsPage } from './transactions/TransactionsPage'
+import { DashboardNewPage } from './DashboardNewPage'
 import { PageHeader } from '../components/PageHeader'
 import { createFinanceApi, FinanceVersionConflictError } from './api'
 import { calculateMonthSummary } from './calculations'
@@ -78,7 +79,10 @@ function makeLines(
 
 export function FinancePage() {
   const location = useLocation()
-  return resolveFinanceRoute(location.pathname)?.view === 'transactions' ? <TransactionsPage /> : <LegacyFinancePage />
+  const view = resolveFinanceRoute(location.pathname)?.view
+  if (view === 'transactions') return <TransactionsPage />
+  if (view === 'dashboard_new') return <DashboardNewPage />
+  return <LegacyFinancePage />
 }
 
 function LegacyFinancePage() {
