@@ -1,5 +1,9 @@
 # Finance transactions, physical wallets, and savings goals
 
+> Migration baseline updated on 2026-10-24: historical migration filenames below
+> refer to the former incremental history. The current fresh-install definitions
+> are grouped by domain in [the migration guide](../supabase/migrations/README.md).
+
 Prepared: 2026-10-13. Updated: 2026-10-20.
 Status: Milestones 1–4 implemented locally. Release 1 hosted rollout checks remain; Milestone 5 is planned.
 

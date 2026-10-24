@@ -26,6 +26,11 @@ Start the frontend in another terminal:
 Open [localhost:5173](http://localhost:5173). Supabase Auth and Postgres run
 locally on the ports reported by the Supabase CLI.
 
+The database starts from eight domain migrations. See
+[the migration guide](supabase/migrations/README.md) for their order and scope.
+These migrations replace the old incremental history and target an empty
+database; they are not an upgrade path for a database with the old history.
+
 To use the development app from another device on the same Wi-Fi, open
 `http://<computer-LAN-IP>:5173` (for example, `http://192.168.1.62:5173`).
 The Vite development and preview servers proxy Supabase requests to the
@@ -150,9 +155,9 @@ transaction; completed results can be corrected later without changing progress.
 The history page lists completed sessions and ended plans. Weight defaults and
 set overrides carry forward from earlier completed sessions in the same plan;
 actual results always start blank in a new session. End an active plan early to
-keep completed history and free the active-plan slot. Apply pending database
-migrations with `npx supabase migration up --local` before using the gym flows,
-including `20261011130000_gym_workouts.sql` for workout entry and history.
+keep completed history and free the active-plan slot. Templates, plans, workout
+entry and history are defined together in
+[`20261024203624_gym.sql`](supabase/migrations/20261024203624_gym.sql).
 
 ## Recurring household tasks
 
@@ -193,14 +198,9 @@ its history available.
 Amounts are stored as integer hundredths of the selected currency, so `100.23`
 is stored as `10023` and formatted as `100.23` in the app.
 
-The bill tables and payment operations are defined in
-`supabase/migrations/20261010150000_bills_and_payment_history.sql`. Monthly or
-two-month cycles and skip history are added by
-`supabase/migrations/20261010160000_bill_cycles_and_skips.sql`. Apply migrations
-in order; `supabase/migrations/20261010170000_grant_bill_table_select.sql`
-adds the table-level read grant required by PostgREST. If the first bill
-migration is already applied, apply the pending follow-up migrations before
-using the updated **Rachunki** flows.
+The bill tables, monthly/two-month cycles, unified paid/skipped history,
+payment operations and PostgREST read grants are defined together in
+[`20261024203622_bills.sql`](supabase/migrations/20261024203622_bills.sql).
 
 New items default to private. Household members can read, edit, and delete
 shared items; private items are accessible only to their creator. Only the
@@ -208,11 +208,10 @@ creator can change visibility. RLS and column grants enforce these rules in
 both `calendar_events` and `annual_dates`. Calendar query keys also include the
 current user to keep private cached items separate after an account switch.
 
-The schema is defined in
-`supabase/migrations/20260928000000_create_calendar_schema.sql`. This migration
-has been applied and manually verified on the test database. Apply it and
-verify it separately in each staging or production Supabase project before
-using these features there.
+The native calendar schema is defined in
+[`20261024203620_calendar.sql`](supabase/migrations/20261024203620_calendar.sql).
+Google OAuth, synchronization and imported events are defined in
+[`20261024203621_google_calendar.sql`](supabase/migrations/20261024203621_google_calendar.sql).
 
 Manual checks of the household, calendar, and Google Calendar flows on the
 test database, plus the phone and desktop layouts, have been reported complete.
@@ -236,12 +235,11 @@ tree: **Oszczędności** remains independent, and the app explains that separati
 in its savings view. Release 1 does not copy legacy savings transactions into
 wallet history or add legacy goal balances to wallet balances.
 
-The additive wallet and transaction schema and RPCs are defined in
-`supabase/migrations/20261014215118_finance_wallet_transactions.sql` and its
-follow-up migrations. Apply the checked-in migrations in order to each hosted
-Supabase project before enabling the transaction UI there. The current local
-database has all migrations applied. No production deployment was performed as
-part of this implementation.
+The wallet and transaction schema and RPCs are defined in
+[`20261024203625_finance.sql`](supabase/migrations/20261024203625_finance.sql),
+alongside budgets, savings and projects. The initial definitions already include
+signed opening balances, opening corrections, multi-select transaction filters
+and the Europe/Warsaw business timezone.
 
 Milestones 1–4 are implemented in the repository. Local verification on
 2026-10-20 passed: `npm test` (75 frontend tests), `npm run build`, the mocked
@@ -312,9 +310,11 @@ pgTAP RLS and sync-lifecycle suites in `supabase/tests/` against the local
 Supabase database. The user reports that the product flows were also checked
 manually on the test database and that the app was checked on phone and desktop.
 
-Reset the local Supabase database when testing migration changes:
+To recreate a disposable local database and verify the fresh-install migrations
+(reset deletes its existing data):
 
-    npx supabase db reset
+    npx supabase db reset --local
+    npx supabase test db --local
 
 ## Project structure
 
@@ -330,11 +330,9 @@ still planned in
 [FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md](docs/FINANCE_TRANSACTIONS_IMPLEMENTATION_PLAN.md).
 Categories select one of six budget sections, including individual accounts.
 Budget and forecast lines require a category and amount, with an optional
-description. Each section offers its own add action. Migration
-`20261012220000_finance_category_sections.sql` normalizes repeated labels and
-preserves historical amounts and sections, splitting mixed saving/personal
-categories when necessary. This migration was applied to local Supabase and
-verified with frontend tests/build, category SQL tests and Finance RLS tests.
+description. Each section offers its own add action. Category sections and their
+validation are part of the initial Finance schema; no historical data conversion
+is needed when creating a new database.
 
 The in-app source includes budgets/scenarios, savings accounts and their
 lifecycle, transfers, draft acceptance, linked savings plans, shared annual

@@ -1,5 +1,9 @@
 # Home Budget → Family Hub: schema and implementation plan
 
+> Migration baseline updated on 2026-10-24: historical migration filenames below
+> refer to the former incremental history. The current fresh-install definitions
+> are grouped by domain in [the migration guide](../supabase/migrations/README.md).
+
 Prepared: 2026-10-10. Updated: 2026-10-13. Finance contracts, schema,
 integrity, grants, RLS and the budget/savings/project flows are implemented.
 The local database contains the Finance migrations through

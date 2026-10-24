@@ -1,5 +1,9 @@
 # Google Calendar integration — implementation plan
 
+> Migration baseline updated on 2026-10-24: historical migration filenames below
+> refer to the former incremental history. The current fresh-install definitions
+> are grouped by domain in [the migration guide](../supabase/migrations/README.md).
+
 Status: the integration code and migrations have been manually exercised on
 the test Supabase database. The user also reports successful manual checks on
 phone and desktop. Staging/production configuration and rollout are not
