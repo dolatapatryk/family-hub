@@ -200,7 +200,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
                     : 'Tej operacji nie można cofnąć.'}
                 </p>}
               </div>
-              <button className="button-quiet task-dialog-close" type="button" aria-label="Zamknij okno" disabled={busy} onClick={closeDialog}>×</button>
+              <button className="button-quiet task-dialog-close" type="button" aria-label="Zamknij okno" disabled={busy} onClick={() => closeDialog()}>×</button>
             </div>
             {dialogAction === 'edit'
               ? <fieldset disabled={update.isPending}>
@@ -235,7 +235,7 @@ export function TaskItem({ task, api, queryKey, showArchive = true, assignedLabe
                 : <button className={dialogAction === 'delete' ? 'button-quiet task-action-confirm-delete' : 'primary-button'} type="submit" disabled={busy}>
                   {dialogAction === 'delete' ? remove.isPending ? 'Usuwam…' : 'Usuń zadanie' : mutation.isPending ? 'Zapisuję…' : task.recurringActive ? 'Pomiń termin' : 'Archiwizuj'}
                 </button>}
-              <button className="button-quiet" type="button" autoFocus={dialogAction !== 'edit'} disabled={busy} onClick={closeDialog}>Anuluj</button>
+              <button className="button-quiet" type="button" autoFocus={dialogAction !== 'edit'} disabled={busy} onClick={() => closeDialog()}>Anuluj</button>
             </div>
           </form>
         )}

@@ -1,5 +1,5 @@
 import type { FinanceCategory } from '../types'
-import { financeMinorUnitsToMoney, formatPln } from '../money'
+import { financeMinorUnitsToMoney, formatFinanceAggregatePln, formatPln } from '../money'
 import type { FinanceTransaction, FinanceWalletWithBalance } from './types'
 import { transactionKindLabels } from './filters'
 
@@ -13,6 +13,10 @@ function dayHeading(day: string, today: string): string {
   return label.charAt(0).toLocaleUpperCase('pl-PL') + label.slice(1)
 }
 
+function transactionMoneyLabel(amountMinor: bigint): string {
+  return formatPln(financeMinorUnitsToMoney(amountMinor.toString()))
+}
+
 function walletMovement(entry: FinanceTransaction): bigint {
   const amount = BigInt(entry.amount_minor)
   switch (entry.kind) {
@@ -24,16 +28,16 @@ function walletMovement(entry: FinanceTransaction): bigint {
 }
 
 function dayTotalLabel(amount: bigint): string {
-  if (amount === 0n) return formatPln(financeMinorUnitsToMoney(0n))
-  return `${amount < 0n ? '−' : '+'}${formatPln(financeMinorUnitsToMoney(amount < 0n ? -amount : amount))}`
+  if (amount === 0n) return formatFinanceAggregatePln(0n)
+  return `${amount < 0n ? '−' : '+'}${formatFinanceAggregatePln(amount < 0n ? -amount : amount)}`
 }
 
 function transactionAmountLabel(entry: FinanceTransaction): string {
   const amount = BigInt(entry.amount_minor)
-  if (entry.kind === 'expense' || entry.kind === 'savings_expense') return formatPln(financeMinorUnitsToMoney(amount))
-  if (entry.kind === 'transfer') return formatPln(financeMinorUnitsToMoney(amount))
-  if (amount < 0n) return `−${formatPln(financeMinorUnitsToMoney(-amount))}`
-  return `+${formatPln(financeMinorUnitsToMoney(amount))}`
+  if (entry.kind === 'expense' || entry.kind === 'savings_expense') return transactionMoneyLabel(amount)
+  if (entry.kind === 'transfer') return transactionMoneyLabel(amount)
+  if (amount < 0n) return `−${transactionMoneyLabel(-amount)}`
+  return `+${transactionMoneyLabel(amount)}`
 }
 
 export function TransactionHistory({ items, wallets, categories, filtered, online, today, onEdit, onOpening }: {

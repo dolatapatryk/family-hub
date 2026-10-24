@@ -176,7 +176,7 @@ export function TasksPage() {
         <form id="add-task-form" className="task-form task-dialog-form" onSubmit={submit}>
           <div className="task-dialog-header">
             <div><h2 className="panel-title" id={dialogTitleId}>Dodaj zadanie</h2><p className="panel-kicker">Dodaj termin lub przypisz je do domownika.</p></div>
-            <button className="button-quiet task-dialog-close" type="button" aria-label="Zamknij okno dodawania zadania" disabled={create.isPending} onClick={closeTaskDialog}>×</button>
+            <button className="button-quiet task-dialog-close" type="button" aria-label="Zamknij okno dodawania zadania" disabled={create.isPending} onClick={() => closeTaskDialog()}>×</button>
           </div>
           <fieldset disabled={create.isPending}>
             <label>Tytuł<input ref={titleInput} required value={title} onChange={event => setTitle(event.target.value)} placeholder="Co trzeba zrobić?" /></label>
@@ -189,7 +189,7 @@ export function TasksPage() {
             {householdMembers.isPending && <p className="task-meta" role="status">Ładuję domowników…</p>}
             {householdMembers.isError && <p className="error-message" role="alert">Nie udało się pobrać listy domowników: {householdMembers.error.message}</p>}
           </fieldset>
-          <div className="task-dialog-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate) || create.isPending}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" disabled={create.isPending} onClick={closeTaskDialog}>Anuluj</button></div>
+          <div className="task-dialog-actions"><button className="primary-button" type="submit" disabled={!title.trim() || (Boolean(cadence) && !dueDate) || create.isPending}>{create.isPending ? 'Dodaję…' : 'Dodaj zadanie'}</button><button type="button" className="button-quiet" disabled={create.isPending} onClick={() => closeTaskDialog()}>Anuluj</button></div>
         </form>
       </dialog>
       {recurringTasks.isPending && <p className="task-meta" role="status">Ładuję stałe zadania…</p>}
