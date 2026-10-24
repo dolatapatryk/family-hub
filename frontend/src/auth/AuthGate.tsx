@@ -16,6 +16,17 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
+const monthlySavingsPlanStoragePrefix = 'family-hub:finance:monthlySavingsPlan:'
+
+function clearSavedMonthlySavingsPlans() {
+  try {
+    const keysToRemove = Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index))
+      .filter((key): key is string => key?.startsWith(monthlySavingsPlanStoragePrefix) ?? false)
+    for (const key of keysToRemove) window.localStorage.removeItem(key)
+  } catch {
+    // Browser storage may be unavailable; authentication must still work.
+  }
+}
 
 export function useAuth(): AuthContextValue {
   const value = useContext(AuthContext)
@@ -45,6 +56,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const nextUserId = session?.user.id ?? null
     if (previousUserId.current !== null && previousUserId.current !== nextUserId) {
+      clearSavedMonthlySavingsPlans()
       for (const queryKey of [
         ['financeTransactions'], ['calendarEvents'], ['importedGoogleCalendarEvents'], ['annualDates'], ['googleCalendarSettings'], ['gym'],
       ]) {
@@ -56,6 +68,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!supabase) {
+      clearSavedMonthlySavingsPlans()
       setAuthLoading(false)
       return
     }
@@ -65,11 +78,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
       if (!active) return
       if (sessionError) setError(sessionError.message)
       setSession(data.session)
+      if (!data.session && !sessionError) clearSavedMonthlySavingsPlans()
       setAuthLoading(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!active) return
+      if (event === 'SIGNED_OUT') clearSavedMonthlySavingsPlans()
       setSession(nextSession)
       setError(null)
     })
@@ -111,6 +126,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   async function signOut() {
     if (!supabase) return
+    clearSavedMonthlySavingsPlans()
     const { error: signOutError } = await supabase.auth.signOut()
     if (signOutError) setError(signOutError.message)
   }
