@@ -5,3 +5,5 @@ pluginManagement {
 	}
 }
 rootProject.name = 'family-hub'
+
+include 'app', 'common', 'modules:shopping-list'
