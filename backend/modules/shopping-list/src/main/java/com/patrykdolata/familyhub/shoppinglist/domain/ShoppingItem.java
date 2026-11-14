@@ -11,14 +11,14 @@ import static java.util.Objects.requireNonNull;
 import static java.util.Optional.empty;
 
 public record ShoppingItem(
-        ShoppingItemId id,
-        HouseholdId householdId,
-        String name,
-        Optional<String> quantity,
-        Optional<String> store,
-        boolean completed,
-        UserId addedBy,
-        Instant createdAt
+    ShoppingItemId id,
+    HouseholdId householdId,
+    String name,
+    Optional<String> quantity,
+    Optional<String> store,
+    boolean completed,
+    UserId addedBy,
+    Instant createdAt
 ) {
 
     public ShoppingItem {
@@ -37,15 +37,15 @@ public record ShoppingItem(
 
     public ShoppingItem update(String name, Optional<String> quantity, Optional<String> store, boolean completed) {
         return shoppingItem()
-                .id(id)
-                .householdId(householdId)
-                .name(name)
-                .quantity(quantity)
-                .store(store)
-                .completed(completed)
-                .addedBy(addedBy)
-                .createdAt(createdAt)
-                .build();
+            .id(id)
+            .householdId(householdId)
+            .name(name)
+            .quantity(quantity)
+            .store(store)
+            .completed(completed)
+            .addedBy(addedBy)
+            .createdAt(createdAt)
+            .build();
     }
 
     private static String normalizeName(String value) {

@@ -5,8 +5,8 @@ import com.patrykdolata.familyhub.common.HouseholdId;
 import static java.util.Objects.requireNonNull;
 
 public record ShoppingListFilter(
-        HouseholdId householdId,
-        boolean completed
+    HouseholdId householdId,
+    boolean completed
 ) {
 
     public ShoppingListFilter {

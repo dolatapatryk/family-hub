@@ -31,24 +31,24 @@ public final class ShoppingListService {
 
     public ShoppingItem create(CurrentMember member, CreateShoppingItemCommand command) {
         ShoppingItem item = shoppingItem()
-                .householdId(member.householdId())
-                .name(command.name())
-                .quantity(command.quantity())
-                .store(command.store())
-                .addedBy(member.userId())
-                .createdAt(clock.instant())
-                .build();
+            .householdId(member.householdId())
+            .name(command.name())
+            .quantity(command.quantity())
+            .store(command.store())
+            .addedBy(member.userId())
+            .createdAt(clock.instant())
+            .build();
         return repository.save(item);
     }
 
     public ShoppingItem update(CurrentMember member, ShoppingItemId id, UpdateShoppingItemCommand command) {
         return transactions.execute(() -> {
-            ShoppingItem current = repository.get(id, member.householdId());
-            ShoppingItem updated = current.update(
-                    command.name().applyTo(current.name()),
-                    command.quantity().applyTo(current.quantity()),
-                    command.store().applyTo(current.store()),
-                    command.completed().applyTo(current.completed())
+            var current = repository.get(id, member.householdId());
+            var updated = current.update(
+                command.name().applyTo(current.name()),
+                command.quantity().applyTo(current.quantity()),
+                command.store().applyTo(current.store()),
+                command.completed().applyTo(current.completed())
             );
             return repository.save(updated);
         });

@@ -7,11 +7,11 @@ import static java.util.UUID.randomUUID;
 
 public record ShoppingItemId(UUID value) {
 
-	public ShoppingItemId {
+    public ShoppingItemId {
         requireNonNull(value, "value");
     }
 
-	public static ShoppingItemId randomShoppingItemId() {
-		return new ShoppingItemId(randomUUID());
-	}
+    public static ShoppingItemId randomShoppingItemId() {
+        return new ShoppingItemId(randomUUID());
+    }
 }

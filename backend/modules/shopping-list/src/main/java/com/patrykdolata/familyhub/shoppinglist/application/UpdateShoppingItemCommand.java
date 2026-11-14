@@ -7,10 +7,10 @@ import java.util.Optional;
 import static java.util.Objects.requireNonNull;
 
 public record UpdateShoppingItemCommand(
-        FieldChange<String> name,
-        FieldChange<Optional<String>> quantity,
-        FieldChange<Optional<String>> store,
-        FieldChange<Boolean> completed
+    FieldChange<String> name,
+    FieldChange<Optional<String>> quantity,
+    FieldChange<Optional<String>> store,
+    FieldChange<Boolean> completed
 ) {
 
     public UpdateShoppingItemCommand {
