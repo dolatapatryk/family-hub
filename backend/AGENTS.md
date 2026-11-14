@@ -7,3 +7,5 @@
 - Check required references for null in constructors, including compact constructors of records. Do not add null checks in ordinary methods; a null for a required argument is a programming bug. Optional values must use `Optional<T>`.
 - Prefer fluent builders for constructing records and domain objects. Avoid static `create(...)` factories that accept every field.
 - Keep domain ports such as repositories in the domain package. Keep use cases and application services in `application`, HTTP contracts in `api/rest`, and technology-specific implementations under `infrastructure/<technology>`.
+- Prefer `var` whenever possible
+- Use //given, //when, //then in tests
