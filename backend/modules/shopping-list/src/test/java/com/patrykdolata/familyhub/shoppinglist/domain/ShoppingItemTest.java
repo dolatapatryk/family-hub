@@ -9,6 +9,7 @@ import static com.patrykdolata.familyhub.shoppinglist.domain.ShoppingItem.shoppi
 import static com.patrykdolata.familyhub.shoppinglist.domain.ShoppingItemTestData.aShoppingItem;
 import static java.util.Optional.empty;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ShoppingItemTest {
 
@@ -105,5 +106,16 @@ class ShoppingItemTest {
 
         // then
         assertThat(result).isSameAs(item);
+    }
+
+    @Test
+    void throws_when_blank_name_provided() {
+        // given
+        var item = aShoppingItem()
+            .name("");
+
+        // then
+        assertThatThrownBy(item::build)
+            .isInstanceOf(InvalidShoppingItem.class);
     }
 }

@@ -8,6 +8,7 @@ commands and does not contain business rules.
 `CurrentMember` is supplied by the application security boundary. The module
 uses its household and user IDs to scope data access and set `addedBy`.
 
-The jOOQ package is the planned adapter for the existing `shopping_items`
-schema. Its database connection and authenticated-member integration will be
-wired when those application boundaries are configured.
+`infrastructure/jooq` contains `JooqShoppingListRepository`, an adapter for
+the existing `shopping_items` schema. Its database connection and
+authenticated-member integration will be wired when those application
+boundaries are configured.

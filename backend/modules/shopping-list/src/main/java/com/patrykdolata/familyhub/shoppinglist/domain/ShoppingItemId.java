@@ -11,6 +11,14 @@ public record ShoppingItemId(UUID value) {
         requireNonNull(value, "value");
     }
 
+    public static ShoppingItemId shoppingItemId(UUID value) {
+        return new ShoppingItemId(value);
+    }
+
+    public static ShoppingItemId shoppingItemId(String value) {
+        return new ShoppingItemId(UUID.fromString(value));
+    }
+
     public static ShoppingItemId randomShoppingItemId() {
         return new ShoppingItemId(randomUUID());
     }
