@@ -3,6 +3,8 @@ package com.patrykdolata.familyhub.shoppinglist.application;
 import com.patrykdolata.familyhub.common.CurrentMember;
 import com.patrykdolata.familyhub.common.DirectTransactionRunner;
 import com.patrykdolata.familyhub.common.FieldChange;
+import com.patrykdolata.familyhub.common.FieldChange.SetValue;
+import com.patrykdolata.familyhub.common.FieldChange.Unchanged;
 import com.patrykdolata.familyhub.common.HouseholdId;
 import com.patrykdolata.familyhub.common.UserId;
 import com.patrykdolata.familyhub.shoppinglist.domain.ShoppingItem;
@@ -85,18 +87,125 @@ class ShoppingListFacadeTest {
         // given
         var original = item(householdId, "Oat milk", false);
         repository.save(original);
-        UpdateShoppingItemCommand command = new UpdateShoppingItemCommand(
-            new FieldChange.SetValue<>("  Almond milk  "),
-            new FieldChange.Unchanged<>(),
-            new FieldChange.SetValue<>(empty()),
-            new FieldChange.SetValue<>(true)
+        var command = new UpdateShoppingItemCommand(
+            new SetValue<>("  Almond milk  "),
+            new Unchanged<>(),
+            new SetValue<>(empty())
         );
 
         // when
         var updated = facade.update(member, original.id(), command);
 
         // then
-        assertThat(updated).isEqualTo(original.update("Almond milk", original.quantity(), empty(), true));
+        assertThat(updated).isEqualTo(original.update("Almond milk", original.quantity(), empty()));
+    }
+
+    @Test
+    void update_does_not_save_when_item_is_unchanged() {
+        // given
+        var original = item(householdId, "Oat milk", false);
+        repository.save(original);
+        int savesBeforeUpdate = repository.saveCount();
+        var command = new UpdateShoppingItemCommand(
+            new Unchanged<>(),
+            new Unchanged<>(),
+            new Unchanged<>()
+        );
+
+        // when
+        var updated = facade.update(member, original.id(), command);
+
+        // then
+        assertThat(updated).isEqualTo(original);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeUpdate);
+    }
+
+    @Test
+    void complete_marks_item_completed_and_saves_it() {
+        // given
+        var original = item(householdId, "Milk", false);
+        repository.save(original);
+        int savesBeforeComplete = repository.saveCount();
+
+        // when
+        var completed = facade.complete(member, original.id());
+
+        // then
+        assertThat(completed).isEqualTo(original.complete());
+        assertThat(repository.find(original.id(), householdId)).contains(completed);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeComplete + 1);
+    }
+
+    @Test
+    void complete_does_not_save_when_item_is_already_completed() {
+        // given
+        var original = item(householdId, "Milk", true);
+        repository.save(original);
+        int savesBeforeComplete = repository.saveCount();
+
+        // when
+        var completed = facade.complete(member, original.id());
+
+        // then
+        assertThat(completed).isEqualTo(original);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeComplete);
+    }
+
+    @Test
+    void complete_cannot_access_item_from_another_household() {
+        // given
+        var otherHouseholdItem = item(anotherHouseholdId, "Milk", false);
+        repository.save(otherHouseholdItem);
+        int savesBeforeComplete = repository.saveCount();
+
+        // then
+        assertThatThrownBy(() -> facade.complete(member, otherHouseholdItem.id()))
+            .isInstanceOf(ShoppingItemNotFound.class);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeComplete);
+    }
+
+    @Test
+    void reopen_marks_item_pending_and_saves_it() {
+        // given
+        var original = item(householdId, "Milk", true);
+        repository.save(original);
+        int savesBeforeReopen = repository.saveCount();
+
+        // when
+        var reopened = facade.reopen(member, original.id());
+
+        // then
+        assertThat(reopened).isEqualTo(original.reopen());
+        assertThat(repository.find(original.id(), householdId)).contains(reopened);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeReopen + 1);
+    }
+
+    @Test
+    void reopen_does_not_save_when_item_is_already_pending() {
+        // given
+        var original = item(householdId, "Milk", false);
+        repository.save(original);
+        int savesBeforeReopen = repository.saveCount();
+
+        // when
+        var reopened = facade.reopen(member, original.id());
+
+        // then
+        assertThat(reopened).isEqualTo(original);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeReopen);
+    }
+
+    @Test
+    void reopen_cannot_access_item_from_another_household() {
+        // given
+        var otherHouseholdItem = item(anotherHouseholdId, "Milk", true);
+        repository.save(otherHouseholdItem);
+        int savesBeforeReopen = repository.saveCount();
+
+        // then
+        assertThatThrownBy(() -> facade.reopen(member, otherHouseholdItem.id()))
+            .isInstanceOf(ShoppingItemNotFound.class);
+        assertThat(repository.saveCount()).isEqualTo(savesBeforeReopen);
     }
 
     @Test
@@ -105,10 +214,9 @@ class ShoppingListFacadeTest {
         var otherHouseholdItem = item(anotherHouseholdId, "Eggs", false);
         repository.save(otherHouseholdItem);
         var command = new UpdateShoppingItemCommand(
-            new FieldChange.SetValue<>("Changed"),
-            new FieldChange.Unchanged<>(),
-            new FieldChange.Unchanged<>(),
-            new FieldChange.Unchanged<>()
+            new SetValue<>("Changed"),
+            new Unchanged<>(),
+            new Unchanged<>()
         );
 
         // then
@@ -119,7 +227,7 @@ class ShoppingListFacadeTest {
     @Test
     void delete_removes_item_for_member() {
         // given
-        ShoppingItem item = item(householdId, "Coffee", false);
+        var item = item(householdId, "Coffee", false);
         repository.save(item);
 
         // when

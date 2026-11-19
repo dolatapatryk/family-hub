@@ -9,14 +9,12 @@ import static java.util.Objects.requireNonNull;
 public record UpdateShoppingItemCommand(
     FieldChange<String> name,
     FieldChange<Optional<String>> quantity,
-    FieldChange<Optional<String>> store,
-    FieldChange<Boolean> completed
+    FieldChange<Optional<String>> store
 ) {
 
     public UpdateShoppingItemCommand {
         requireNonNull(name, "name");
         requireNonNull(quantity, "quantity");
         requireNonNull(store, "store");
-        requireNonNull(completed, "completed");
     }
 }

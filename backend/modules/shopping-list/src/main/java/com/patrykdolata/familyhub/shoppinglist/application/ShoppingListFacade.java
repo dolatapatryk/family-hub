@@ -30,7 +30,7 @@ public final class ShoppingListFacade {
     }
 
     public ShoppingItem create(CurrentMember member, CreateShoppingItemCommand command) {
-        ShoppingItem item = shoppingItem()
+        var item = shoppingItem()
             .householdId(member.householdId())
             .name(command.name())
             .quantity(command.quantity())
@@ -47,11 +47,28 @@ public final class ShoppingListFacade {
             var updated = current.update(
                 command.name().applyTo(current.name()),
                 command.quantity().applyTo(current.quantity()),
-                command.store().applyTo(current.store()),
-                command.completed().applyTo(current.completed())
+                command.store().applyTo(current.store())
             );
-            return repository.save(updated);
+            return saveIfChanged(current, updated);
         });
+    }
+
+    public ShoppingItem complete(CurrentMember member, ShoppingItemId id) {
+        return transactions.execute(() -> {
+            var item = repository.get(id, member.householdId());
+            return saveIfChanged(item, item.complete());
+        });
+    }
+
+    public ShoppingItem reopen(CurrentMember member, ShoppingItemId id) {
+        return transactions.execute(() -> {
+            var item = repository.get(id, member.householdId());
+            return saveIfChanged(item, item.reopen());
+        });
+    }
+
+    private ShoppingItem saveIfChanged(ShoppingItem current, ShoppingItem updated) {
+        return current.equals(updated) ? current : repository.save(updated);
     }
 
     public void delete(CurrentMember member, ShoppingItemId id) {

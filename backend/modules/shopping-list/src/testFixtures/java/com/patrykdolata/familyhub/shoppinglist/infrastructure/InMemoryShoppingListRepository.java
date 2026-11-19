@@ -14,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class InMemoryShoppingListRepository implements ShoppingListRepository {
 
     private final Map<ShoppingItemId, ShoppingItem> items = new ConcurrentHashMap<>();
+    private int saveCount;
 
     @Override
     public Optional<ShoppingItem> find(ShoppingItemId id, HouseholdId householdId) {
@@ -31,8 +32,13 @@ public final class InMemoryShoppingListRepository implements ShoppingListReposit
 
     @Override
     public ShoppingItem save(ShoppingItem item) {
+        saveCount++;
         items.put(item.id(), item);
         return item;
+    }
+
+    public int saveCount() {
+        return saveCount;
     }
 
     @Override

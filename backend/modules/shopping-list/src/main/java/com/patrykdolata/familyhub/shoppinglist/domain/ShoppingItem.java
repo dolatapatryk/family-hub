@@ -35,7 +35,33 @@ public record ShoppingItem(
         return new Builder();
     }
 
-    public ShoppingItem update(String name, Optional<String> quantity, Optional<String> store, boolean completed) {
+    public ShoppingItem update(String name, Optional<String> quantity, Optional<String> store) {
+        return copy()
+            .name(name)
+            .quantity(quantity)
+            .store(store)
+            .build();
+    }
+
+    public ShoppingItem complete() {
+        if (completed) {
+            return this;
+        }
+        return copy()
+            .completed(true)
+            .build();
+    }
+
+    public ShoppingItem reopen() {
+        if (!completed) {
+            return this;
+        }
+        return copy()
+            .completed(false)
+            .build();
+    }
+
+    public ShoppingItem.Builder copy() {
         return shoppingItem()
             .id(id)
             .householdId(householdId)
@@ -44,8 +70,7 @@ public record ShoppingItem(
             .store(store)
             .completed(completed)
             .addedBy(addedBy)
-            .createdAt(createdAt)
-            .build();
+            .createdAt(createdAt);
     }
 
     private static String normalizeName(String value) {
